@@ -1,0 +1,4 @@
+<!-- shelfbot_simulation.xacro -->
+<robot name="shelfbot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Robot description goes here -->
+</robot>
