@@ -7,7 +7,7 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     urdf_file_path = get_package_share_directory('shelfbot') + '/urdf/shelfbot.urdf.xacro'
     robot_description = ParameterValue(Command(['xacro ', urdf_file_path]), value_type=str)
-
+    
     return LaunchDescription([
         Node(
             package='robot_state_publisher',
@@ -17,10 +17,17 @@ def generate_launch_description():
             parameters=[{'robot_description': robot_description}],
         ),
         Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='static_transform_publisher',
+            output='screen',
+            arguments=['0', '0', '0', '0', '0', '0', 'base_link', 'base_footprint'],
+        ),
+        Node(
             package='rviz2',
             executable='rviz2',
             name='rviz2',
             output='screen',
-            arguments=['-d', 'config/shelfbot_config.rviz'],
-        )
+            arguments=['-d', '/home/chris/ros2_ws/src/shelfbot/rviz2/shelfbot_config.rviz'],
+        ),
     ])
