@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Revolute Joint Macro -->
+  <xacro:macro name="revolute_joint" params="name parent child origin_width origin_length origin_height axis_width axis_length axis_height limit_effort limit_velocity">
+    <joint name="${name}" type="revolute">
+      <parent link="${parent}"/>
+      <child link="${child}"/>
+      <origin xyz="${origin_width} ${origin_length} ${origin_height}" rpy="0 0 0"/>
+      <axis xyz="${axis_width} ${axis_length} ${axis_height}"/>
+      <limit effort="${limit_effort}" velocity="${limit_velocity}"/>
+    </joint>
+  </xacro:macro>
+</robot>

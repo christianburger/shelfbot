@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="camera" params="name width length height radius">
+    <link name="${name}">
+      <visual>
+        <origin xyz="0 0 ${height/2}"/>
+        <geometry>
+          <box size="${width} ${length} ${height}"/>
+          <cylinder length="0.05" radius="${radius}"/>
+        </geometry>
+        <material name="gray"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${height/2}"/>
+        <geometry>
+          <box size="${width} ${length} ${height}"/>
+          <cylinder length="0.05" radius="${radius}"/>
+        </geometry>
+      </collision>
+    </link>
+  </xacro:macro>
+
+</robot>

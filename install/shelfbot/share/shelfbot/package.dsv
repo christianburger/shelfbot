@@ -1,0 +1,8 @@
+source;share/shelfbot/hook/cmake_prefix_path.ps1
+source;share/shelfbot/hook/cmake_prefix_path.dsv
+source;share/shelfbot/hook/cmake_prefix_path.sh
+source;share/shelfbot/local_setup.bash
+source;share/shelfbot/local_setup.dsv
+source;share/shelfbot/local_setup.ps1
+source;share/shelfbot/local_setup.sh
+source;share/shelfbot/local_setup.zsh

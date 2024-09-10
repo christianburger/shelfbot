@@ -1,0 +1,41 @@
+# VS Code specific files
+.vscode/
+
+# Python files
+*.pyc
+*.pyo
+__pycache__/
+
+# C/C++ compiler output
+*.o
+*.so
+*.a
+*.elf
+
+# C/C++ debugging files
+.gdb
+core
+
+# Python package installation directories
+venv/
+env/
+lib/python*/site-packages/
+
+# Log subdirectory
+log/
+
+# IntelliJ IDEA files
+.idea/
+*.iws
+*.iml
+*.ipr
+*.iws
+*.log
+*.xml
+*.zip
+
+# Other common files and folders to ignore
+node_modules/
+npm-debug.log
+yarn-error.log
+.DS_Store
