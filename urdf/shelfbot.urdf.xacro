@@ -23,8 +23,8 @@
     </visual>
   </link>
 
-  <xacro:fixed_joint name="joint_base_footprint" parent="base_footprint" child="base_link" origin_xyz="0 0 ${base_height / 2}" origin_rpy="0 0 0"/>
-
+  <!-- Modified joint to raise base_link -->
+  <xacro:fixed_joint name="joint_base_footprint" parent="base_footprint" child="base_link" origin_xyz="0 0 ${base_height / 2 + wheel_radius}" origin_rpy="0 0 0"/>
   <!-- Base Axes -->
   <xacro:base_axis name="base_axis_front_left" length="${base_axis_length}" radius="${base_axis_radius}"/>
   <xacro:base_axis name="base_axis_front_right" length="${base_axis_length}" radius="${base_axis_radius}"/>
