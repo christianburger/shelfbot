@@ -6,7 +6,7 @@
         <geometry>
           <cylinder length="${width}" radius="${radius}"/>
         </geometry>
-        <material name="black"/>
+        <material name="metallic_dark_lead"/>
       </visual>
       <collision>
         <geometry>

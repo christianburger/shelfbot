@@ -1,11 +1,15 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.substitutions import Command
+from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
+import os
 
 def generate_launch_description():
-    urdf_file_path = get_package_share_directory('shelfbot') + '/urdf/shelfbot.urdf.xacro'
+    pkg_share = get_package_share_directory('shelfbot')
+    urdf_file_path = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
+    rviz_config_path = os.path.join(pkg_share, 'rviz2', 'rviz_launch.rviz')
+
     robot_description = ParameterValue(Command(['xacro ', urdf_file_path]), value_type=str)
     
     return LaunchDescription([
@@ -28,6 +32,6 @@ def generate_launch_description():
             executable='rviz2',
             name='rviz2',
             output='screen',
-            arguments=['-d', '/home/chris/ros2_ws/src/shelfbot/rviz2/shelfbot_config.rviz'],
+            arguments=['-d', rviz_config_path],
         ),
     ])

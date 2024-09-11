@@ -1,11 +1,17 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <!-- Material Definitions -->
-  <material name="gray">
-    <color rgba="0.5 0.5 0.5 1.0"/>
+  <material name="golden_brown">
+    <color rgba="0.87 0.72 0.53 1.0"/>
   </material>
-  <material name="black">
-    <color rgba="0 0 0 1.0"/>
+  <material name="metallic_dark_lead">
+    <color rgba="0.33 0.33 0.33 1.0"/>
+  </material>
+  <material name="dark_red">
+    <color rgba="0.55 0.0 0.0 1.0"/>
+  </material>
+  <material name="metallic_gray">
+    <color rgba="0.66 0.66 0.66 1.0"/>
   </material>
 
   <!-- Common dimensions for motors and wheels -->
@@ -15,12 +21,13 @@
 
   <xacro:property name="motor_radius" value="0.05"/>
   <xacro:property name="motor_length" value="0.2"/>
-  <xacro:property name="wheel_radius" value="0.1"/>
+  <xacro:property name="wheel_radius" value="0.2"/>
   <xacro:property name="wheel_width" value="0.05"/>
   <xacro:property name="camera_width" value="0.2"/>
   <xacro:property name="camera_length" value="0.2"/>
   <xacro:property name="camera_height" value="0.1"/>
   <xacro:property name="camera_lens_radius" value="0.05"/>
   <xacro:property name="camera_mount_height" value="0.5"/>
-
+  <xacro:property name="base_axis_radius" value="0.02"/>
+  <xacro:property name="base_axis_length" value="${motor_length + wheel_width}"/>
 </robot>
