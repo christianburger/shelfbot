@@ -1,0 +1,38 @@
+# Use this to visualize your shelfbot model
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Selection
+    Name: Selection
+  - Class: rviz_common/ToolProperties
+    Name: Tool Properties
+  - Class: rviz_common/Views
+    Name: Views
+
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Enabled: true
+      Name: Robot Model
+      Robot Description: /robot_description  # Ensure this matches the parameter name
+  Enabled: true
+  Global Options:
+    Background Color: [48, 48, 48]
+    Fixed Frame: base_link
+    Frame Rate: 30
+    Show Help: true
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/tools/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/tools/MoveCamera
+    - Class: rviz_default_plugins/tools/Select
+    - Class: rviz_default_plugins/tools/FocusCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 3
+      Focal Point: [0, 0, 0]
+      Name: Orbit

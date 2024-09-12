@@ -2,19 +2,23 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>shelfbot</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="burger.christian@gmail.com">chris</maintainer>
-  <license>License: Proprietary License</license>
+  <version>0.0.1</version>  <!-- Version reflects the initial release -->
+  <description>The Shelfbot package contains all functionalities related to the Shelfbot project.</description>  <!-- Updated description -->
 
+  <maintainer email="burger.christian@gmail.com">chris</maintainer>
+  <license>Proprietary</license>  <!-- Updated license formatting -->
+
+  <!-- Core build dependencies -->
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- Runtime dependencies for nodes, hardware, and simulation -->
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
   <depend>hardware_interface</depend>
-  <depend>gazebo_ros</depend>
   <depend>tf2_ros</depend>
+  <depend>xacro</depend>  <!-- Included for xacro processing -->
 
+  <!-- Testing dependencies -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
