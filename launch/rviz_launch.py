@@ -8,10 +8,12 @@ import os
 def generate_launch_description():
     pkg_share = get_package_share_directory('shelfbot')
     urdf_file_path = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
-    rviz_config_path = os.path.join(pkg_share, 'rviz2', 'rviz_launch.rviz')
+    default_rviz_config_path = os.path.expanduser('~/.rviz2/shelfbot.rviz')  # Expand ~ here
+
+    rviz_config_file = LaunchConfiguration('rviz_config', default=default_rviz_config_path)
 
     robot_description = ParameterValue(Command(['xacro ', urdf_file_path]), value_type=str)
-    
+
     return LaunchDescription([
         Node(
             package='robot_state_publisher',
@@ -32,6 +34,6 @@ def generate_launch_description():
             executable='rviz2',
             name='rviz2',
             output='screen',
-            arguments=['-d', rviz_config_path],
+            arguments=['-d', rviz_config_file],
         ),
     ])
