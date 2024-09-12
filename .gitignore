@@ -1,32 +1,41 @@
-# Prerequisites
-*.d
+# VS Code specific files
+.vscode/
 
-# Compiled Object files
-*.slo
-*.lo
+# Python files
+*.pyc
+*.pyo
+__pycache__/
+
+# C/C++ compiler output
 *.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
 *.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
 *.a
-*.lib
+*.elf
 
-# Executables
-*.exe
-*.out
-*.app
+# C/C++ debugging files
+.gdb
+core
+
+# Python package installation directories
+venv/
+env/
+lib/python*/site-packages/
+
+# Log subdirectory
+log/
+
+# IntelliJ IDEA files
+.idea/
+*.iws
+*.iml
+*.ipr
+*.iws
+*.log
+*.xml
+*.zip
+
+# Other common files and folders to ignore
+node_modules/
+npm-debug.log
+yarn-error.log
+.DS_Store
