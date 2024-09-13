@@ -1,32 +1,39 @@
-
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="gazebo_properties" params="link">
+  <xacro:macro name="gazebo_link_properties" params="link color">
     <gazebo reference="${link}">
-      <material>Gazebo/Grey</material>
+      <material>Gazebo/${color}</material>
       <mu1>0.2</mu1>
       <mu2>0.2</mu2>
+      <kp>1000000.0</kp>
+      <kd>100.0</kd>
+      <maxVel>1.0</maxVel>
+      <minDepth>0.001</minDepth>
     </gazebo>
   </xacro:macro>
 
-  <xacro:macro name="wheel_gazebo" params="name">
-    <gazebo reference="${name}">
-      <material>Gazebo/Black</material>
-      <mu1>1.0</mu1>
-      <mu2>1.0</mu2>
-      <kp>1000000.0</kp>
-      <kd>100.0</kd>
-      <minDepth>0.001</minDepth>
-      <maxVel>1.0</maxVel>
-    </gazebo>
-  </xacro:macro>
+  <!-- Apply properties to links -->
+  <xacro:gazebo_link_properties link="base_link" color="Gold"/>
+  <xacro:gazebo_link_properties link="wheel_front_left" color="Black"/>
+  <xacro:gazebo_link_properties link="wheel_front_right" color="Black"/>
+  <xacro:gazebo_link_properties link="wheel_back_left" color="Black"/>
+  <xacro:gazebo_link_properties link="wheel_back_right" color="Black"/>
+  <xacro:gazebo_link_properties link="base_axis_front_left" color="Red"/>
+  <xacro:gazebo_link_properties link="base_axis_front_right" color="Red"/>
+  <xacro:gazebo_link_properties link="base_axis_back_left" color="Red"/>
+  <xacro:gazebo_link_properties link="base_axis_back_right" color="Red"/>
+  <xacro:gazebo_link_properties link="motor_front_left" color="Grey"/>
+  <xacro:gazebo_link_properties link="motor_front_right" color="Grey"/>
+  <xacro:gazebo_link_properties link="motor_back_left" color="Grey"/>
+  <xacro:gazebo_link_properties link="motor_back_right" color="Grey"/>
+  <xacro:gazebo_link_properties link="camera" color="Blue"/>
 
   <gazebo>
     <plugin name="differential_drive_controller" filename="libgazebo_ros_diff_drive.so">
       <updateRate>100.0</updateRate>
-      <leftJoint>front_left_wheel_joint</leftJoint>
-      <rightJoint>front_right_wheel_joint</rightJoint>
+      <leftJoint>joint_wheel_front_left</leftJoint>
+      <rightJoint>joint_wheel_front_right</rightJoint>
       <wheelSeparation>${base_width}</wheelSeparation>
       <wheelDiameter>${2*wheel_radius}</wheelDiameter>
       <robotBaseFrame>base_link</robotBaseFrame>
