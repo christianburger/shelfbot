@@ -10,16 +10,28 @@ import os
 def generate_launch_description():
     pkg_share = get_package_share_directory('shelfbot')
     urdf_file_path = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
-    world_file_path = os.path.join(pkg_share, 'worlds', 'shelfbot_world.world')
+    
+    # New world file path
+    world_file_path = os.path.expanduser('~/.world/shelfbot_world.world')
+    
+    default_rviz_config_path = os.path.expanduser('~/.rviz2/shelfbot.rviz')
+
+    rviz_config_file = LaunchConfiguration('rviz_config', default=default_rviz_config_path)
 
     robot_description = ParameterValue(Command(['xacro ', urdf_file_path]), value_type=str)
 
+    # Troubleshooting prints
+    print(f"Package share directory: {pkg_share}")
+    print(f"URDF file path: {urdf_file_path}")
+    print(f"World file path: {world_file_path}")
+    print(f"World file exists: {os.path.exists(world_file_path)}")
+    print(f"RViz config file: {rviz_config_file}")
+
     return LaunchDescription([
-        # Launch Gazebo
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([os.path.join(
-                get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')]),
-            launch_arguments={'world': world_file_path}.items()
+        # Launch Gazebo with the specified world file
+        ExecuteProcess(
+            cmd=['gazebo', '--verbose', world_file_path, '-s', 'libgazebo_ros_init.so', '-s', 'libgazebo_ros_factory.so'],
+            output='screen'
         ),
 
         # Spawn robot in Gazebo
@@ -39,12 +51,11 @@ def generate_launch_description():
             parameters=[{'robot_description': robot_description}],
         ),
 
-        # Launch RViz2
         Node(
             package='rviz2',
             executable='rviz2',
             name='rviz2',
-            arguments=['-d', os.path.join(pkg_share, 'rviz2', 'shelfbot_config.rviz')],
-            output='screen'
+            output='screen',
+            arguments=['-d', rviz_config_file],
         ),
     ])
