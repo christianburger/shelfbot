@@ -34,67 +34,79 @@
   <xacro:base_axis name="base_axis_back_left" length="${base_axis_length}" radius="${base_axis_radius}"/>
   <xacro:base_axis name="base_axis_back_right" length="${base_axis_length}" radius="${base_axis_radius}"/>
 
-  <!-- Base Axes Joints -->
-  <joint name="joint_base_axis_front_left" type="fixed">
-    <parent link="base_link"/>
-    <child link="base_axis_front_left"/>
-    <origin xyz="${-base_width / 2} ${base_length / 2} 0" rpy="0 ${pi/2} 0"/>
-  </joint>
-
-  <joint name="joint_base_axis_front_right" type="fixed">
-    <parent link="base_link"/>
-    <child link="base_axis_front_right"/>
-    <origin xyz="${base_width / 2} ${base_length / 2} 0" rpy="0 ${pi/2} 0"/>
-  </joint>
-
-  <joint name="joint_base_axis_back_left" type="fixed">
-    <parent link="base_link"/>
-    <child link="base_axis_back_left"/>
-    <origin xyz="${-base_width / 2} ${-base_length / 2} 0" rpy="0 ${pi/2} 0"/>
-  </joint>
-
-  <joint name="joint_base_axis_back_right" type="fixed">
-    <parent link="base_link"/>
-    <child link="base_axis_back_right"/>
-    <origin xyz="${base_width / 2} ${-base_length / 2} 0" rpy="0 ${pi/2} 0"/>
-  </joint>
-
   <!-- Motors -->
   <xacro:motor name="motor_front_left" length="${motor_length}" radius="${motor_radius}" mass="1.0" ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
   <xacro:motor name="motor_front_right" length="${motor_length}" radius="${motor_radius}" mass="1.0" ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
   <xacro:motor name="motor_back_left" length="${motor_length}" radius="${motor_radius}" mass="1.0" ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
   <xacro:motor name="motor_back_right" length="${motor_length}" radius="${motor_radius}" mass="1.0" ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
 
-  <!-- Motor Joints -->
-  <joint name="joint_motor_front_left" type="fixed">
-    <parent link="base_axis_front_left"/>
-    <child link="motor_front_left"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-  </joint>
-
-  <joint name="joint_motor_front_right" type="fixed">
-    <parent link="base_axis_front_right"/>
-    <child link="motor_front_right"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-  </joint>
-
-  <joint name="joint_motor_back_left" type="fixed">
-    <parent link="base_axis_back_left"/>
-    <child link="motor_back_left"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-  </joint>
-
-  <joint name="joint_motor_back_right" type="fixed">
-    <parent link="base_axis_back_right"/>
-    <child link="motor_back_right"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-  </joint>
-
   <!-- Wheels -->
   <xacro:wheel name="wheel_front_left" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel name="wheel_front_right" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel name="wheel_back_left" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel name="wheel_back_right" radius="${wheel_radius}" width="${wheel_width}"/>
+
+  <!-- Motor Joints -->
+  <joint name="joint_motor_front_left" type="fixed">
+    <parent link="base_link"/>
+    <child link="motor_front_left"/>
+    <origin xyz="${-base_width / 2} ${base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+  </joint>
+
+  <joint name="joint_motor_front_right" type="fixed">
+    <parent link="base_link"/>
+    <child link="motor_front_right"/>
+    <origin xyz="${base_width / 2} ${base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+  </joint>
+
+  <joint name="joint_motor_back_left" type="fixed">
+    <parent link="base_link"/>
+    <child link="motor_back_left"/>
+    <origin xyz="${-base_width / 2} ${-base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+  </joint>
+
+  <joint name="joint_motor_back_right" type="fixed">
+    <parent link="base_link"/>
+    <child link="motor_back_right"/>
+    <origin xyz="${base_width / 2} ${-base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+  </joint>
+
+  <!-- Base Axes Joints -->
+  <joint name="joint_base_axis_front_left" type="revolute">
+    <parent link="motor_front_left"/>
+    <child link="base_axis_front_left"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+  </joint>
+
+  <joint name="joint_base_axis_front_right" type="revolute">
+    <parent link="motor_front_right"/>
+    <child link="base_axis_front_right"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+  </joint>
+
+  <joint name="joint_base_axis_back_left" type="revolute">
+    <parent link="motor_back_left"/>
+    <child link="base_axis_back_left"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+  </joint>
+
+  <joint name="joint_base_axis_back_right" type="revolute">
+    <parent link="motor_back_right"/>
+    <child link="base_axis_back_right"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+  </joint>
 
   <!-- Wheels Joints -->
   <joint name="joint_wheel_front_left" type="fixed">
