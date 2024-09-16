@@ -6,8 +6,6 @@
   <xacro:include filename="$(find shelfbot)/urdf/motor.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/wheel.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/camera.xacro"/>
-  <xacro:include filename="$(find shelfbot)/urdf/fixed_joint.xacro"/>
-  <xacro:include filename="$(find shelfbot)/urdf/revolute_joint.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/base_axis.xacro"/>
 
   <!-- Base Footprint Link -->
@@ -23,8 +21,13 @@
     </visual>
   </link>
 
-  <!-- Modified joint to raise base_link -->
-  <xacro:fixed_joint name="joint_base_footprint" parent="base_footprint" child="base_link" origin_xyz="0 0 ${base_height / 2 + wheel_radius}" origin_rpy="0 0 0"/>
+  <!-- Joint to raise base_link -->
+  <joint name="joint_base_footprint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${base_height / 2 + wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
   <!-- Base Axes -->
   <xacro:base_axis name="base_axis_front_left" length="${base_axis_length}" radius="${base_axis_radius}"/>
   <xacro:base_axis name="base_axis_front_right" length="${base_axis_length}" radius="${base_axis_radius}"/>
@@ -32,10 +35,29 @@
   <xacro:base_axis name="base_axis_back_right" length="${base_axis_length}" radius="${base_axis_radius}"/>
 
   <!-- Base Axes Joints -->
-  <xacro:fixed_joint name="joint_base_axis_front_left" parent="base_link" child="base_axis_front_left" origin_xyz="${-base_width / 2} ${base_length / 2} 0" origin_rpy="0 ${pi/2} 0"/>
-  <xacro:fixed_joint name="joint_base_axis_front_right" parent="base_link" child="base_axis_front_right" origin_xyz="${base_width / 2} ${base_length / 2} 0" origin_rpy="0 ${pi/2} 0"/>
-  <xacro:fixed_joint name="joint_base_axis_back_left" parent="base_link" child="base_axis_back_left" origin_xyz="${-base_width / 2} ${-base_length / 2} 0" origin_rpy="0 ${pi/2} 0"/>
-  <xacro:fixed_joint name="joint_base_axis_back_right" parent="base_link" child="base_axis_back_right" origin_xyz="${base_width / 2} ${-base_length / 2} 0" origin_rpy="0 ${pi/2} 0"/>
+  <joint name="joint_base_axis_front_left" type="fixed">
+    <parent link="base_link"/>
+    <child link="base_axis_front_left"/>
+    <origin xyz="${-base_width / 2} ${base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+  </joint>
+
+  <joint name="joint_base_axis_front_right" type="fixed">
+    <parent link="base_link"/>
+    <child link="base_axis_front_right"/>
+    <origin xyz="${base_width / 2} ${base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+  </joint>
+
+  <joint name="joint_base_axis_back_left" type="fixed">
+    <parent link="base_link"/>
+    <child link="base_axis_back_left"/>
+    <origin xyz="${-base_width / 2} ${-base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+  </joint>
+
+  <joint name="joint_base_axis_back_right" type="fixed">
+    <parent link="base_link"/>
+    <child link="base_axis_back_right"/>
+    <origin xyz="${base_width / 2} ${-base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+  </joint>
 
   <!-- Motors -->
   <xacro:motor name="motor_front_left" length="${motor_length}" radius="${motor_radius}" mass="1.0" ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
@@ -44,10 +66,29 @@
   <xacro:motor name="motor_back_right" length="${motor_length}" radius="${motor_radius}" mass="1.0" ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
 
   <!-- Motor Joints -->
-  <xacro:fixed_joint name="joint_motor_front_left" parent="base_axis_front_left" child="motor_front_left" origin_xyz="0 0 0" origin_rpy="0 0 0"/>
-  <xacro:fixed_joint name="joint_motor_front_right" parent="base_axis_front_right" child="motor_front_right" origin_xyz="0 0 0" origin_rpy="0 0 0"/>
-  <xacro:fixed_joint name="joint_motor_back_left" parent="base_axis_back_left" child="motor_back_left" origin_xyz="0 0 0" origin_rpy="0 0 0"/>
-  <xacro:fixed_joint name="joint_motor_back_right" parent="base_axis_back_right" child="motor_back_right" origin_xyz="0 0 0" origin_rpy="0 0 0"/>
+  <joint name="joint_motor_front_left" type="fixed">
+    <parent link="base_axis_front_left"/>
+    <child link="motor_front_left"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="joint_motor_front_right" type="fixed">
+    <parent link="base_axis_front_right"/>
+    <child link="motor_front_right"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="joint_motor_back_left" type="fixed">
+    <parent link="base_axis_back_left"/>
+    <child link="motor_back_left"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="joint_motor_back_right" type="fixed">
+    <parent link="base_axis_back_right"/>
+    <child link="motor_back_right"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
 
   <!-- Wheels -->
   <xacro:wheel name="wheel_front_left" radius="${wheel_radius}" width="${wheel_width}"/>
@@ -56,15 +97,38 @@
   <xacro:wheel name="wheel_back_right" radius="${wheel_radius}" width="${wheel_width}"/>
 
   <!-- Wheels Joints -->
-  <xacro:fixed_joint name="joint_wheel_front_left" parent="base_axis_front_left" child="wheel_front_left" origin_xyz="0 0 -${motor_length/2}" origin_rpy="0 0 0"/>
-  <xacro:fixed_joint name="joint_wheel_front_right" parent="base_axis_front_right" child="wheel_front_right" origin_xyz="0 0 ${motor_length/2}" origin_rpy="0 0 0"/>
-  <xacro:fixed_joint name="joint_wheel_back_left" parent="base_axis_back_left" child="wheel_back_left" origin_xyz="0 0 -${motor_length/2}" origin_rpy="0 0 0"/>
-  <xacro:fixed_joint name="joint_wheel_back_right" parent="base_axis_back_right" child="wheel_back_right" origin_xyz="0 0 ${motor_length/2}" origin_rpy="0 0 0"/>
+  <joint name="joint_wheel_front_left" type="fixed">
+    <parent link="base_axis_front_left"/>
+    <child link="wheel_front_left"/>
+    <origin xyz="0 0 -${motor_length/2}" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="joint_wheel_front_right" type="fixed">
+    <parent link="base_axis_front_right"/>
+    <child link="wheel_front_right"/>
+    <origin xyz="0 0 ${motor_length/2}" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="joint_wheel_back_left" type="fixed">
+    <parent link="base_axis_back_left"/>
+    <child link="wheel_back_left"/>
+    <origin xyz="0 0 -${motor_length/2}" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="joint_wheel_back_right" type="fixed">
+    <parent link="base_axis_back_right"/>
+    <child link="wheel_back_right"/>
+    <origin xyz="0 0 ${motor_length/2}" rpy="0 0 0"/>
+  </joint>
 
   <!-- Camera -->
   <xacro:camera name="camera" width="${camera_width}" length="${camera_length}" height="${camera_height}" radius="${camera_lens_radius}"/>
 
   <!-- Camera Joint -->
-  <xacro:fixed_joint name="joint_camera" parent="base_link" child="camera" origin_xyz="0 0 ${base_height}" origin_rpy="0 0 0"/>
+  <joint name="joint_camera" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera"/>
+    <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
+  </joint>
 
 </robot>
