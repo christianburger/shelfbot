@@ -76,7 +76,7 @@
     <parent link="motor_front_left"/>
     <child link="base_axis_front_left"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 0 1"/>
     <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
     <dynamics damping="0.1" friction="0.1"/>
   </joint>
@@ -85,7 +85,7 @@
     <parent link="motor_front_right"/>
     <child link="base_axis_front_right"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 0 1"/>
     <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
     <dynamics damping="0.1" friction="0.1"/>
   </joint>
@@ -94,7 +94,7 @@
     <parent link="motor_back_left"/>
     <child link="base_axis_back_left"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 0 1"/>
     <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
     <dynamics damping="0.1" friction="0.1"/>
   </joint>
@@ -103,7 +103,7 @@
     <parent link="motor_back_right"/>
     <child link="base_axis_back_right"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 0 1"/>
     <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
     <dynamics damping="0.1" friction="0.1"/>
   </joint>
