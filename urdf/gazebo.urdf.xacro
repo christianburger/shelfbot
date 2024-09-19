@@ -1,46 +1,78 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="gazebo_link_properties" params="link color">
-    <gazebo reference="${link}">
-      <material>Gazebo/${color}</material>
-      <mu1>0.2</mu1>
-      <mu2>0.2</mu2>
-      <kp>1000000.0</kp>
-      <kd>100.0</kd>
-      <maxVel>1.0</maxVel>
-      <minDepth>0.001</minDepth>
-    </gazebo>
-  </xacro:macro>
+  <!-- Gazebo colors for each link -->
+  <gazebo reference="base_link">
+    <material>Gazebo/Gold</material>
+  </gazebo>
 
-  <!-- Apply properties to links -->
-  <xacro:gazebo_link_properties link="base_link" color="Gold"/>
-  <xacro:gazebo_link_properties link="wheel_front_left" color="Black"/>
-  <xacro:gazebo_link_properties link="wheel_front_right" color="Black"/>
-  <xacro:gazebo_link_properties link="wheel_back_left" color="Black"/>
-  <xacro:gazebo_link_properties link="wheel_back_right" color="Black"/>
-  <xacro:gazebo_link_properties link="base_axis_front_left" color="Red"/>
-  <xacro:gazebo_link_properties link="base_axis_front_right" color="Red"/>
-  <xacro:gazebo_link_properties link="base_axis_back_left" color="Red"/>
-  <xacro:gazebo_link_properties link="base_axis_back_right" color="Red"/>
-  <xacro:gazebo_link_properties link="motor_front_left" color="Grey"/>
-  <xacro:gazebo_link_properties link="motor_front_right" color="Grey"/>
-  <xacro:gazebo_link_properties link="motor_back_left" color="Grey"/>
-  <xacro:gazebo_link_properties link="motor_back_right" color="Grey"/>
-  <xacro:gazebo_link_properties link="camera" color="Blue"/>
+  <gazebo reference="wheel_front_left">
+    <material>Gazebo/Black</material>
+  </gazebo>
 
+  <gazebo reference="wheel_front_right">
+    <material>Gazebo/Black</material>
+  </gazebo>
+
+  <gazebo reference="wheel_back_left">
+    <material>Gazebo/Black</material>
+  </gazebo>
+
+  <gazebo reference="wheel_back_right">
+    <material>Gazebo/Black</material>
+  </gazebo>
+
+  <gazebo reference="base_axis_front_left">
+    <material>Gazebo/Red</material>
+  </gazebo>
+
+  <gazebo reference="base_axis_front_right">
+    <material>Gazebo/Red</material>
+  </gazebo>
+
+  <gazebo reference="base_axis_back_left">
+    <material>Gazebo/Red</material>
+  </gazebo>
+
+  <gazebo reference="base_axis_back_right">
+    <material>Gazebo/Red</material>
+  </gazebo>
+
+  <gazebo reference="motor_front_left">
+    <material>Gazebo/Grey</material>
+  </gazebo>
+
+  <gazebo reference="motor_front_right">
+    <material>Gazebo/Grey</material>
+  </gazebo>
+
+  <gazebo reference="motor_back_left">
+    <material>Gazebo/Grey</material>
+  </gazebo>
+
+  <gazebo reference="motor_back_right">
+    <material>Gazebo/Grey</material>
+  </gazebo>
+
+  <gazebo reference="camera">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+  <!-- Gazebo plugin for 4-wheeled robot control -->
   <gazebo>
-    <plugin name="differential_drive_controller" filename="libgazebo_ros_diff_drive.so">
+    <plugin name="skid_steer_drive_controller" filename="libgazebo_ros_skid_steer_drive.so">
       <updateRate>100.0</updateRate>
-      <leftJoint>joint_wheel_front_left</leftJoint>
-      <rightJoint>joint_wheel_front_right</rightJoint>
+      <robotNamespace>/</robotNamespace>
+      <leftFrontJoint>joint_base_axis_front_left</leftFrontJoint>
+      <rightFrontJoint>joint_base_axis_front_right</rightFrontJoint>
+      <leftRearJoint>joint_base_axis_back_left</leftRearJoint>
+      <rightRearJoint>joint_base_axis_back_right</rightRearJoint>
       <wheelSeparation>${base_width}</wheelSeparation>
       <wheelDiameter>${2*wheel_radius}</wheelDiameter>
       <robotBaseFrame>base_link</robotBaseFrame>
-      <publishWheelTF>true</publishWheelTF>
-      <publishOdomTF>true</publishOdomTF>
-      <publishWheelJointState>true</publishWheelJointState>
-      <odometrySource>world</odometrySource>
+      <torque>20</torque>
+      <topicName>cmd_vel</topicName>
+      <broadcastTF>true</broadcastTF>
     </plugin>
   </gazebo>
 

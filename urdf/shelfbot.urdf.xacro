@@ -8,6 +8,9 @@
   <xacro:include filename="$(find shelfbot)/urdf/camera.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/base_axis.xacro"/>
 
+  <!-- Fix: Include the Gazebo-specific properties -->
+  <xacro:include filename="$(find shelfbot)/urdf/gazebo.urdf.xacro"/>
+
   <!-- Base Footprint Link -->
   <link name="base_footprint"/>
 
@@ -19,6 +22,15 @@
       </geometry>
       <material name="golden_brown"/>
     </visual>
+    <collision>
+      <geometry>
+        <box size="${base_width} ${base_length} ${base_height}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="5"/>
+      <inertia ixx="0.0395" ixy="0" ixz="0" iyy="0.086" iyz="0" izz="0.0754"/>
+    </inertial>
   </link>
 
   <!-- Joint to raise base_link -->
@@ -72,40 +84,32 @@
   </joint>
 
   <!-- Base Axes Joints -->
-  <joint name="joint_base_axis_front_left" type="revolute">
+  <joint name="joint_base_axis_front_left" type="continuous">
     <parent link="motor_front_left"/>
     <child link="base_axis_front_left"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
-    <dynamics damping="0.1" friction="0.1"/>
   </joint>
 
-  <joint name="joint_base_axis_front_right" type="revolute">
+  <joint name="joint_base_axis_front_right" type="continuous">
     <parent link="motor_front_right"/>
     <child link="base_axis_front_right"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
-    <dynamics damping="0.1" friction="0.1"/>
   </joint>
 
-  <joint name="joint_base_axis_back_left" type="revolute">
+  <joint name="joint_base_axis_back_left" type="continuous">
     <parent link="motor_back_left"/>
     <child link="base_axis_back_left"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
-    <dynamics damping="0.1" friction="0.1"/>
   </joint>
 
-  <joint name="joint_base_axis_back_right" type="revolute">
+  <joint name="joint_base_axis_back_right" type="continuous">
     <parent link="motor_back_right"/>
     <child link="base_axis_back_right"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-3.14159" upper="3.14159" effort="100" velocity="1.0"/>
-    <dynamics damping="0.1" friction="0.1"/>
   </joint>
 
   <!-- Wheels Joints -->
