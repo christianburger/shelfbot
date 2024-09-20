@@ -60,7 +60,7 @@
 
   <!-- Gazebo plugin for 4-wheeled robot control -->
   <gazebo>
-    <plugin name="skid_steer_drive_controller" filename="libgazebo_ros_skid_steer_drive.so">
+    <plugin name="four_wheel_drive_controller" filename="libgazebo_ros_four_wheel_drive.so">
       <updateRate>100.0</updateRate>
       <robotNamespace>/</robotNamespace>
       <leftFrontJoint>joint_base_axis_front_left</leftFrontJoint>
