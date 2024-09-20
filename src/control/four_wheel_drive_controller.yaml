@@ -1,0 +1,58 @@
+four_wheel_drive_controller:
+  ros__parameters:
+    wheel_names: ["front_left_wheel", "front_right_wheel", "rear_left_wheel", "rear_right_wheel"]
+    base_axis_names: ["base_axis_front_left", "base_axis_front_right", "base_axis_back_left", "base_axis_back_right"]
+    motor_names: ["motor_front_left", "motor_front_right", "motor_back_left", "motor_back_right"]
+
+    # Encoder parameters
+    encoder_resolution: 4096  # Ticks per revolution
+    use_sim_encoders: false   # Set to true for Gazebo simulation
+
+    # Wheel parameters
+    wheel_separation_width: 0.5   # Distance between left and right wheels
+    wheel_separation_length: 0.7  # Distance between front and rear wheels
+    wheel_radius: 0.1             # Radius of each wheel
+
+    # Control parameters
+    publish_rate: 50.0
+    cmd_vel_timeout: 0.5
+
+    # Odometry parameters
+    pose_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
+    twist_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
+    open_loop: false
+    enable_odom_tf: true
+
+    # Velocity and acceleration limits
+    linear:
+      x:
+        has_velocity_limits: true
+        max_velocity: 1.0
+        min_velocity: -1.0
+        has_acceleration_limits: true
+        max_acceleration: 0.8
+        min_acceleration: -0.8
+    angular:
+      z:
+        has_velocity_limits: true
+        max_velocity: 1.5
+        min_velocity: -1.5
+        has_acceleration_limits: true
+        max_acceleration: 1.0
+        min_acceleration: -1.0
+
+    # State and command interfaces
+    state_interfaces:
+      - front_left_wheel/position
+      - front_right_wheel/position
+      - rear_left_wheel/position
+      - rear_right_wheel/position
+      - front_left_wheel/velocity
+      - front_right_wheel/velocity
+      - rear_left_wheel/velocity
+      - rear_right_wheel/velocity
+    command_interfaces:
+      - front_left_wheel/velocity
+      - front_right_wheel/velocity
+      - rear_left_wheel/velocity
+      - rear_right_wheel/velocity
