@@ -62,6 +62,28 @@ protected:
   // Odometry related variables
   double x_;
   double y_;
+  double theta_;  std::shared_ptr<realtime_tools::RealtimePublisher<nav_msgs::msg::Odometry>> realtime_odometry_publisher_;
+  std::shared_ptr<realtime_tools::RealtimePublisher<tf2_msgs::msg::TFMessage>> realtime_odometry_transform_publisher_;
+
+  rclcpp::Time last_update_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Duration publish_period_{0, 0};
+  rclcpp::Time last_publish_time_{0, 0, RCL_ROS_TIME};
+
+  std::vector<std::string> wheel_names_;
+  std::vector<std::string> base_axis_names_;
+  std::vector<std::string> motor_names_;
+  double wheel_separation_width_;
+  double wheel_separation_length_;
+  double wheel_radius_;
+  int encoder_resolution_;
+  bool use_sim_encoders_;
+  double publish_rate_;
+  bool enable_odom_tf_;
+  std::chrono::milliseconds cmd_vel_timeout_;
+
+  // Odometry related variables
+  double x_;
+  double y_;
   double theta_;
 };
 
