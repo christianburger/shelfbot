@@ -7,8 +7,6 @@
   <xacro:include filename="$(find shelfbot)/urdf/wheel.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/camera.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/base_axis.xacro"/>
-
-  <!-- Fix: Include the Gazebo-specific properties -->
   <xacro:include filename="$(find shelfbot)/urdf/gazebo.urdf.xacro"/>
 
   <!-- Base Footprint Link -->
@@ -89,6 +87,7 @@
     <child link="base_axis_front_left"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10"/>
   </joint>
 
   <joint name="joint_base_axis_front_right" type="continuous">
@@ -96,6 +95,7 @@
     <child link="base_axis_front_right"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10"/>
   </joint>
 
   <joint name="joint_base_axis_back_left" type="continuous">
@@ -103,6 +103,7 @@
     <child link="base_axis_back_left"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10"/>
   </joint>
 
   <joint name="joint_base_axis_back_right" type="continuous">
@@ -110,6 +111,7 @@
     <child link="base_axis_back_right"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10"/>
   </joint>
 
   <!-- Wheels Joints -->
@@ -147,4 +149,34 @@
     <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
   </joint>
 
+  <!-- ros2_control -->
+  <ros2_control name="FourWheelDriveSystem" type="system">
+    <hardware>
+      <plugin>shelfbot/FourWheelDriveController</plugin>
+    </hardware>
+
+    <joint name="joint_base_axis_front_left">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_base_axis_front_right">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_base_axis_back_left">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_base_axis_back_right">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
 </robot>

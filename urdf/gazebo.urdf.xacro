@@ -58,21 +58,10 @@
     <material>Gazebo/Blue</material>
   </gazebo>
 
-  <!-- Gazebo plugin for 4-wheeled robot control -->
+  <!-- Gazebo plugin for ros2_control -->
   <gazebo>
-    <plugin name="four_wheel_drive_controller" filename="libgazebo_ros_four_wheel_drive.so">
-      <updateRate>100.0</updateRate>
-      <robotNamespace>/</robotNamespace>
-      <leftFrontJoint>joint_base_axis_front_left</leftFrontJoint>
-      <rightFrontJoint>joint_base_axis_front_right</rightFrontJoint>
-      <leftRearJoint>joint_base_axis_back_left</leftRearJoint>
-      <rightRearJoint>joint_base_axis_back_right</rightRearJoint>
-      <wheelSeparation>${base_width}</wheelSeparation>
-      <wheelDiameter>${2*wheel_radius}</wheelDiameter>
-      <robotBaseFrame>base_link</robotBaseFrame>
-      <torque>20</torque>
-      <topicName>cmd_vel</topicName>
-      <broadcastTF>true</broadcastTF>
+    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+      <parameters>$(find shelfbot)/config/four_wheel_drive_controller.yaml</parameters>
     </plugin>
   </gazebo>
 

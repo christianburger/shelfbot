@@ -12,6 +12,10 @@ find_package(gazebo_dev REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(controller_interface REQUIRED)
+find_package(hardware_interface REQUIRED)
+find_package(realtime_tools REQUIRED)
+find_package(pluginlib REQUIRED)
 
 # Include directories
 include_directories(
@@ -21,12 +25,24 @@ include_directories(
 
 link_directories(${GAZEBO_LIBRARY_DIRS})
 
-# Add executables
-add_executable(camera_driver src/hardware/camera_driver.cpp)
-ament_target_dependencies(camera_driver rclcpp sensor_msgs)
+# Add the FourWheelDriveController library
+add_library(four_wheel_drive_controller SHARED
+  src/control/four_wheel_drive_controller.cpp
+)
 
-add_executable(hardware_interface src/hardware/hardware_interface.cpp)
-ament_target_dependencies(hardware_interface rclcpp tf2_ros)
+target_include_directories(four_wheel_drive_controller PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+ament_target_dependencies(four_wheel_drive_controller
+  hardware_interface
+  pluginlib
+  rclcpp
+  controller_interface
+)
+
+pluginlib_export_plugin_description_file(controller_interface four_wheel_drive_controller_plugin.xml)
 
 # Add the Gazebo plugin
 add_library(gazebo_ros_four_wheel_drive SHARED
@@ -44,8 +60,7 @@ ament_target_dependencies(gazebo_ros_four_wheel_drive
 
 # Install targets
 install(TARGETS
-  camera_driver
-  hardware_interface
+  four_wheel_drive_controller
   gazebo_ros_four_wheel_drive
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -57,6 +72,7 @@ install(DIRECTORY
   launch
   config
   urdf
+  include
   DESTINATION share/${PROJECT_NAME}/
 )
 
