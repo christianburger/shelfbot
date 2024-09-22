@@ -24,8 +24,7 @@ include_directories(
 )
 
 link_directories(${GAZEBO_LIBRARY_DIRS})
-
-# Add the FourWheelDriveController library
+# Add these lines
 add_library(four_wheel_drive_controller SHARED
   src/control/four_wheel_drive_controller.cpp
 )
@@ -42,7 +41,13 @@ ament_target_dependencies(four_wheel_drive_controller
   controller_interface
 )
 
-pluginlib_export_plugin_description_file(controller_interface four_wheel_drive_controller_plugin.xml)
+pluginlib_export_plugin_description_file(hardware_interface four_wheel_drive_controller_plugin.xml)
+
+install(TARGETS four_wheel_drive_controller
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
 
 # Add the Gazebo plugin
 add_library(gazebo_ros_four_wheel_drive SHARED
