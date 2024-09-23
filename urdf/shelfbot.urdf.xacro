@@ -1,7 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="shelfbot">
 
-  <!-- Include common properties and entities -->
   <xacro:include filename="$(find shelfbot)/urdf/common_properties.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/motor.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/wheel.xacro"/>
@@ -9,10 +8,8 @@
   <xacro:include filename="$(find shelfbot)/urdf/base_axis.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/gazebo.urdf.xacro"/>
 
-  <!-- Base Footprint Link -->
   <link name="base_footprint"/>
 
-  <!-- Base Link -->
   <link name="base_link">
     <visual>
       <geometry>
@@ -31,32 +28,27 @@
     </inertial>
   </link>
 
-  <!-- Joint to raise base_link -->
   <joint name="joint_base_footprint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
     <origin xyz="0 0 ${base_height / 2 + wheel_radius}" rpy="0 0 0"/>
   </joint>
 
-  <!-- Base Axes -->
   <xacro:base_axis name="base_axis_front_left" length="${base_axis_length}" radius="${base_axis_radius}"/>
   <xacro:base_axis name="base_axis_front_right" length="${base_axis_length}" radius="${base_axis_radius}"/>
   <xacro:base_axis name="base_axis_back_left" length="${base_axis_length}" radius="${base_axis_radius}"/>
   <xacro:base_axis name="base_axis_back_right" length="${base_axis_length}" radius="${base_axis_radius}"/>
 
-  <!-- Motors -->
   <xacro:motor name="motor_front_left" length="${motor_length}" radius="${motor_radius}" mass="1.0" ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
   <xacro:motor name="motor_front_right" length="${motor_length}" radius="${motor_radius}" mass="1.0" ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
   <xacro:motor name="motor_back_left" length="${motor_length}" radius="${motor_radius}" mass="1.0" ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
   <xacro:motor name="motor_back_right" length="${motor_length}" radius="${motor_radius}" mass="1.0" ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
 
-  <!-- Wheels -->
   <xacro:wheel name="wheel_front_left" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel name="wheel_front_right" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel name="wheel_back_left" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel name="wheel_back_right" radius="${wheel_radius}" width="${wheel_width}"/>
 
-  <!-- Motor Joints -->
   <joint name="joint_motor_front_left" type="fixed">
     <parent link="base_link"/>
     <child link="motor_front_left"/>
@@ -81,7 +73,6 @@
     <origin xyz="${base_width / 2} ${-base_length / 2} 0" rpy="0 ${pi/2} 0"/>
   </joint>
 
-  <!-- Base Axes Joints -->
   <joint name="joint_base_axis_front_left" type="continuous">
     <parent link="motor_front_left"/>
     <child link="base_axis_front_left"/>
@@ -114,7 +105,6 @@
     <limit effort="10" velocity="10"/>
   </joint>
 
-  <!-- Wheels Joints -->
   <joint name="joint_wheel_front_left" type="fixed">
     <parent link="base_axis_front_left"/>
     <child link="wheel_front_left"/>
@@ -139,20 +129,17 @@
     <origin xyz="0 0 ${motor_length/2}" rpy="0 0 0"/>
   </joint>
 
-  <!-- Camera -->
   <xacro:camera name="camera" width="${camera_width}" length="${camera_length}" height="${camera_height}" radius="${camera_lens_radius}"/>
 
-  <!-- Camera Joint -->
   <joint name="joint_camera" type="fixed">
     <parent link="base_link"/>
     <child link="camera"/>
     <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
   </joint>
 
-  <!-- ros2_control -->
   <ros2_control name="FourWheelDriveSystem" type="system">
     <hardware>
-      <plugin>shelfbot/FourWheelDriveController</plugin>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
     </hardware>
 
     <joint name="joint_base_axis_front_left">
@@ -179,4 +166,5 @@
       <state_interface name="velocity"/>
     </joint>
   </ros2_control>
+
 </robot>

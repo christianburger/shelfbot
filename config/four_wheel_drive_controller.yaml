@@ -2,19 +2,24 @@ controller_manager:
   ros__parameters:
     update_rate: 100  # Hz
 
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
     four_wheel_drive_controller:
       type: shelfbot/FourWheelDriveController
 
 four_wheel_drive_controller:
   ros__parameters:
-    wheel_names: ["wheel_front_left", "wheel_front_right", "wheel_back_left", "wheel_back_right"]
-    base_axis_names: ["base_axis_front_left", "base_axis_front_right", "base_axis_back_left", "base_axis_back_right"]
-    motor_names: ["motor_front_left", "motor_front_right", "motor_back_left", "motor_back_right"]
+    joints:
+      - joint_base_axis_front_left
+      - joint_base_axis_front_right
+      - joint_base_axis_back_left
+      - joint_base_axis_back_right
     wheel_separation_width: 0.5
     wheel_separation_length: 0.7
     wheel_radius: 0.1
     encoder_resolution: 4096
-    use_sim_encoders: false
+    use_sim_encoders: true
     publish_rate: 50.0
     cmd_vel_timeout: 0.5
     enable_odom_tf: true

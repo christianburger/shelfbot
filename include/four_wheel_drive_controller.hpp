@@ -4,37 +4,31 @@
 #include <vector>
 #include <string>
 
-#include "hardware_interface/system_interface.hpp"
-#include "hardware_interface/types/hardware_interface_return_values.hpp"
+#include "controller_interface/controller_interface.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 
 namespace shelfbot
 {
 
-class FourWheelDriveController : public hardware_interface::SystemInterface
+class FourWheelDriveController : public controller_interface::ControllerInterface
 {
 public:
   FourWheelDriveController();
 
-  hardware_interface::CallbackReturn on_init(const hardware_interface::HardwareInfo & info) override;
-
-  std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
-
-  std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
-
-  hardware_interface::CallbackReturn on_activate(const rclcpp_lifecycle::State & previous_state) override;
-
-  hardware_interface::CallbackReturn on_deactivate(const rclcpp_lifecycle::State & previous_state) override;
-
-  hardware_interface::return_type read(const rclcpp::Time & time, const rclcpp::Duration & period) override;
-
-  hardware_interface::return_type write(const rclcpp::Time & time, const rclcpp::Duration & period) override;
+  controller_interface::InterfaceConfiguration command_interface_configuration() const override;
+  controller_interface::InterfaceConfiguration state_interface_configuration() const override;
+  controller_interface::return_type update(const rclcpp::Time & time, const rclcpp::Duration & period) override;
+  controller_interface::CallbackReturn on_init() override;
+  controller_interface::CallbackReturn on_configure(const rclcpp_lifecycle::State & previous_state) override;
+  controller_interface::CallbackReturn on_activate(const rclcpp_lifecycle::State & previous_state) override;
+  controller_interface::CallbackReturn on_deactivate(const rclcpp_lifecycle::State & previous_state) override;
 
 private:
-  std::vector<double> joint_position_;
-  std::vector<double> joint_velocity_;
-  std::vector<double> joint_velocity_command_;
+  std::vector<std::string> joint_names_;
+  std::vector<double> joint_positions_;
+  std::vector<double> joint_velocities_;
+  std::vector<double> joint_commands_;
 };
 
 }  // namespace shelfbot

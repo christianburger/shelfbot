@@ -1,110 +1,99 @@
 #include "four_wheel_drive_controller.hpp"
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
+#include <controller_interface/controller_interface.hpp>
 
 namespace shelfbot
 {
 
 FourWheelDriveController::FourWheelDriveController()
-  : hardware_interface::SystemInterface()
+  : controller_interface::ControllerInterface()
 {
+    RCLCPP_INFO(rclcpp::get_logger("FourWheelDriveController"), "TROUBLESHOOTING: FourWheelDriveController constructor called");
 }
 
-hardware_interface::CallbackReturn FourWheelDriveController::on_init(const hardware_interface::HardwareInfo & info)
+controller_interface::CallbackReturn FourWheelDriveController::on_init()
 {
-  if (hardware_interface::SystemInterface::on_init(info) != hardware_interface::CallbackReturn::SUCCESS)
-  {
-      return hardware_interface::CallbackReturn::ERROR;
-  }
+    RCLCPP_INFO(rclcpp::get_logger("FourWheelDriveController"), "TROUBLESHOOTING: Initializing FourWheelDriveController");
+    
+    try {
+        auto_declare<std::vector<std::string>>("joints", std::vector<std::string>());
+    } catch (const std::exception & e) {
+        RCLCPP_ERROR(rclcpp::get_logger("FourWheelDriveController"), "Exception thrown during init stage with message: %s", e.what());
+        return controller_interface::CallbackReturn::ERROR;
+    }
 
-  for (const hardware_interface::ComponentInfo & joint : info_.joints)
-  {
-      if (joint.command_interfaces.size() != 1 ||
-          joint.command_interfaces[0].name != hardware_interface::HW_IF_VELOCITY)
-      {
-          RCLCPP_FATAL(
-              rclcpp::get_logger("FourWheelDriveController"),
-              "Joint '%s' has %zu command interfaces found. 1 expected.", 
-              joint.name.c_str(), joint.command_interfaces.size());
-          return hardware_interface::CallbackReturn::ERROR;
-      }
-
-      if (joint.state_interfaces.size() != 2 ||
-          joint.state_interfaces[0].name != hardware_interface::HW_IF_POSITION ||
-          joint.state_interfaces[1].name != hardware_interface::HW_IF_VELOCITY)
-      {
-          RCLCPP_FATAL(
-              rclcpp::get_logger("FourWheelDriveController"),
-              "Joint '%s' has %zu state interface. 2 expected.", 
-              joint.name.c_str(), joint.state_interfaces.size());
-          return hardware_interface::CallbackReturn::ERROR;
-      }
-  }
-
-  joint_position_.resize(info_.joints.size(), 0);
-  joint_velocity_.resize(info_.joints.size(), 0);
-  joint_velocity_command_.resize(info_.joints.size(), 0);
-
-  return hardware_interface::CallbackReturn::SUCCESS;
+    RCLCPP_INFO(rclcpp::get_logger("FourWheelDriveController"), "TROUBLESHOOTING: FourWheelDriveController initialized");
+    return controller_interface::CallbackReturn::SUCCESS;
 }
 
-std::vector<hardware_interface::StateInterface> FourWheelDriveController::export_state_interfaces()
+controller_interface::CallbackReturn FourWheelDriveController::on_configure(
+  const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  std::vector<hardware_interface::StateInterface> state_interfaces;
-  for (size_t i = 0; i < info_.joints.size(); i++)
-  {
-      state_interfaces.emplace_back(hardware_interface::StateInterface(
-          info_.joints[i].name, hardware_interface::HW_IF_POSITION, &joint_position_[i]));
-      state_interfaces.emplace_back(hardware_interface::StateInterface(
-          info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &joint_velocity_[i]));
-  }
+    RCLCPP_INFO(rclcpp::get_logger("FourWheelDriveController"), "TROUBLESHOOTING: Configuring FourWheelDriveController");
+    
+    joint_names_ = get_node()->get_parameter("joints").as_string_array();
+    if (joint_names_.empty()) {
+        RCLCPP_ERROR(rclcpp::get_logger("FourWheelDriveController"), "No joints specified");
+        return controller_interface::CallbackReturn::ERROR;
+    }
 
-  return state_interfaces;
+    joint_positions_.resize(joint_names_.size(), 0.0);
+    joint_velocities_.resize(joint_names_.size(), 0.0);
+    joint_commands_.resize(joint_names_.size(), 0.0);
+
+    RCLCPP_INFO(rclcpp::get_logger("FourWheelDriveController"), "TROUBLESHOOTING: FourWheelDriveController configured");
+    return controller_interface::CallbackReturn::SUCCESS;
 }
 
-std::vector<hardware_interface::CommandInterface> FourWheelDriveController::export_command_interfaces()
+controller_interface::CallbackReturn FourWheelDriveController::on_activate(
+  const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  std::vector<hardware_interface::CommandInterface> command_interfaces;
-  for (size_t i = 0; i < info_.joints.size(); i++)
-  {
-      command_interfaces.emplace_back(hardware_interface::CommandInterface(
-          info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &joint_velocity_command_[i]));
-  }
-
-  return command_interfaces;
+    RCLCPP_INFO(rclcpp::get_logger("FourWheelDriveController"), "TROUBLESHOOTING: Activating FourWheelDriveController");
+    return controller_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::CallbackReturn FourWheelDriveController::on_activate(const rclcpp_lifecycle::State & /*previous_state*/)
+controller_interface::CallbackReturn FourWheelDriveController::on_deactivate(
+  const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  return hardware_interface::CallbackReturn::SUCCESS;
+    RCLCPP_INFO(rclcpp::get_logger("FourWheelDriveController"), "TROUBLESHOOTING: Deactivating FourWheelDriveController");
+    return controller_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::CallbackReturn FourWheelDriveController::on_deactivate(const rclcpp_lifecycle::State & /*previous_state*/)
+controller_interface::return_type FourWheelDriveController::update(
+  const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-  return hardware_interface::CallbackReturn::SUCCESS;
+    RCLCPP_DEBUG(rclcpp::get_logger("FourWheelDriveController"), "TROUBLESHOOTING: Updating FourWheelDriveController");
+    for (size_t i = 0; i < joint_names_.size(); ++i) {
+        joint_positions_[i] = state_interfaces_[i].get_value();
+        joint_velocities_[i] = state_interfaces_[i + joint_names_.size()].get_value();
+        command_interfaces_[i].set_value(joint_commands_[i]);
+    }
+
+    return controller_interface::return_type::OK;
 }
 
-hardware_interface::return_type FourWheelDriveController::read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
+controller_interface::InterfaceConfiguration FourWheelDriveController::command_interface_configuration() const
 {
-  for (size_t i = 0; i < info_.joints.size(); i++)
-  {
-      joint_position_[i] += joint_velocity_[i] * 0.01;  // Assume 10ms cycle time
-      joint_velocity_[i] = joint_velocity_command_[i];
-  }
-
-  return hardware_interface::return_type::OK;
+    controller_interface::InterfaceConfiguration config;
+    config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
+    for (const auto & joint_name : joint_names_) {
+        config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_VELOCITY);
+    }
+    return config;
 }
 
-hardware_interface::return_type FourWheelDriveController::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
+controller_interface::InterfaceConfiguration FourWheelDriveController::state_interface_configuration() const
 {
-  for (size_t i = 0; i < info_.joints.size(); i++)
-  {
-      joint_velocity_[i] = joint_velocity_command_[i];
-  }
-
-  return hardware_interface::return_type::OK;
+    controller_interface::InterfaceConfiguration config;
+    config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
+    for (const auto & joint_name : joint_names_) {
+        config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_POSITION);
+        config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_VELOCITY);
+    }
+    return config;
 }
 
 }  // namespace shelfbot
 
 #include "pluginlib/class_list_macros.hpp"
-PLUGINLIB_EXPORT_CLASS(shelfbot::FourWheelDriveController, hardware_interface::SystemInterface)
+PLUGINLIB_EXPORT_CLASS(shelfbot::FourWheelDriveController, controller_interface::ControllerInterface)
