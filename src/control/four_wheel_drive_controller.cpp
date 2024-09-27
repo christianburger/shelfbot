@@ -1,5 +1,4 @@
 #include "four_wheel_drive_controller.hpp"
-
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
 
 namespace shelfbot {
