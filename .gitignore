@@ -31,7 +31,6 @@ log/
 *.ipr
 *.iws
 *.log
-*.xml
 *.zip
 
 # Other common files and folders to ignore
