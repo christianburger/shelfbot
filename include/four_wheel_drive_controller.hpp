@@ -7,6 +7,7 @@
 #include "controller_interface/controller_interface.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/state.hpp"
+#include "geometry_msgs/msg/twist.hpp"
 
 namespace shelfbot
 {
@@ -29,8 +30,14 @@ private:
   std::vector<double> joint_positions_;
   std::vector<double> joint_velocities_;
   std::vector<double> joint_commands_;
+  
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
+  void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg);
+  
+  double wheel_separation_;
+  double wheel_radius_;
 };
 
-}  // namespace shelfbot
+}
 
-#endif  // FOUR_WHEEL_DRIVE_CONTROLLER_HPP
+#endif
