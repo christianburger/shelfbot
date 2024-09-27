@@ -9,7 +9,6 @@
           <box size="${width} ${length} ${height}"/>
           <cylinder length="0.05" radius="${radius}"/>
         </geometry>
-        <!-- Fixed: Changed material from "gray" to "metallic_gray" -->
         <material name="metallic_gray"/>
       </visual>
       <collision>

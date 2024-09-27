@@ -7,45 +7,59 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(rviz2 REQUIRED)
+find_package(gazebo_ros REQUIRED)
+find_package(gazebo_ros2_control REQUIRED)
+find_package(gazebo_dev REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(controller_interface REQUIRED)
+find_package(hardware_interface REQUIRED)
+find_package(realtime_tools REQUIRED)
+find_package(pluginlib REQUIRED)
 
 # Include directories
 include_directories(
   include
+  ${GAZEBO_INCLUDE_DIRS}
 )
 
-# Add executables
-add_executable(camera_driver src/hardware/camera_driver.cpp)
-ament_target_dependencies(camera_driver rclcpp sensor_msgs)
+link_directories(${GAZEBO_LIBRARY_DIRS})
 
-add_executable(hardware_interface src/hardware/hardware_interface.cpp)
-ament_target_dependencies(hardware_interface rclcpp tf2_ros)
+# Add the FourWheelDriveController library
+add_library(four_wheel_drive_controller SHARED
+  src/control/four_wheel_drive_controller.cpp
+)
 
-# Install executables
-install(TARGETS
-  camera_driver
+target_include_directories(four_wheel_drive_controller PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+ament_target_dependencies(four_wheel_drive_controller
   hardware_interface
-  DESTINATION lib/${PROJECT_NAME}
+  pluginlib
+  rclcpp
+  controller_interface
 )
 
-# Install launch files
-install(DIRECTORY launch
-  DESTINATION share/${PROJECT_NAME}
+pluginlib_export_plugin_description_file(controller_interface four_wheel_drive_controller_plugin.xml)
+
+# Install targets
+install(TARGETS
+  four_wheel_drive_controller
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
-# Install config files (for RViz)
-install(DIRECTORY config
-  DESTINATION share/${PROJECT_NAME}
+# Install directories
+install(DIRECTORY
+  launch
+  config
+  urdf
+  include
+  DESTINATION share/${PROJECT_NAME}/
 )
 
-# Install URDF/Xacro files
-install(DIRECTORY urdf
-  DESTINATION share/${PROJECT_NAME}
-)
-
-# Install package.xml
-install(FILES package.xml
-  DESTINATION share/${PROJECT_NAME}
-)
-
-# Ament package for ROS 2 dependencies
 ament_package()

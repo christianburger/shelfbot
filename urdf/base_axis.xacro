@@ -6,12 +6,14 @@
         <geometry>
           <cylinder length="${length}" radius="${radius}"/>
         </geometry>
+        <origin xyz="0 0 0" rpy="0 0 ${pi / 2.0}" />
         <material name="dark_red"/>
       </visual>
       <collision>
         <geometry>
           <cylinder length="${length}" radius="${radius}"/>
         </geometry>
+        <origin xyz="0 0 0" rpy="0 0 ${pi / 2.0}" />
       </collision>
     </link>
   </xacro:macro>
