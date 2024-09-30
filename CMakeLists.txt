@@ -41,6 +41,7 @@ ament_target_dependencies(four_wheel_drive_controller
   pluginlib
   rclcpp
   controller_interface
+  gazebo_ros2_control
 )
 
 pluginlib_export_plugin_description_file(controller_interface four_wheel_drive_controller_plugin.xml)

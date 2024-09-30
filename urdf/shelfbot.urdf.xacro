@@ -136,35 +136,33 @@
     <child link="camera"/>
     <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
   </joint>
-
   <ros2_control name="FourWheelDriveSystem" type="system">
     <hardware>
       <plugin>gazebo_ros2_control/GazeboSystem</plugin>
     </hardware>
 
     <joint name="joint_base_axis_front_left">
-      <command_interface name="velocity"/>
+      <command_interface name="position"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
 
     <joint name="joint_base_axis_front_right">
-      <command_interface name="velocity"/>
+      <command_interface name="position"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
 
     <joint name="joint_base_axis_back_left">
-      <command_interface name="velocity"/>
+      <command_interface name="position"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
 
     <joint name="joint_base_axis_back_right">
-      <command_interface name="velocity"/>
+      <command_interface name="position"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
   </ros2_control>
-
 </robot>
