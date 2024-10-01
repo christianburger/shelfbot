@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <xacro:macro name="motor" params="name length radius mass ixx ixy ixz iyy iyz izz">
+  <xacro:macro name="motor" params="name length radius">
     <link name="${name}">
       <visual>
         <geometry>
@@ -14,9 +14,9 @@
         </geometry>
       </collision>
       <inertial>
-        <mass value="${mass}"/>
+        <mass value="${motor_mass}"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <inertia ixx="${ixx}" ixy="${ixy}" ixz="${ixz}" iyy="${iyy}" iyz="${iyz}" izz="${izz}"/>
+        <xacro:cylinder_inertia m="${motor_mass}" r="${radius}" h="${length}"/>
       </inertial>
     </link>
   </xacro:macro>
