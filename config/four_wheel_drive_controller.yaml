@@ -15,32 +15,19 @@ four_wheel_drive_controller:
       - joint_base_axis_front_right
       - joint_base_axis_back_left
       - joint_base_axis_back_right
-    wheel_separation_width: 0.5
-    wheel_separation_length: 0.7
-    wheel_radius: 0.1
-    encoder_resolution: 4096.0
-    use_sim_encoders: true
+    use_sim_time: true
     publish_rate: 50.0
-    cmd_vel_timeout: 0.5
     enable_odom_tf: true
-
-    pose_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
-    twist_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
     open_loop: false
 
-    linear:
-      x:
-        has_velocity_limits: true
-        max_velocity: 1.0
-        min_velocity: -1.0
-        has_acceleration_limits: true
-        max_acceleration: 0.8
-        min_acceleration: -0.8
-    angular:
-      z:
-        has_velocity_limits: true
-        max_velocity: 1.5
-        min_velocity: -1.5
-        has_acceleration_limits: true
-        max_acceleration: 1.0
-        min_acceleration: -1.0
+    command_interfaces:
+      - joint_base_axis_front_left/position
+      - joint_base_axis_front_right/position
+      - joint_base_axis_back_left/position
+      - joint_base_axis_back_right/position
+
+    state_interfaces:
+      - joint_base_axis_front_left/position
+      - joint_base_axis_front_right/position
+      - joint_base_axis_back_left/position
+      - joint_base_axis_back_right/position

@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler, ExecuteProcess
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler, ExecuteProcess, TimerAction
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution, EnvironmentVariable
@@ -97,6 +97,31 @@ def generate_launch_description():
             on_exit=[robot_controller_spawner],
         )
     )
+    # Add RViz2 configuration
+    rviz_config_file = PathJoinSubstitution([FindPackageShare('shelfbot'), 'config', 'shelfbot.rviz'])
+
+    # RViz2 node
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', rviz_config_file],
+        parameters=[
+            {'use_sim_time': use_sim_time},
+            {'robot_description': robot_description_content}
+        ],
+        remappings=[
+            ('/tf', 'tf'),
+            ('/tf_static', 'tf_static'),
+        ],
+        output='screen',
+    )
+
+    # Delay RViz2 launch to ensure all topics are available
+    delayed_rviz = TimerAction(
+        period=5.0,
+        actions=[rviz_node],
+    )
 
     nodes = [
         world_arg,
@@ -106,6 +131,6 @@ def generate_launch_description():
         control_node,
         joint_state_broadcaster_spawner,
         delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
+        delayed_rviz,
     ]
-
     return LaunchDescription(declared_arguments + nodes)
