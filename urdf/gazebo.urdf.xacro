@@ -57,6 +57,26 @@
     <material>Gazebo/Blue</material>
   </gazebo>
 
+  <gazebo reference="joint_base_axis_front_left">
+    <provideFeedback>true</provideFeedback>
+    <implicitSpringDamper>true</implicitSpringDamper>
+  </gazebo>
+
+  <gazebo reference="joint_base_axis_front_right">
+    <provideFeedback>true</provideFeedback>
+    <implicitSpringDamper>true</implicitSpringDamper>
+  </gazebo>
+
+  <gazebo reference="joint_base_axis_back_left">
+    <provideFeedback>true</provideFeedback>
+    <implicitSpringDamper>true</implicitSpringDamper>
+  </gazebo>
+
+  <gazebo reference="joint_base_axis_back_right">
+    <provideFeedback>true</provideFeedback>
+    <implicitSpringDamper>true</implicitSpringDamper>
+  </gazebo>
+
   <gazebo>
     <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
       <parameters>$(find shelfbot)/config/four_wheel_drive_controller.yaml</parameters>
