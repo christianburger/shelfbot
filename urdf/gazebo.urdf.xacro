@@ -5,85 +5,50 @@
     <material>Gazebo/Gold</material>
   </gazebo>
 
-  <gazebo reference="wheel_front_left">
-    <material>Gazebo/Black</material>
-  </gazebo>
+  <xacro:macro name="wheel_gazebo" params="name">
+    <gazebo reference="${name}">
+      <material>Gazebo/Black</material>
+      <mu1>0.8</mu1>
+      <mu2>0.8</mu2>
+      <kp>1000000.0</kp>
+      <kd>100.0</kd>
+      <minDepth>0.001</minDepth>
+      <maxVel>1.0</maxVel>
+      <fdir1>1 0 0</fdir1>
+      <slip1>0.05</slip1>
+      <slip2>0.05</slip2>
+    </gazebo>
+  </xacro:macro>
 
-  <gazebo reference="wheel_front_right">
-    <material>Gazebo/Black</material>
-  </gazebo>
+  <xacro:wheel_gazebo name="wheel_front_left"/>
+  <xacro:wheel_gazebo name="wheel_front_right"/>
+  <xacro:wheel_gazebo name="wheel_back_left"/>
+  <xacro:wheel_gazebo name="wheel_back_right"/>
 
-  <gazebo reference="wheel_back_left">
-    <material>Gazebo/Black</material>
-  </gazebo>
+  <xacro:macro name="base_axis_gazebo" params="name">
+    <gazebo reference="${name}">
+      <material>Gazebo/Red</material>
+    </gazebo>
+  </xacro:macro>
 
-  <gazebo reference="wheel_back_right">
-    <material>Gazebo/Black</material>
-  </gazebo>
+  <xacro:base_axis_gazebo name="base_axis_front_left"/>
+  <xacro:base_axis_gazebo name="base_axis_front_right"/>
+  <xacro:base_axis_gazebo name="base_axis_back_left"/>
+  <xacro:base_axis_gazebo name="base_axis_back_right"/>
 
-  <gazebo reference="base_axis_front_left">
-    <material>Gazebo/Red</material>
-  </gazebo>
+  <xacro:macro name="motor_gazebo" params="name">
+    <gazebo reference="${name}">
+      <material>Gazebo/Grey</material>
+    </gazebo>
+  </xacro:macro>
 
-  <gazebo reference="base_axis_front_right">
-    <material>Gazebo/Red</material>
-  </gazebo>
-
-  <gazebo reference="base_axis_back_left">
-    <material>Gazebo/Red</material>
-  </gazebo>
-
-  <gazebo reference="base_axis_back_right">
-    <material>Gazebo/Red</material>
-  </gazebo>
-
-  <gazebo reference="motor_front_left">
-    <material>Gazebo/Grey</material>
-  </gazebo>
-
-  <gazebo reference="motor_front_right">
-    <material>Gazebo/Grey</material>
-  </gazebo>
-
-  <gazebo reference="motor_back_left">
-    <material>Gazebo/Grey</material>
-  </gazebo>
-
-  <gazebo reference="motor_back_right">
-    <material>Gazebo/Grey</material>
-  </gazebo>
+  <xacro:motor_gazebo name="motor_front_left"/>
+  <xacro:motor_gazebo name="motor_front_right"/>
+  <xacro:motor_gazebo name="motor_back_left"/>
+  <xacro:motor_gazebo name="motor_back_right"/>
 
   <gazebo reference="camera">
     <material>Gazebo/Blue</material>
-  </gazebo>
-
-  <gazebo reference="joint_base_axis_front_left">
-    <provideFeedback>true</provideFeedback>
-    <implicitSpringDamper>true</implicitSpringDamper>
-  </gazebo>
-
-  <gazebo reference="joint_base_axis_front_right">
-    <provideFeedback>true</provideFeedback>
-    <implicitSpringDamper>true</implicitSpringDamper>
-  </gazebo>
-
-  <gazebo reference="joint_base_axis_back_left">
-    <provideFeedback>true</provideFeedback>
-    <implicitSpringDamper>true</implicitSpringDamper>
-  </gazebo>
-
-  <gazebo reference="joint_base_axis_back_right">
-    <provideFeedback>true</provideFeedback>
-    <implicitSpringDamper>true</implicitSpringDamper>
-  </gazebo>
-
-  <gazebo>
-    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
-      <parameters>$(find shelfbot)/config/four_wheel_drive_controller.yaml</parameters>
-    </plugin>
-  </gazebo>
-
-  <gazebo reference="camera">
     <sensor type="camera" name="camera">
       <update_rate>30.0</update_rate>
       <camera name="head">
@@ -107,6 +72,24 @@
         <frameName>camera</frameName>
       </plugin>
     </sensor>
+  </gazebo>
+
+  <xacro:macro name="base_axis_joint_gazebo" params="name">
+    <gazebo reference="${name}">
+      <provideFeedback>true</provideFeedback>
+      <implicitSpringDamper>true</implicitSpringDamper>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:base_axis_joint_gazebo name="joint_base_axis_front_left"/>
+  <xacro:base_axis_joint_gazebo name="joint_base_axis_front_right"/>
+  <xacro:base_axis_joint_gazebo name="joint_base_axis_back_left"/>
+  <xacro:base_axis_joint_gazebo name="joint_base_axis_back_right"/>
+
+  <gazebo>
+    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+      <parameters>$(find shelfbot)/config/four_wheel_drive_controller.yaml</parameters>
+    </plugin>
   </gazebo>
 
 </robot>
