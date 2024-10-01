@@ -14,9 +14,9 @@
         </geometry>
       </collision>
       <inertial>
-        <mass value="0.5"/>
+        <mass value="${wheel_mass}"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <inertia ixx="0.005" ixy="0.0" ixz="0.0" iyy="0.005" iyz="0.0" izz="0.005"/>
+        <xacro:cylinder_inertia m="${wheel_mass}" r="${radius}" h="${width}"/>
       </inertial>
     </link>
   </xacro:macro>

@@ -1,13 +1,11 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-
   <xacro:macro name="camera" params="name width length height radius">
     <link name="${name}">
       <visual>
         <origin xyz="0 0 ${height/2}"/>
         <geometry>
           <box size="${width} ${length} ${height}"/>
-          <cylinder length="0.05" radius="${radius}"/>
         </geometry>
         <material name="metallic_gray"/>
       </visual>
@@ -15,10 +13,13 @@
         <origin xyz="0 0 ${height/2}"/>
         <geometry>
           <box size="${width} ${length} ${height}"/>
-          <cylinder length="0.05" radius="${radius}"/>
         </geometry>
       </collision>
+      <inertial>
+        <mass value="${camera_mass}"/>
+        <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+        <xacro:box_inertia m="${camera_mass}" x="${width}" y="${length}" z="${height}"/>
+      </inertial>
     </link>
   </xacro:macro>
-
 </robot>

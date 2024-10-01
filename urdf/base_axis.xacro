@@ -15,6 +15,11 @@
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 ${pi / 2.0}" />
       </collision>
+      <inertial>
+        <mass value="${base_axis_mass}"/>
+        <origin xyz="0 0 0" rpy="0 0 ${pi / 2.0}"/>
+        <xacro:cylinder_inertia m="${base_axis_mass}" r="${radius}" h="${length}"/>
+      </inertial>
     </link>
   </xacro:macro>
 </robot>
