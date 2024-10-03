@@ -26,6 +26,20 @@ include_directories(
 
 link_directories(${GAZEBO_LIBRARY_DIRS})
 
+# Add the ShelfbotUtils library
+add_library(shelfbot_utils SHARED
+  src/shelfbot_utils.cpp
+)
+
+target_include_directories(shelfbot_utils PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+ament_target_dependencies(shelfbot_utils
+  rclcpp
+)
+
 # Add the FourWheelDriveController library
 add_library(four_wheel_drive_controller SHARED
   src/control/four_wheel_drive_controller.cpp
@@ -34,6 +48,10 @@ add_library(four_wheel_drive_controller SHARED
 target_include_directories(four_wheel_drive_controller PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
+)
+
+target_link_libraries(four_wheel_drive_controller
+  shelfbot_utils
 )
 
 ament_target_dependencies(four_wheel_drive_controller
@@ -48,6 +66,7 @@ pluginlib_export_plugin_description_file(controller_interface four_wheel_drive_c
 
 # Install targets
 install(TARGETS
+  shelfbot_utils
   four_wheel_drive_controller
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
