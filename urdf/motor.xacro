@@ -6,16 +6,18 @@
         <geometry>
           <cylinder length="${length}" radius="${radius}"/>
         </geometry>
+        <origin xyz="${length/2} 0 0" rpy="0 ${pi/2} 0"/>
         <material name="metallic_gray"/>
       </visual>
       <collision>
         <geometry>
           <cylinder length="${length}" radius="${radius}"/>
         </geometry>
+        <origin xyz="${length/2} 0 0" rpy="0 ${pi/2} 0"/>
       </collision>
       <inertial>
         <mass value="${motor_mass}"/>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="${length/2} 0 0" rpy="0 ${pi/2} 0"/>
         <xacro:cylinder_inertia m="${motor_mass}" r="${radius}" h="${length}"/>
       </inertial>
     </link>
