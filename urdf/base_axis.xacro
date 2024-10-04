@@ -6,18 +6,18 @@
         <geometry>
           <cylinder length="${length}" radius="${radius}"/>
         </geometry>
-        <origin xyz="0 0 0" rpy="0 0 ${pi / 2.0}" />
+        <origin xyz="${length/2} 0 0" rpy="0 ${pi/2} 0"/>
         <material name="dark_red"/>
       </visual>
       <collision>
         <geometry>
           <cylinder length="${length}" radius="${radius}"/>
         </geometry>
-        <origin xyz="0 0 0" rpy="0 0 ${pi / 2.0}" />
+        <origin xyz="${length/2} 0 0" rpy="0 ${pi/2} 0"/>
       </collision>
       <inertial>
         <mass value="${base_axis_mass}"/>
-        <origin xyz="0 0 0" rpy="0 0 ${pi / 2.0}"/>
+        <origin xyz="${length/2} 0 0" rpy="0 ${pi/2} 0"/>
         <xacro:cylinder_inertia m="${base_axis_mass}" r="${radius}" h="${length}"/>
       </inertial>
     </link>
