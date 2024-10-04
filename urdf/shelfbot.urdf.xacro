@@ -53,97 +53,96 @@
   <joint name="joint_motor_front_left" type="fixed">
     <parent link="base_link"/>
     <child link="motor_front_left"/>
-    <origin xyz="${-base_width / 2} ${base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+    <origin xyz="${-base_width / 2 + motor_length / 2} ${base_length / 2} 0" rpy="${pi/2} 0 ${pi}"/>
   </joint>
 
   <joint name="joint_motor_front_right" type="fixed">
     <parent link="base_link"/>
     <child link="motor_front_right"/>
-    <origin xyz="${base_width / 2} ${base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+    <origin xyz="${base_width / 2 - motor_length / 2} ${base_length / 2} 0" rpy="${-pi/2} 0 0"/>
   </joint>
 
   <joint name="joint_motor_back_left" type="fixed">
     <parent link="base_link"/>
     <child link="motor_back_left"/>
-    <origin xyz="${-base_width / 2} ${-base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+    <origin xyz="${-base_width / 2 + motor_length / 2} ${-base_length / 2} 0" rpy="${pi/2} 0 ${pi}"/>
   </joint>
 
   <joint name="joint_motor_back_right" type="fixed">
     <parent link="base_link"/>
     <child link="motor_back_right"/>
-    <origin xyz="${base_width / 2} ${-base_length / 2} 0" rpy="0 ${pi/2} 0"/>
+    <origin xyz="${base_width / 2 - motor_length / 2} ${-base_length / 2} 0" rpy="${-pi/2} 0 0"/>
   </joint>
 
   <joint name="joint_base_axis_front_left" type="continuous">
     <parent link="motor_front_left"/>
     <child link="base_axis_front_left"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
+    <origin xyz="${motor_length/2} 0 0" rpy="${-pi/2} 0 0"/>
+    <axis xyz="1 0 0"/>
     <dynamics damping="0.1" friction="0.1"/>
   </joint>
 
   <joint name="joint_base_axis_front_right" type="continuous">
     <parent link="motor_front_right"/>
     <child link="base_axis_front_right"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
+    <origin xyz="${motor_length/2} 0 0" rpy="${pi/2} 0 0"/>
+    <axis xyz="1 0 0"/>
     <dynamics damping="0.1" friction="0.1"/>
   </joint>
 
   <joint name="joint_base_axis_back_left" type="continuous">
     <parent link="motor_back_left"/>
     <child link="base_axis_back_left"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
+    <origin xyz="${motor_length/2} 0 0" rpy="${-pi/2} 0 0"/>
+    <axis xyz="1 0 0"/>
     <dynamics damping="0.1" friction="0.1"/>
   </joint>
 
   <joint name="joint_base_axis_back_right" type="continuous">
     <parent link="motor_back_right"/>
     <child link="base_axis_back_right"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
+    <origin xyz="${motor_length/2} 0 0" rpy="${pi/2} 0 0"/>
+    <axis xyz="1 0 0"/>
     <dynamics damping="0.1" friction="0.1"/>
   </joint>
 
   <joint name="joint_wheel_front_left" type="continuous">
     <parent link="base_axis_front_left"/>
     <child link="wheel_front_left"/>
-    <origin xyz="0 0 -${motor_length/2}" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
+    <origin xyz="${base_axis_length - wheel_width} 0 0" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
     <mimic joint="joint_base_axis_front_left" multiplier="${gear_ratio}" offset="0"/>
   </joint>
 
   <joint name="joint_wheel_front_right" type="continuous">
     <parent link="base_axis_front_right"/>
     <child link="wheel_front_right"/>
-    <origin xyz="0 0 ${motor_length/2}" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
+    <origin xyz="${base_axis_length - wheel_width} 0 0" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
     <mimic joint="joint_base_axis_front_right" multiplier="${gear_ratio}" offset="0"/>
   </joint>
 
   <joint name="joint_wheel_back_left" type="continuous">
     <parent link="base_axis_back_left"/>
     <child link="wheel_back_left"/>
-    <origin xyz="0 0 -${motor_length/2}" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
+    <origin xyz="${base_axis_length - wheel_width} 0 0" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
     <mimic joint="joint_base_axis_back_left" multiplier="${gear_ratio}" offset="0"/>
   </joint>
 
   <joint name="joint_wheel_back_right" type="continuous">
     <parent link="base_axis_back_right"/>
     <child link="wheel_back_right"/>
-    <origin xyz="0 0 ${motor_length/2}" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
+    <origin xyz="${base_axis_length - wheel_width} 0 0" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
     <mimic joint="joint_base_axis_back_right" multiplier="${gear_ratio}" offset="0"/>
   </joint>
-
   <xacro:camera name="camera" width="${camera_width}" length="${camera_length}" height="${camera_height}" radius="${camera_lens_radius}"/>
 
   <joint name="joint_camera" type="fixed">
     <parent link="base_link"/>
     <child link="camera"/>
-    <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
+    <origin xyz="0 0 ${base_height}" rpy="${-pi/2} 0 0"/>
   </joint>
 
   <ros2_control name="FourWheelDriveSystem" type="system">

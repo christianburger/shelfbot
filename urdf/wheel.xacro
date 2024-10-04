@@ -6,16 +6,18 @@
         <geometry>
           <cylinder length="${width}" radius="${radius}"/>
         </geometry>
+        <origin xyz="${width/2} 0 0" rpy="0 ${pi/2} 0"/>
         <material name="metallic_dark_lead"/>
       </visual>
       <collision>
         <geometry>
           <cylinder length="${width}" radius="${radius}"/>
         </geometry>
+        <origin xyz="${width/2} 0 0" rpy="0 ${pi/2} 0"/>
       </collision>
       <inertial>
         <mass value="${wheel_mass}"/>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="${width/2} 0 0" rpy="0 ${pi/2} 0"/>
         <xacro:cylinder_inertia m="${wheel_mass}" r="${radius}" h="${width}"/>
       </inertial>
     </link>
