@@ -6,6 +6,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(rviz2 REQUIRED)
 find_package(gazebo_ros REQUIRED)
 find_package(gazebo_ros2_control REQUIRED)
@@ -60,6 +61,10 @@ ament_target_dependencies(four_wheel_drive_controller
   rclcpp
   controller_interface
   gazebo_ros2_control
+  nav_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
 )
 
 pluginlib_export_plugin_description_file(controller_interface four_wheel_drive_controller_plugin.xml)

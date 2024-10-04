@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "controller_interface/controller_interface.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 #include "shelfbot_utils.hpp"
@@ -31,13 +32,21 @@ class FourWheelDriveController : public controller_interface::ControllerInterfac
   std::map<std::string, double> axis_positions_;
   std::map<std::string, double> axis_commands_;
 
+  double wheel_separation_;
+  double wheel_radius_;
+  double x_ = 0.0, y_ = 0.0, theta_ = 0.0;
+  double prev_left_wheel_pos_ = 0.0;
+  double prev_right_wheel_pos_ = 0.0;
+
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr cmd_sub_;
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
   std::map<std::string, rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr> joint_state_pubs_;
 
   void cmd_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg);
   void publish_joint_states();
+  void calculate_odometry(const rclcpp::Duration& period);
 };
 
-} 
+}
 
 #endif
