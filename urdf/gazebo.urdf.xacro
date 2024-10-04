@@ -8,8 +8,8 @@
   <xacro:macro name="wheel_gazebo" params="name">
     <gazebo reference="${name}">
       <material>Gazebo/Black</material>
-      <mu1>1.0</mu1>
-      <mu2>1.0</mu2>
+      <mu1>0.8</mu1>
+      <mu2>0.8</mu2>
       <kp>1000000.0</kp>
       <kd>100.0</kd>
       <minDepth>0.001</minDepth>
@@ -18,8 +18,8 @@
       <surface>
         <friction>
           <ode>
-            <mu>1.0</mu>
-            <mu2>1.0</mu2>
+            <mu>0.8</mu>
+            <mu2>0.8</mu2>
             <fdir1>1 0 0</fdir1>
           </ode>
         </friction>
@@ -122,6 +122,7 @@
 
   <gazebo>
     <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+      <robotNamespace>/</robotNamespace>
       <parameters>$(find shelfbot)/config/four_wheel_drive_controller.yaml</parameters>
     </plugin>
   </gazebo>
