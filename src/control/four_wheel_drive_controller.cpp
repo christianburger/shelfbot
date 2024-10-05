@@ -36,7 +36,7 @@ CallbackReturn FourWheelDriveController::on_init() {
 }
 
 CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::State& previous_state) {
-  log_info("FourWheelDriveController", "on_configure", "Called");
+  log_info("FourWheelDriveController", "on_configure", "Starting configuration");
   joint_names_ = get_node()->get_parameter("joints").as_string_array();
   wheel_separation_ = get_node()->get_parameter("wheel_separation").as_double();
   wheel_radius_ = get_node()->get_parameter("wheel_radius").as_double();
@@ -60,10 +60,17 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
 
   odom_pub_ = get_node()->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
 
+  log_info("FourWheelDriveController", "on_configure", "Joint state broadcaster initialization check");
+  auto js_broadcaster = get_node()->get_parameter("use_joint_state_broadcaster").as_bool();
+  if (js_broadcaster) {
+    log_info("FourWheelDriveController", "on_configure", "Joint state broadcaster is enabled");
+  } else {
+    log_debug("FourWheelDriveController", "on_configure", "Joint state broadcaster is disabled");
+  }
+
   log_info("FourWheelDriveController", "on_configure", "Completed successfully");
   return CallbackReturn::SUCCESS;
 }
-
 CallbackReturn FourWheelDriveController::on_activate(const rclcpp_lifecycle::State& previous_state) {
   log_info("FourWheelDriveController", "on_activate", "Called");
   log_info("FourWheelDriveController", "on_activate", "Completed successfully");
@@ -90,25 +97,27 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
         right_wheel_pos += current_position;
       }
       axis_positions_[joint_name] = current_position;
-      
-      log_debug("FourWheelDriveController", "update", 
-                "Joint " + joint_name + ": Position = " + to_string(current_position) + 
-                ", Previous = " + to_string(axis_positions_[joint_name]));
-      
+
+      log_debug("FourWheelDriveController",
+                "update",
+                "Joint " + joint_name + ": Position = " + to_string(current_position) +
+                    ", Previous = " + to_string(axis_positions_[joint_name]));
+
       if (i < command_interfaces_.size()) {
         command_interfaces_[i].set_value(axis_commands_[joint_name]);
-        log_debug("FourWheelDriveController", "update",
+        log_debug("FourWheelDriveController",
+                  "update",
                   "Joint " + joint_name + ": Command = " + to_string(axis_commands_[joint_name]));
       }
     }
   }
-  
+
   // Calculate odometry
-  left_wheel_pos /= 2.0;  // Average of left wheels
+  left_wheel_pos /= 2.0;   // Average of left wheels
   right_wheel_pos /= 2.0;  // Average of right wheels
   double left_wheel_delta = left_wheel_pos - prev_left_wheel_pos_;
   double right_wheel_delta = right_wheel_pos - prev_right_wheel_pos_;
-  
+
   double linear_delta = (left_wheel_delta + right_wheel_delta) * wheel_radius_ / 2.0;
   double angular_delta = (right_wheel_delta - left_wheel_delta) * wheel_radius_ / wheel_separation_;
 
@@ -186,7 +195,7 @@ InterfaceConfiguration FourWheelDriveController::state_interface_configuration()
   return config;
 }
 
-}
+}  // namespace shelfbot
 
 #include "pluginlib/class_list_macros.hpp"
 PLUGINLIB_EXPORT_CLASS(shelfbot::FourWheelDriveController, controller_interface::ControllerInterface)
