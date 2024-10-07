@@ -7,6 +7,7 @@
   <xacro:include filename="$(find shelfbot)/urdf/camera.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/base_axis.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/gazebo.urdf.xacro"/>
+  <xacro:include filename="$(find shelfbot)/urdf/box.xacro"/>
 
   <link name="base_footprint"/>
 
@@ -49,6 +50,8 @@
   <xacro:wheel name="wheel_front_right" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel name="wheel_back_left" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel name="wheel_back_right" radius="${wheel_radius}" width="${wheel_width}"/>
+
+  <xacro:box name="indicator_box" parent_link="wheel_front_right"/>
 
   <joint name="joint_motor_front_left" type="fixed">
     <parent link="base_link"/>
@@ -106,36 +109,28 @@
     <dynamics damping="0.1" friction="0.1"/>
   </joint>
 
-  <joint name="joint_wheel_front_left" type="continuous">
+  <joint name="joint_wheel_front_left" type="fixed">
     <parent link="base_axis_front_left"/>
     <child link="wheel_front_left"/>
     <origin xyz="${base_axis_length/2} 0 0" rpy="0 0 0"/>
-    <axis xyz="1 0 0"/>
-    <mimic joint="joint_base_axis_front_left" multiplier="${gear_ratio}" offset="0"/>
   </joint>
 
-  <joint name="joint_wheel_front_right" type="continuous">
+  <joint name="joint_wheel_front_right" type="fixed">
     <parent link="base_axis_front_right"/>
     <child link="wheel_front_right"/>
     <origin xyz="${base_axis_length/2} 0 0" rpy="0 0 0"/>
-    <axis xyz="1 0 0"/>
-    <mimic joint="joint_base_axis_front_right" multiplier="${gear_ratio}" offset="0"/>
   </joint>
 
-  <joint name="joint_wheel_back_left" type="continuous">
+  <joint name="joint_wheel_back_left" type="fixed">
     <parent link="base_axis_back_left"/>
     <child link="wheel_back_left"/>
     <origin xyz="${base_axis_length/2} 0 0" rpy="0 0 0"/>
-    <axis xyz="1 0 0"/>
-    <mimic joint="joint_base_axis_back_left" multiplier="${gear_ratio}" offset="0"/>
   </joint>
 
-  <joint name="joint_wheel_back_right" type="continuous">
+  <joint name="joint_wheel_back_right" type="fixed">
     <parent link="base_axis_back_right"/>
     <child link="wheel_back_right"/>
     <origin xyz="${base_axis_length/2} 0 0" rpy="0 0 0"/>
-    <axis xyz="1 0 0"/>
-    <mimic joint="joint_base_axis_back_right" multiplier="${gear_ratio}" offset="0"/>
   </joint>
   <xacro:camera name="camera" width="${camera_width}" length="${camera_length}" height="${camera_height}" radius="${camera_lens_radius}"/>
 
