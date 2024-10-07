@@ -120,7 +120,7 @@
   </xacro:macro>
 
   <gazebo>
-    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+    <plugin name="gz_ros2_control" filename="libgz_ros2_control.so">
       <robotNamespace>/</robotNamespace>
       <parameters>$(find shelfbot)/config/four_wheel_drive_controller.yaml</parameters>
     </plugin>

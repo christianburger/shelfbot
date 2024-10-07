@@ -142,7 +142,7 @@
 
   <ros2_control name="FourWheelDriveSystem" type="system">
     <hardware>
-      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+      <plugin>gz_ros2_control/GazeboSystem</plugin>
     </hardware>
     <joint name="joint_base_axis_front_left">
       <command_interface name="position"/>

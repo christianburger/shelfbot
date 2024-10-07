@@ -1,0 +1,120 @@
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler, ExecuteProcess, TimerAction
+from launch.conditions import IfCondition
+from launch.event_handlers import OnProcessExit
+from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution, EnvironmentVariable
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+
+def generate_launch_description():
+    declared_arguments = []
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "use_sim_time",
+            default_value="true",
+            description="Use simulation (Gazebo) clock if true",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "gui",
+            default_value="true",
+            description="Start Gazebo GUI if true",
+        )
+    )
+
+    use_sim_time = LaunchConfiguration("use_sim_time")
+    gui = LaunchConfiguration("gui")
+
+    pkg_share = FindPackageShare(package='shelfbot').find('shelfbot')
+    urdf_file_path = PathJoinSubstitution([pkg_share, 'urdf', 'shelfbot.urdf.xacro'])
+    
+    robot_description_content = Command(
+        [
+            FindExecutable(name="xacro"),
+            " ",
+            urdf_file_path,
+        ]
+    )
+    robot_description = {"robot_description": robot_description_content}
+
+    controller_config = PathJoinSubstitution([pkg_share, 'config', 'four_wheel_drive_controller.yaml'])
+
+    gz_sim_node = ExecuteProcess(
+        cmd=['gz', 'sim', '-v', '4', '-r', '/home/chris/empty.sdf'],
+        output='screen',
+    )
+
+    spawn_entity_node = Node(
+        package='ros_gz_sim',
+        executable='create',
+        arguments=['-topic', 'robot_description', '-name', 'shelfbot'],
+        output='screen'
+    )
+
+    robot_state_pub_node = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        output="both",
+        parameters=[robot_description],
+    )
+
+    control_node = Node(
+        package="controller_manager",
+        executable="ros2_control_node",
+        parameters=[robot_description, controller_config],
+        output="both",
+    )
+
+    joint_state_broadcaster_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
+    )
+
+    robot_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["four_wheel_drive_controller", "--controller-manager", "/controller_manager"],
+    )
+
+    delay_robot_controller_spawner_after_joint_state_broadcaster_spawner = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=joint_state_broadcaster_spawner,
+            on_exit=[robot_controller_spawner],
+        )
+    )
+
+    rviz_config_file = PathJoinSubstitution([FindPackageShare('shelfbot'), 'config', 'shelfbot.rviz'])
+
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', rviz_config_file],
+        parameters=[
+            {'use_sim_time': use_sim_time},
+            {'robot_description': robot_description_content}
+        ],
+        remappings=[
+            ('/tf', 'tf'),
+            ('/tf_static', 'tf_static'),
+        ],
+        output='screen',
+    )
+
+    delayed_rviz = TimerAction(
+        period=5.0,
+        actions=[rviz_node],
+    )
+
+    nodes = [
+        gz_sim_node,
+        spawn_entity_node,
+        robot_state_pub_node,
+        control_node,
+        joint_state_broadcaster_spawner,
+        delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
+        delayed_rviz,
+    ]
+    return LaunchDescription(declared_arguments + nodes)

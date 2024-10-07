@@ -35,6 +35,8 @@ four_wheel_drive_controller:
       - joint_base_axis_back_left/position
       - joint_base_axis_back_right/position
 
+    type: gz_ros2_control/GzSystem
+
     # Robot dimensions
     base_width: 0.5
     base_length: 0.7
