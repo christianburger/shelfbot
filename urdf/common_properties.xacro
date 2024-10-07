@@ -12,6 +12,9 @@
   <material name="metallic_gray">
     <color rgba="0.66 0.66 0.66 1.0"/>
   </material>
+  <material name="red">
+    <color rgba="1.0 0.0 0.0 1.0"/>
+  </material>
 
   <xacro:property name="base_width" value="0.5"/>
   <xacro:property name="base_length" value="0.7"/>
