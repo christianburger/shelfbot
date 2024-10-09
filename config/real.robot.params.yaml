@@ -1,0 +1,4 @@
+
+real_robot:
+  ros__parameters:
+    # Add real hardware specific parameters here

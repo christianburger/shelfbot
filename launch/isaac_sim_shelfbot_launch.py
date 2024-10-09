@@ -1,8 +1,7 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler, ExecuteProcess, TimerAction
-from launch.conditions import IfCondition
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler, TimerAction
 from launch.event_handlers import OnProcessExit
-from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution, EnvironmentVariable
+from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -12,19 +11,11 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "use_sim_time",
             default_value="true",
-            description="Use simulation (Gazebo) clock if true",
-        )
-    )
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "gui",
-            default_value="true",
-            description="Start Gazebo GUI if true",
+            description="Use simulation (Isaac Sim) clock if true",
         )
     )
 
     use_sim_time = LaunchConfiguration("use_sim_time")
-    gui = LaunchConfiguration("gui")
 
     pkg_share = FindPackageShare(package='shelfbot').find('shelfbot')
     urdf_file_path = PathJoinSubstitution([pkg_share, 'urdf', 'shelfbot.urdf.xacro'])
@@ -34,49 +25,24 @@ def generate_launch_description():
             FindExecutable(name="xacro"),
             " ",
             urdf_file_path,
-            " sim_mode:=gazebo"
+            " sim_mode:=isaac"
         ]
     )
     robot_description = {"robot_description": robot_description_content}
 
-    controller_config = PathJoinSubstitution([pkg_share, 'config', 'four_wheel_drive_controller.yaml'])
-    
-    world_file_path = PathJoinSubstitution([
-        EnvironmentVariable('HOME'),
-        '.world',
-        'shelfbot_world.world'
-    ])
-
-    world_arg = DeclareLaunchArgument(
-        'world',
-        default_value=world_file_path,
-        description='Path to the world file'
-    )
-
-    gazebo_node = ExecuteProcess(
-        cmd=['gazebo', '--verbose', LaunchConfiguration('world'), '-s', 'libgazebo_ros_init.so', '-s', 'libgazebo_ros_factory.so'],
-        output='screen',
-        condition=IfCondition(gui)
-    )
-
-    spawn_entity_node = Node(
-        package='gazebo_ros',
-        executable='spawn_entity.py',
-        arguments=['-topic', 'robot_description', '-entity', 'shelfbot'],
-        output='screen'
-    )
+    controller_config = PathJoinSubstitution([pkg_share, 'config', 'isaac.sim.params.yaml'])
 
     robot_state_pub_node = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         output="both",
-        parameters=[robot_description],
+        parameters=[robot_description, {"use_sim_time": use_sim_time}],
     )
 
     control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[robot_description, controller_config],
+        parameters=[robot_description, controller_config, {"use_sim_time": use_sim_time}],
         output="both",
     )
 
@@ -100,12 +66,10 @@ def generate_launch_description():
     )
 
     nodes = [
-        world_arg,
-        gazebo_node,
-        spawn_entity_node,
         robot_state_pub_node,
         control_node,
         joint_state_broadcaster_spawner,
         delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
     ]
+    return LaunchDescription(declared_arguments + nodes)
     return LaunchDescription(declared_arguments + nodes)
