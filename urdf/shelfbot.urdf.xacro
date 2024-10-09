@@ -6,9 +6,20 @@
   <xacro:include filename="$(find shelfbot)/urdf/wheel.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/camera.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/base_axis.xacro"/>
-  <xacro:include filename="$(find shelfbot)/urdf/gazebo.urdf.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/box.xacro"/>
-
+  <xacro:property name="sim_mode" value="gazebo"/>
+  
+  <xacro:if value="${sim_mode == 'gazebo'}">
+    <xacro:include filename="$(find shelfbot)/urdf/gazebo.urdf.xacro"/>
+  </xacro:if>
+  
+  <xacro:if value="${sim_mode == 'isaac'}">
+    <xacro:include filename="$(find shelfbot)/urdf/isaac.sim.urdf.xacro"/>
+  </xacro:if>
+  
+  <xacro:if value="${sim_mode == 'real'}">
+    <xacro:include filename="$(find shelfbot)/urdf/real.robot.urdf.xacro"/>
+  </xacro:if>
   <link name="base_footprint"/>
 
   <link name="base_link">
