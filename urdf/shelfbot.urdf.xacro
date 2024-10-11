@@ -7,19 +7,50 @@
   <xacro:include filename="$(find shelfbot)/urdf/camera.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/base_axis.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/box.xacro"/>
-  <xacro:property name="sim_mode" value="gazebo"/>
+
+  <xacro:arg name="sim_mode" default="gazebo"/>
   
-  <xacro:if value="${sim_mode == 'gazebo'}">
+  <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
     <xacro:include filename="$(find shelfbot)/urdf/gazebo.urdf.xacro"/>
   </xacro:if>
   
-  <xacro:if value="${sim_mode == 'isaac'}">
+  <xacro:if value="${'$(arg sim_mode)' == 'isaac'}">
     <xacro:include filename="$(find shelfbot)/urdf/isaac.sim.urdf.xacro"/>
   </xacro:if>
   
-  <xacro:if value="${sim_mode == 'real'}">
+  <xacro:if value="${'$(arg sim_mode)' == 'real'}">
     <xacro:include filename="$(find shelfbot)/urdf/real.robot.urdf.xacro"/>
   </xacro:if>
+
+  <ros2_control name="FourWheelDriveSystem" type="system">
+    <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
+      <hardware>
+        <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+      </hardware>
+    </xacro:if>
+    <xacro:if value="${'$(arg sim_mode)' != 'gazebo'}">
+      <hardware>
+        <plugin>shelfbot/FourWheelDriveController</plugin>
+      </hardware>
+    </xacro:if>
+    <joint name="joint_base_axis_front_left">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+    </joint>
+    <joint name="joint_base_axis_front_right">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+    </joint>
+    <joint name="joint_base_axis_back_left">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+    </joint>
+    <joint name="joint_base_axis_back_right">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+    </joint>
+  </ros2_control>
+
   <link name="base_footprint"/>
 
   <link name="base_link">
@@ -143,6 +174,7 @@
     <child link="wheel_back_right"/>
     <origin xyz="${base_axis_length/2} 0 0" rpy="0 0 0"/>
   </joint>
+
   <xacro:camera name="camera" width="${camera_width}" length="${camera_length}" height="${camera_height}" radius="${camera_lens_radius}"/>
 
   <joint name="joint_camera" type="fixed">
@@ -151,25 +183,4 @@
     <origin xyz="0 0 ${base_height}" rpy="${-pi/2} 0 0"/>
   </joint>
 
-  <ros2_control name="FourWheelDriveSystem" type="system">
-    <hardware>
-      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
-    </hardware>
-    <joint name="joint_base_axis_front_left">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
-    </joint>
-    <joint name="joint_base_axis_front_right">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
-    </joint>
-    <joint name="joint_base_axis_back_left">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
-    </joint>
-    <joint name="joint_base_axis_back_right">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
-    </joint>
-  </ros2_control>
 </robot>

@@ -1,6 +1,12 @@
 #ifndef FOUR_WHEEL_DRIVE_CONTROLLER_HPP
 #define FOUR_WHEEL_DRIVE_CONTROLLER_HPP
 
+#include<termios.h> 
+#include<fcntl.h>
+#include<unistd.h>
+
+#include <msgpack.hpp>
+
 #include <map>
 #include <string>
 #include <vector>
@@ -13,7 +19,7 @@
 #include "std_msgs/msg/float64.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
 
-namespace shelfbot {
+    namespace shelfbot {
 
 class FourWheelDriveController : public controller_interface::ControllerInterface {
  public:
@@ -28,10 +34,13 @@ class FourWheelDriveController : public controller_interface::ControllerInterfac
   controller_interface::CallbackReturn on_deactivate(const rclcpp_lifecycle::State& previous_state) override;
 
  private:
+  int serial_fd_ = -1;
+
   std::vector<std::string> joint_names_;
   std::map<std::string, double> axis_positions_;
   std::map<std::string, double> axis_commands_;
-
+  
+  
   double wheel_separation_;
   double wheel_radius_;
   double x_ = 0.0, y_ = 0.0, theta_ = 0.0;
@@ -45,8 +54,11 @@ class FourWheelDriveController : public controller_interface::ControllerInterfac
   void cmd_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg);
   void publish_joint_states();
   void calculate_odometry(const rclcpp::Duration& period);
-};
 
+  bool writeCommandsToHardware(const std::vector<double>& wheel_positions);
+  std::vector<double> readStateFromHardware(const std::string& value_type = "position");
+  
+};
 }
 
 #endif

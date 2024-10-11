@@ -1,0 +1,9 @@
+<library path="four_wheel_drive_hardware_interface">
+  <class name="shelfbot/FourWheelDriveHardwareInterface"
+         type="shelfbot::FourWheelDriveHardwareInterface"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Four Wheel Drive Hardware Interface for Shelfbot
+    </description>
+  </class>
+</library>
