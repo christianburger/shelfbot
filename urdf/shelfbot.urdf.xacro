@@ -161,7 +161,7 @@
     </xacro:if>
     <xacro:if value="${'$(arg sim_mode)' != 'gazebo'}">
       <hardware>
-        <plugin>shelfbot/FourWheelDriveController</plugin>
+        <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
       </hardware>
     </xacro:if>
     <joint name="joint_base_axis_front_left">
