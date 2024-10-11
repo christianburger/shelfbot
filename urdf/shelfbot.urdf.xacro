@@ -21,36 +21,6 @@
   <xacro:if value="${'$(arg sim_mode)' == 'real'}">
     <xacro:include filename="$(find shelfbot)/urdf/real.robot.urdf.xacro"/>
   </xacro:if>
-
-  <ros2_control name="FourWheelDriveSystem" type="system">
-    <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
-      <hardware>
-        <plugin>gazebo_ros2_control/GazeboSystem</plugin>
-      </hardware>
-    </xacro:if>
-    <xacro:if value="${'$(arg sim_mode)' != 'gazebo'}">
-      <hardware>
-        <plugin>shelfbot/FourWheelDriveController</plugin>
-      </hardware>
-    </xacro:if>
-    <joint name="joint_base_axis_front_left">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
-    </joint>
-    <joint name="joint_base_axis_front_right">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
-    </joint>
-    <joint name="joint_base_axis_back_left">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
-    </joint>
-    <joint name="joint_base_axis_back_right">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
-    </joint>
-  </ros2_control>
-
   <link name="base_footprint"/>
 
   <link name="base_link">
@@ -78,15 +48,15 @@
     <origin xyz="0 0 ${base_height / 2 + wheel_radius}" rpy="0 0 0"/>
   </joint>
 
-  <xacro:base_axis name="base_axis_front_left" length="${base_axis_length}" radius="${base_axis_radius}"/>
-  <xacro:base_axis name="base_axis_front_right" length="${base_axis_length}" radius="${base_axis_radius}"/>
-  <xacro:base_axis name="base_axis_back_left" length="${base_axis_length}" radius="${base_axis_radius}"/>
-  <xacro:base_axis name="base_axis_back_right" length="${base_axis_length}" radius="${base_axis_radius}"/>
-
   <xacro:motor name="motor_front_left" length="${motor_length}" radius="${motor_radius}"/>
   <xacro:motor name="motor_front_right" length="${motor_length}" radius="${motor_radius}"/>
   <xacro:motor name="motor_back_left" length="${motor_length}" radius="${motor_radius}"/>
   <xacro:motor name="motor_back_right" length="${motor_length}" radius="${motor_radius}"/>
+
+  <xacro:base_axis name="base_axis_front_left" length="${base_axis_length}" radius="${base_axis_radius}"/>
+  <xacro:base_axis name="base_axis_front_right" length="${base_axis_length}" radius="${base_axis_radius}"/>
+  <xacro:base_axis name="base_axis_back_left" length="${base_axis_length}" radius="${base_axis_radius}"/>
+  <xacro:base_axis name="base_axis_back_right" length="${base_axis_length}" radius="${base_axis_radius}"/>
 
   <xacro:wheel name="wheel_front_left" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel name="wheel_front_right" radius="${wheel_radius}" width="${wheel_width}"/>
@@ -182,5 +152,34 @@
     <child link="camera"/>
     <origin xyz="0 0 ${base_height}" rpy="${-pi/2} 0 0"/>
   </joint>
+
+  <ros2_control name="FourWheelDriveSystem" type="system">
+    <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
+      <hardware>
+        <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+      </hardware>
+    </xacro:if>
+    <xacro:if value="${'$(arg sim_mode)' != 'gazebo'}">
+      <hardware>
+        <plugin>shelfbot/FourWheelDriveController</plugin>
+      </hardware>
+    </xacro:if>
+    <joint name="joint_base_axis_front_left">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+    </joint>
+    <joint name="joint_base_axis_front_right">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+    </joint>
+    <joint name="joint_base_axis_back_left">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+    </joint>
+    <joint name="joint_base_axis_back_right">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+    </joint>
+  </ros2_control>
 
 </robot>
