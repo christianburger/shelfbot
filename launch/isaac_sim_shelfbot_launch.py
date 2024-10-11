@@ -39,6 +39,13 @@ def generate_launch_description():
         parameters=[robot_description, {"use_sim_time": use_sim_time}],
     )
 
+    joint_state_pub_node = Node(
+        package="joint_state_publisher",
+        executable="joint_state_publisher",
+        name="joint_state_publisher",
+        parameters=[{"use_sim_time": use_sim_time}],
+    )
+
     control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
@@ -65,11 +72,35 @@ def generate_launch_description():
         )
     )
 
+    rviz_config_file = PathJoinSubstitution([FindPackageShare('shelfbot'), 'config', 'shelfbot.rviz'])
+
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', rviz_config_file],
+        parameters=[
+            {'use_sim_time': use_sim_time},
+            robot_description
+        ],
+        remappings=[
+            ('/tf', 'tf'),
+            ('/tf_static', 'tf_static'),
+        ],
+        output='screen',
+    )
+
+    delayed_rviz = TimerAction(
+        period=5.0,
+        actions=[rviz_node],
+    )
+
     nodes = [
         robot_state_pub_node,
+        joint_state_pub_node,
         control_node,
         joint_state_broadcaster_spawner,
         delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
+        delayed_rviz,
     ]
-    return LaunchDescription(declared_arguments + nodes)
     return LaunchDescription(declared_arguments + nodes)

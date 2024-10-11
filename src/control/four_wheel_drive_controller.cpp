@@ -195,6 +195,55 @@ InterfaceConfiguration FourWheelDriveController::state_interface_configuration()
   return config;
 }
 
+bool FourWheelDriveController::writeCommandsToHardware(const std::vector<double>& wheel_positions) {
+  msgpack::sbuffer sbuf;
+  msgpack::pack(sbuf, wheel_positions);
+
+  ssize_t bytes_written = write(serial_fd_, sbuf.data(), sbuf.size());
+  if (bytes_written != static_cast<ssize_t>(sbuf.size())) {
+    log_error("FourWheelDriveController", "writeCommandsToHardware", "Failed to write to serial port");
+    return false;
+  }
+
+  std::vector<uint8_t> response(64);
+  ssize_t bytes_read = read(serial_fd_, response.data(), response.size());
+  if (bytes_read <= 0) {
+    log_error("FourWheelDriveController", "writeCommandsToHardware", "Failed to read from serial port");
+    return false;
+  }
+
+  msgpack::object_handle oh = msgpack::unpack(reinterpret_cast<char*>(response.data()), bytes_read);
+  msgpack::object obj = oh.get();
+
+  bool success;
+  obj.convert(success);
+  return success;
+}
+
+std::vector<double> FourWheelDriveController::readStateFromHardware(const std::string& value_type) {
+  msgpack::sbuffer sbuf;
+  msgpack::pack(sbuf, value_type);
+
+  ssize_t bytes_written = write(serial_fd_, sbuf.data(), sbuf.size());
+  if (bytes_written != static_cast<ssize_t>(sbuf.size())) {
+    log_error("FourWheelDriveController", "readStateFromHardware", "Failed to write to serial port");
+    return {};
+  }
+
+  std::vector<uint8_t> response(64);
+  ssize_t bytes_read = read(serial_fd_, response.data(), response.size());
+  if (bytes_read <= 0) {
+    log_error("FourWheelDriveController", "readStateFromHardware", "Failed to read from serial port");
+    return {};
+  }
+
+  msgpack::object_handle oh = msgpack::unpack(reinterpret_cast<char*>(response.data()), bytes_read);
+  msgpack::object obj = oh.get();
+
+  std::vector<double> wheel_positions;
+  obj.convert(wheel_positions);
+  return wheel_positions;
+}
 }  // namespace shelfbot
 
 #include "pluginlib/class_list_macros.hpp"
