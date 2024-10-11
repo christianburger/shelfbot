@@ -28,6 +28,10 @@ class FourWheelDriveHardwareInterface : public hardware_interface::SystemInterfa
   hardware_interface::return_type read(const rclcpp::Time& time, const rclcpp::Duration& period) override;
   hardware_interface::return_type write(const rclcpp::Time& time, const rclcpp::Duration& period) override;
 
+  const std::vector<double>& get_positions() const { return hw_positions_; }
+  std::vector<double>& get_commands() { return hw_commands_; }
+  void set_commands(const std::vector<double>& commands) { hw_commands_ = commands; }
+
  private:
   int serial_fd_ = -1;
 
@@ -38,6 +42,6 @@ class FourWheelDriveHardwareInterface : public hardware_interface::SystemInterfa
   bool readStateFromHardware();
 };
 
-} 
+}
 
 #endif

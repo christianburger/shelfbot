@@ -1,12 +1,5 @@
 #include "four_wheel_drive_controller.hpp"
 
-#include <tf2/LinearMath/Quaternion.h>
-
-#include <functional>
-#include <hardware_interface/types/hardware_interface_type_values.hpp>
-#include <nav_msgs/msg/odometry.hpp>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-
 using controller_interface::CallbackReturn;
 using controller_interface::InterfaceConfiguration;
 using std::string;
@@ -71,6 +64,7 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
   log_info("FourWheelDriveController", "on_configure", "Completed successfully");
   return CallbackReturn::SUCCESS;
 }
+
 CallbackReturn FourWheelDriveController::on_activate(const rclcpp_lifecycle::State& previous_state) {
   log_info("FourWheelDriveController", "on_activate", "Called");
   log_info("FourWheelDriveController", "on_activate", "Completed successfully");
@@ -87,34 +81,30 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
                                                                    const rclcpp::Duration& period) {
   log_debug("FourWheelDriveController", "update", "Called");
   double left_wheel_pos = 0.0, right_wheel_pos = 0.0;
+
   for (size_t i = 0; i < joint_names_.size(); ++i) {
     const auto& joint_name = joint_names_[i];
-    if (i < state_interfaces_.size()) {
-      double current_position = state_interfaces_[i].get_value();
-      if (joint_name.find("left") != std::string::npos) {
-        left_wheel_pos += current_position;
-      } else if (joint_name.find("right") != std::string::npos) {
-        right_wheel_pos += current_position;
-      }
-      axis_positions_[joint_name] = current_position;
-
-      log_debug("FourWheelDriveController",
-                "update",
-                "Joint " + joint_name + ": Position = " + to_string(current_position) +
-                    ", Previous = " + to_string(axis_positions_[joint_name]));
-
-      if (i < command_interfaces_.size()) {
-        command_interfaces_[i].set_value(axis_commands_[joint_name]);
-        log_debug("FourWheelDriveController",
-                  "update",
-                  "Joint " + joint_name + ": Command = " + to_string(axis_commands_[joint_name]));
-      }
+    double current_position = state_interfaces_[i].get_value();
+    if (joint_name.find("left") != std::string::npos) {
+      left_wheel_pos += current_position;
+    } else if (joint_name.find("right") != std::string::npos) {
+      right_wheel_pos += current_position;
     }
+    axis_positions_[joint_name] = current_position;
+
+    log_debug("FourWheelDriveController",
+              "update",
+              "Joint " + joint_name + ": Position = " + to_string(current_position) +
+                  ", Previous = " + to_string(axis_positions_[joint_name]));
+
+    command_interfaces_[i].set_value(axis_commands_[joint_name]);
+    log_debug("FourWheelDriveController",
+              "update",
+              "Joint " + joint_name + ": Command = " + to_string(axis_commands_[joint_name]));
   }
 
-  // Calculate odometry
-  left_wheel_pos /= 2.0;   // Average of left wheels
-  right_wheel_pos /= 2.0;  // Average of right wheels
+  left_wheel_pos /= 2.0;
+  right_wheel_pos /= 2.0;
   double left_wheel_delta = left_wheel_pos - prev_left_wheel_pos_;
   double right_wheel_delta = right_wheel_pos - prev_right_wheel_pos_;
 
@@ -128,7 +118,6 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
   prev_left_wheel_pos_ = left_wheel_pos;
   prev_right_wheel_pos_ = right_wheel_pos;
 
-  // Publish odometry
   nav_msgs::msg::Odometry odom_msg;
   odom_msg.header.stamp = get_node()->now();
   odom_msg.header.frame_id = "odom";
@@ -141,6 +130,7 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
   odom_pub_->publish(odom_msg);
 
   publish_joint_states();
+
   return controller_interface::return_type::OK;
 }
 
@@ -170,80 +160,23 @@ void FourWheelDriveController::publish_joint_states() {
 }
 
 InterfaceConfiguration FourWheelDriveController::command_interface_configuration() const {
-  log_info("FourWheelDriveController", "command_interface_configuration", "Called");
   InterfaceConfiguration config;
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
-  for (const auto& joint_name : joint_names_) {
-    config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_POSITION);
-    log_info("FourWheelDriveController",
-             "command_interface_configuration",
-             "Added command interface: " + joint_name + "/" + hardware_interface::HW_IF_POSITION);
+  for (const auto& joint : joint_names_) {
+    config.names.push_back(joint + "/" + hardware_interface::HW_IF_POSITION);
   }
   return config;
 }
 
 InterfaceConfiguration FourWheelDriveController::state_interface_configuration() const {
-  log_info("FourWheelDriveController", "state_interface_configuration", "Called");
   InterfaceConfiguration config;
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
-  for (const auto& joint_name : joint_names_) {
-    config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_POSITION);
-    log_info("FourWheelDriveController",
-             "state_interface_configuration",
-             "Added state interface: " + joint_name + "/" + hardware_interface::HW_IF_POSITION);
+  for (const auto& joint : joint_names_) {
+    config.names.push_back(joint + "/" + hardware_interface::HW_IF_POSITION);
   }
   return config;
 }
 
-bool FourWheelDriveController::writeCommandsToHardware(const std::vector<double>& wheel_positions) {
-  msgpack::sbuffer sbuf;
-  msgpack::pack(sbuf, wheel_positions);
-
-  ssize_t bytes_written = write(serial_fd_, sbuf.data(), sbuf.size());
-  if (bytes_written != static_cast<ssize_t>(sbuf.size())) {
-    log_error("FourWheelDriveController", "writeCommandsToHardware", "Failed to write to serial port");
-    return false;
-  }
-
-  std::vector<uint8_t> response(64);
-  ssize_t bytes_read = read(serial_fd_, response.data(), response.size());
-  if (bytes_read <= 0) {
-    log_error("FourWheelDriveController", "writeCommandsToHardware", "Failed to read from serial port");
-    return false;
-  }
-
-  msgpack::object_handle oh = msgpack::unpack(reinterpret_cast<char*>(response.data()), bytes_read);
-  msgpack::object obj = oh.get();
-
-  bool success;
-  obj.convert(success);
-  return success;
-}
-
-std::vector<double> FourWheelDriveController::readStateFromHardware(const std::string& value_type) {
-  msgpack::sbuffer sbuf;
-  msgpack::pack(sbuf, value_type);
-
-  ssize_t bytes_written = write(serial_fd_, sbuf.data(), sbuf.size());
-  if (bytes_written != static_cast<ssize_t>(sbuf.size())) {
-    log_error("FourWheelDriveController", "readStateFromHardware", "Failed to write to serial port");
-    return {};
-  }
-
-  std::vector<uint8_t> response(64);
-  ssize_t bytes_read = read(serial_fd_, response.data(), response.size());
-  if (bytes_read <= 0) {
-    log_error("FourWheelDriveController", "readStateFromHardware", "Failed to read from serial port");
-    return {};
-  }
-
-  msgpack::object_handle oh = msgpack::unpack(reinterpret_cast<char*>(response.data()), bytes_read);
-  msgpack::object obj = oh.get();
-
-  std::vector<double> wheel_positions;
-  obj.convert(wheel_positions);
-  return wheel_positions;
-}
 }  // namespace shelfbot
 
 #include "pluginlib/class_list_macros.hpp"
