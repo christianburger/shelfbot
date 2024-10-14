@@ -1,21 +1,22 @@
 #ifndef FOUR_WHEEL_DRIVE_CONTROLLER_HPP
 #define FOUR_WHEEL_DRIVE_CONTROLLER_HPP
 
+#include <shelfbot_utils.hpp>
+#include <hardware_interface/types/hardware_interface_type_values.hpp>
+
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
+#include <nav_msgs/msg/odometry.hpp>
 
 #include <functional>
-#include <hardware_interface/types/hardware_interface_type_values.hpp>
 #include <map>
-#include <nav_msgs/msg/odometry.hpp>
 #include <string>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <vector>
 
 #include "controller_interface/controller_interface.hpp"
-#include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/state.hpp"
-#include "shelfbot_utils.hpp"
 #include "std_msgs/msg/float64.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
 
@@ -56,7 +57,6 @@ class FourWheelDriveController : public controller_interface::ControllerInterfac
   void publish_joint_states();
   void calculate_odometry(const rclcpp::Duration& period);
 };
-
-}  // namespace shelfbot
+}
 
 #endif
