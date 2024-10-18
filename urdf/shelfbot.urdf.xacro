@@ -63,8 +63,6 @@
   <xacro:wheel name="wheel_back_left" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel name="wheel_back_right" radius="${wheel_radius}" width="${wheel_width}"/>
 
-  <xacro:box name="indicator_box" parent_link="wheel_front_right"/>
-
   <joint name="joint_motor_front_left" type="fixed">
     <parent link="base_link"/>
     <child link="motor_front_left"/>

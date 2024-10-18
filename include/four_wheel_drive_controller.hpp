@@ -1,22 +1,23 @@
 #ifndef FOUR_WHEEL_DRIVE_CONTROLLER_HPP
 #define FOUR_WHEEL_DRIVE_CONTROLLER_HPP
 
-#include <shelfbot_utils.hpp>
-#include <hardware_interface/types/hardware_interface_type_values.hpp>
-
-#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_ros/transform_broadcaster.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
-#include <nav_msgs/msg/odometry.hpp>
-
 #include <functional>
+#include <hardware_interface/types/hardware_interface_type_values.hpp>
 #include <map>
+#include <nav_msgs/msg/odometry.hpp>
+#include <sensor_msgs/msg/joint_state.hpp>
+#include <shelfbot_utils.hpp>
 #include <string>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <vector>
 
 #include "controller_interface/controller_interface.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "rclcpp_lifecycle/state.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "std_msgs/msg/float64.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
 
@@ -37,14 +38,16 @@ class FourWheelDriveController : public controller_interface::ControllerInterfac
   controller_interface::CallbackReturn on_deactivate(const rclcpp_lifecycle::State& previous_state) override;
 
  private:
+  rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_publisher_;
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   std::shared_ptr<FourWheelDriveHardwareInterface> hardware_interface_;
-
   std::vector<std::string> joint_names_;
   std::map<std::string, double> axis_positions_;
   std::map<std::string, double> axis_commands_;
 
   double wheel_separation_;
   double wheel_radius_;
+  double base_height_;
   double x_ = 0.0, y_ = 0.0, theta_ = 0.0;
   double prev_left_wheel_pos_ = 0.0;
   double prev_right_wheel_pos_ = 0.0;
@@ -55,8 +58,9 @@ class FourWheelDriveController : public controller_interface::ControllerInterfac
 
   void cmd_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg);
   void publish_joint_states();
-  void calculate_odometry(const rclcpp::Duration& period);
+  void publish_transforms();
 };
 }
 
 #endif
+
