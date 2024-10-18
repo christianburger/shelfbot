@@ -1,6 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler, TimerAction
-from launch.event_handlers import OnProcessExit
+from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -39,13 +38,6 @@ def generate_launch_description():
         parameters=[robot_description, {"use_sim_time": use_sim_time}],
     )
 
-    joint_state_pub_node = Node(
-        package="joint_state_publisher",
-        executable="joint_state_publisher",
-        name="joint_state_publisher",
-        parameters=[{"use_sim_time": use_sim_time}],
-    )
-
     control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
@@ -65,13 +57,6 @@ def generate_launch_description():
         arguments=["four_wheel_drive_controller", "--controller-manager", "/controller_manager"],
     )
 
-    delay_robot_controller_spawner_after_joint_state_broadcaster_spawner = RegisterEventHandler(
-        event_handler=OnProcessExit(
-            target_action=joint_state_broadcaster_spawner,
-            on_exit=[robot_controller_spawner],
-        )
-    )
-
     rviz_config_file = PathJoinSubstitution([FindPackageShare('shelfbot'), 'config', 'shelfbot.rviz'])
 
     rviz_node = Node(
@@ -83,24 +68,19 @@ def generate_launch_description():
             {'use_sim_time': use_sim_time},
             robot_description
         ],
-        remappings=[
-            ('/tf', 'tf'),
-            ('/tf_static', 'tf_static'),
-        ],
         output='screen',
     )
 
-    delayed_rviz = TimerAction(
+    delay_rviz_after_joint_state_broadcaster_spawner = TimerAction(
         period=5.0,
         actions=[rviz_node],
     )
 
     nodes = [
         robot_state_pub_node,
-        joint_state_pub_node,
         control_node,
         joint_state_broadcaster_spawner,
-        delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
-        delayed_rviz,
+        robot_controller_spawner,
+        delay_rviz_after_joint_state_broadcaster_spawner,
     ]
     return LaunchDescription(declared_arguments + nodes)

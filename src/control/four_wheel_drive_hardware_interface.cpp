@@ -3,6 +3,7 @@ namespace shelfbot {
 
 FourWheelDriveHardwareInterface::FourWheelDriveHardwareInterface() {
   log_info("FourWheelDriveHardwareInterface", "Constructor", "Initializing hardware interface");
+  mock_comm_ = std::make_unique<MockCommunication>();
 }
 
 hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_init(
@@ -24,9 +25,8 @@ hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_init(
     log_debug("FourWheelDriveHardwareInterface", "on_init", "Joint found: " + joint.name);
   }
 
-  serial_fd_ = open("/dev/ttyUSB0", O_RDWR | O_NOCTTY | O_SYNC);
-  if (serial_fd_ < 0) {
-    log_error("FourWheelDriveHardwareInterface", "on_init", "Error opening serial port");
+  if (!mock_comm_->open("/dev/ttyUSB0")) {
+    log_error("FourWheelDriveHardwareInterface", "on_init", "Error opening mock communication");
     return hardware_interface::CallbackReturn::ERROR;
   }
 
@@ -88,7 +88,7 @@ hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_deactivat
   log_info("FourWheelDriveHardwareInterface", "on_deactivate", "Deactivating hardware interface");
   log_debug(
       "FourWheelDriveHardwareInterface", "on_deactivate", "Previous state: " + std::string(previous_state.label()));
-  close(serial_fd_);
+  mock_comm_->close();
   log_info("FourWheelDriveHardwareInterface", "on_deactivate", "Hardware interface deactivated successfully");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -96,15 +96,18 @@ hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_deactivat
 hardware_interface::return_type FourWheelDriveHardwareInterface::read(const rclcpp::Time& time,
                                                                       const rclcpp::Duration& period) {
   log_debug("FourWheelDriveHardwareInterface", "read", "Reading hardware state");
-  log_debug("FourWheelDriveHardwareInterface",
-            "read",
-            "Time: " + std::to_string(time.seconds()) + ", Period: " + std::to_string(period.seconds()));
 
-  if (!readStateFromHardware()) {
+  if (!mock_comm_->readStateFromHardware(hw_positions_)) {
+    log_error("FourWheelDriveHardwareInterface", "read", "Failed to read state from hardware");
     return hardware_interface::return_type::ERROR;
   }
 
-  log_debug("FourWheelDriveHardwareInterface", "read", "Hardware state read successfully");
+  for (size_t i = 0; i < hw_positions_.size(); ++i) {
+    log_debug("FourWheelDriveHardwareInterface",
+              "read",
+              "Joint " + std::to_string(i) + " position: " + std::to_string(hw_positions_[i]));
+  }
+
   return hardware_interface::return_type::OK;
 }
 
@@ -115,7 +118,7 @@ hardware_interface::return_type FourWheelDriveHardwareInterface::write(const rcl
             "write",
             "Time: " + std::to_string(time.seconds()) + ", Period: " + std::to_string(period.seconds()));
 
-  if (!writeCommandsToHardware()) {
+  if (!mock_comm_->writeCommandsToHardware(hw_commands_)) {
     return hardware_interface::return_type::ERROR;
   }
 
@@ -123,56 +126,7 @@ hardware_interface::return_type FourWheelDriveHardwareInterface::write(const rcl
   return hardware_interface::return_type::OK;
 }
 
-bool FourWheelDriveHardwareInterface::writeCommandsToHardware() {
-  msgpack::sbuffer sbuf;
-  msgpack::pack(sbuf, hw_commands_);
-
-  ssize_t bytes_written = ::write(serial_fd_, sbuf.data(), sbuf.size());
-  if (bytes_written != static_cast<ssize_t>(sbuf.size())) {
-    log_error("FourWheelDriveHardwareInterface", "writeCommandsToHardware", "Failed to write to serial port");
-    return false;
-  }
-
-  std::vector<uint8_t> response(64);
-  ssize_t bytes_read = ::read(serial_fd_, response.data(), response.size());
-  if (bytes_read <= 0) {
-    log_error("FourWheelDriveHardwareInterface", "writeCommandsToHardware", "Failed to read from serial port");
-    return false;
-  }
-
-  msgpack::object_handle oh = msgpack::unpack(reinterpret_cast<char*>(response.data()), bytes_read);
-  msgpack::object obj = oh.get();
-
-  bool success;
-  obj.convert(success);
-  return success;
 }
-
-bool FourWheelDriveHardwareInterface::readStateFromHardware() {
-  msgpack::sbuffer sbuf;
-  msgpack::pack(sbuf, std::string("position"));
-
-  ssize_t bytes_written = ::write(serial_fd_, sbuf.data(), sbuf.size());
-  if (bytes_written != static_cast<ssize_t>(sbuf.size())) {
-    log_error("FourWheelDriveHardwareInterface", "readStateFromHardware", "Failed to write to serial port");
-    return false;
-  }
-
-  std::vector<uint8_t> response(64);
-  ssize_t bytes_read = ::read(serial_fd_, response.data(), response.size());
-  if (bytes_read <= 0) {
-    log_error("FourWheelDriveHardwareInterface", "readStateFromHardware", "Failed to read from serial port");
-    return false;
-  }
-
-  msgpack::object_handle oh = msgpack::unpack(reinterpret_cast<char*>(response.data()), bytes_read);
-  msgpack::object obj = oh.get();
-
-  obj.convert(hw_positions_);
-  return true;
-}
-
-} 
 
 #include "pluginlib/class_list_macros.hpp"
 PLUGINLIB_EXPORT_CLASS(shelfbot::FourWheelDriveHardwareInterface, hardware_interface::SystemInterface)

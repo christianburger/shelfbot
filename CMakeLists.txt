@@ -11,6 +11,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(msgpack REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 include_directories(include)
 
@@ -22,6 +23,30 @@ target_link_libraries(shelfbot_utils
 )
 ament_target_dependencies(shelfbot_utils
   rclcpp
+)
+
+add_library(serial_communication SHARED
+  src/hardware/serial_communication.cpp
+)
+target_link_libraries(serial_communication
+  shelfbot_utils
+  ${msgpack_LIBRARIES}
+)
+target_include_directories(serial_communication PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+add_library(mock_communication SHARED
+  src/hardware/mock_communication.cpp
+)
+target_link_libraries(mock_communication
+  shelfbot_utils
+  ${msgpack_LIBRARIES}
+)
+target_include_directories(mock_communication PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
 )
 
 add_library(four_wheel_drive_controller SHARED
@@ -45,6 +70,7 @@ ament_target_dependencies(four_wheel_drive_controller
   tf2_ros
   tf2_geometry_msgs
   msgpack
+  sensor_msgs
 )
 
 add_library(four_wheel_drive_hardware_interface SHARED
@@ -52,6 +78,8 @@ add_library(four_wheel_drive_hardware_interface SHARED
 )
 target_link_libraries(four_wheel_drive_hardware_interface
   shelfbot_utils
+  serial_communication
+  mock_communication
   ${rclcpp_LIBRARIES}
   ${hardware_interface_LIBRARIES}
   ${pluginlib_LIBRARIES}
@@ -66,6 +94,8 @@ ament_target_dependencies(four_wheel_drive_hardware_interface
 
 install(TARGETS
   shelfbot_utils
+  serial_communication
+  mock_communication
   four_wheel_drive_controller
   four_wheel_drive_hardware_interface
   ARCHIVE DESTINATION lib
@@ -103,7 +133,7 @@ pluginlib_export_plugin_description_file(controller_interface four_wheel_drive_c
 pluginlib_export_plugin_description_file(hardware_interface four_wheel_drive_hardware_interface_plugin.xml)
 
 ament_export_include_directories(include)
-ament_export_libraries(shelfbot_utils four_wheel_drive_controller four_wheel_drive_hardware_interface)
+ament_export_libraries(shelfbot_utils serial_communication mock_communication four_wheel_drive_controller four_wheel_drive_hardware_interface)
 ament_export_dependencies(
   rclcpp
   hardware_interface
@@ -114,6 +144,7 @@ ament_export_dependencies(
   tf2_ros
   tf2_geometry_msgs
   msgpack
+  sensor_msgs
 )
 
 ament_package()
