@@ -9,11 +9,13 @@ using std::placeholders::_1;
 
 namespace shelfbot {
 
-FourWheelDriveController::FourWheelDriveController()
-: ControllerInterface() {
+FourWheelDriveController::FourWheelDriveController() : controller_interface::ControllerInterface(), clock_(RCL_SYSTEM_TIME) {
   log_info("FourWheelDriveController", "Constructor", "Called");
-}
+  for (const auto& joint : joint_names_) {
+    log_debug("FourWheelDriveController", "Constructor", "Joint name: " + joint);
+  }
 
+}
 CallbackReturn FourWheelDriveController::on_init() {
   log_info("FourWheelDriveController", "on_init", "Called");
   try {
@@ -32,6 +34,10 @@ CallbackReturn FourWheelDriveController::on_init() {
 
 CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::State& previous_state) {
   log_info("FourWheelDriveController", "on_configure", "Starting configuration");
+ 
+  // Initialize the clock
+  clock_ = rclcpp::Clock(RCL_SYSTEM_TIME);
+
   joint_state_publisher_ = get_node()->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
   joint_names_ = get_node()->get_parameter("joints").as_string_array();
   wheel_separation_ = get_node()->get_parameter("wheel_separation").as_double();
@@ -41,6 +47,7 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
     log_error("FourWheelDriveController", "on_configure", "No joints specified");
     return CallbackReturn::ERROR;
   }
+
   log_info("FourWheelDriveController", "on_configure", "Joints loaded: " + to_string(joint_names_.size()));
 
   for (const auto& joint : joint_names_) {
@@ -66,6 +73,10 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
   } else {
     log_debug("FourWheelDriveController", "on_configure", "Joint state broadcaster is disabled");
   }
+  
+  for (const auto& joint : joint_names_) {
+    log_debug("FourWheelDriveController", "on_configure", "Configured joint: " + joint);
+  }
 
   log_info("FourWheelDriveController", "on_configure", "Completed successfully");
   return CallbackReturn::SUCCESS;
@@ -87,65 +98,60 @@ CallbackReturn FourWheelDriveController::on_deactivate(const rclcpp_lifecycle::S
 controller_interface::return_type FourWheelDriveController::update(const rclcpp::Time& time,
                                                                    const rclcpp::Duration& period) {
   log_debug("FourWheelDriveController", "update", "Called");
-  double left_wheel_pos = 0.0, right_wheel_pos = 0.0;
 
+  // Read current joint states from state interfaces
   for (size_t i = 0; i < joint_names_.size(); ++i) {
-    const auto& joint_name = joint_names_[i];
-    double current_position = state_interfaces_[i].get_value();
-
-    if (joint_name.find("left") != std::string::npos) {
-      left_wheel_pos += current_position;
-    } else if (joint_name.find("right") != std::string::npos) {
-      right_wheel_pos += current_position;
-    }
-
-    axis_positions_[joint_name] = current_position;
-
-    log_debug("FourWheelDriveController",
-              "update",
-              "Joint " + joint_name + ": Position = " + to_string(current_position) +
-                  ", Previous = " + to_string(axis_positions_[joint_name]));
-
-    command_interfaces_[i].set_value(axis_commands_[joint_name]);
-
-    log_debug("FourWheelDriveController",
-              "update",
-              "Joint " + joint_name + ": Command = " + to_string(axis_commands_[joint_name]));
+    axis_positions_[joint_names_[i]] = state_interfaces_[i].get_value();
   }
 
-  left_wheel_pos /= 2.0;
-  right_wheel_pos /= 2.0;
+  // Update odometry
+  update_odometry(period);
 
-  double left_wheel_delta = left_wheel_pos - prev_left_wheel_pos_;
-  double right_wheel_delta = right_wheel_pos - prev_right_wheel_pos_;
-
-  double linear_delta = (left_wheel_delta + right_wheel_delta) * wheel_radius_ / 2.0;
-  double angular_delta = (right_wheel_delta - left_wheel_delta) * wheel_radius_ / wheel_separation_;
-
-  x_ += linear_delta * cos(theta_);
-  y_ += linear_delta * sin(theta_);
-  theta_ += angular_delta;
-
-  prev_left_wheel_pos_ = left_wheel_pos;
-  prev_right_wheel_pos_ = right_wheel_pos;
-
-  nav_msgs::msg::Odometry odom_msg;
-  odom_msg.header.stamp = get_node()->now();
-  odom_msg.header.frame_id = "odom";
-  odom_msg.child_frame_id = "base_link";
-  odom_msg.pose.pose.position.x = x_;
-  odom_msg.pose.pose.position.y = y_;
-  odom_msg.pose.pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
-  odom_msg.twist.twist.linear.x = linear_delta / period.seconds();
-  odom_msg.twist.twist.angular.z = angular_delta / period.seconds();
-  odom_pub_->publish(odom_msg);
-
+  // Publish joint states and transforms
   publish_joint_states();
-  log_debug("FourWheelDriveController", "update", "Joint states published");
   publish_transforms();
-  log_debug("FourWheelDriveController", "update", "Transforms published");
+
+  // Write commands to command interfaces
+  for (size_t i = 0; i < joint_names_.size(); ++i) {
+    command_interfaces_[i].set_value(axis_commands_[joint_names_[i]]);
+  }
 
   return controller_interface::return_type::OK;
+}
+
+void FourWheelDriveController::update_odometry(const rclcpp::Duration& period) {
+  // Calculate wheel velocities
+  std::vector<double> wheel_velocities(joint_names_.size());
+  for (size_t i = 0; i < joint_names_.size(); ++i) {
+    wheel_velocities[i] = axis_positions_[joint_names_[i]] / period.seconds();
+  }
+
+  // Calculate robot velocity
+  double vx = std::accumulate(wheel_velocities.begin(), wheel_velocities.end(), 0.0) * wheel_radius_ / joint_names_.size();
+  double vy = 0.0;  // Assuming no lateral movement
+  double vth = (wheel_velocities[1] + wheel_velocities[3] - wheel_velocities[0] - wheel_velocities[2]) * wheel_radius_ / (2.0 * wheel_separation_);
+
+  // Update position
+  double delta_x = (vx * std::cos(theta_) - vy * std::sin(theta_)) * period.seconds();
+  double delta_y = (vx * std::sin(theta_) + vy * std::cos(theta_)) * period.seconds();
+  double delta_th = vth * period.seconds();
+
+  x_ += delta_x;
+  y_ += delta_y;
+  theta_ += delta_th;
+
+  // Create and publish odometry message
+  auto odom_msg = std::make_unique<nav_msgs::msg::Odometry>();
+  odom_msg->header.stamp = clock_.now();
+  odom_msg->header.frame_id = "odom";
+  odom_msg->child_frame_id = "base_link";
+  odom_msg->pose.pose.position.x = x_;
+  odom_msg->pose.pose.position.y = y_;
+  odom_msg->pose.pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
+  odom_msg->twist.twist.linear.x = vx;
+  odom_msg->twist.twist.linear.y = vy;
+  odom_msg->twist.twist.angular.z = vth;
+  odom_pub_->publish(std::move(odom_msg));
 }
 
 void FourWheelDriveController::cmd_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
@@ -158,13 +164,13 @@ void FourWheelDriveController::cmd_callback(const std_msgs::msg::Float64MultiArr
     axis_commands_[joint_names_[i]] = msg->data[i];
     log_info("FourWheelDriveController",
              "cmd_callback",
-             "Setting " + joint_names_[i] + " command to " + to_string(msg->data[i]));
+             "Setting " + joint_names_[i] + " command to " + std::to_string(msg->data[i]));
   }
 }
 
 void FourWheelDriveController::publish_joint_states() {
   sensor_msgs::msg::JointState joint_state_msg;
-  joint_state_msg.header.stamp = get_node()->now();
+  joint_state_msg.header.stamp = clock_.now();
   joint_state_msg.header.frame_id = "base_link";
 
   log_debug("FourWheelDriveController", "publish_joint_states", "Publishing joint states");
@@ -205,73 +211,58 @@ InterfaceConfiguration FourWheelDriveController::state_interface_configuration()
 
 void FourWheelDriveController::publish_transforms() {
   log_debug("FourWheelDriveController", "publish_transforms", "Starting transform publication");
+  auto now = clock_.now();
 
-  auto now = get_node()->now();
+  std::vector<geometry_msgs::msg::TransformStamped> transforms;
 
-  // Publish base_footprint to base_link transform
-  geometry_msgs::msg::TransformStamped t;
-  t.header.stamp = now;
-  t.header.frame_id = "base_footprint";
-  t.child_frame_id = "base_link";
-  t.transform.translation.z = wheel_radius_;
-  t.transform.rotation.w = 1.0;
-  tf_broadcaster_->sendTransform(t);
-  log_debug("FourWheelDriveController", "publish_transforms", "Published base_footprint to base_link transform");
+  // Base footprint to base_link transform
+  transforms.push_back(create_transform("base_footprint", "base_link", 0, 0, wheel_radius_, 0, 0, 0, now));
 
-  // Publish transforms for base_axis joints and wheels
+  // Base_link to joints and wheels transforms
   for (const auto& joint : joint_names_) {
-    geometry_msgs::msg::TransformStamped transform;
-    transform.header.stamp = now;
-    transform.header.frame_id = "base_link";
-    transform.child_frame_id = joint;
-
-    // Set translation based on joint position
+    double x = 0, y = 0;
     if (joint.find("front_left") != std::string::npos) {
-      transform.transform.translation.x = -wheel_separation_ / 2;
-      transform.transform.translation.y = wheel_separation_ / 2;
+      x = -wheel_separation_ / 2;
+      y = wheel_separation_ / 2;
     } else if (joint.find("front_right") != std::string::npos) {
-      transform.transform.translation.x = wheel_separation_ / 2;
-      transform.transform.translation.y = wheel_separation_ / 2;
+      x = wheel_separation_ / 2;
+      y = wheel_separation_ / 2;
     } else if (joint.find("back_left") != std::string::npos) {
-      transform.transform.translation.x = -wheel_separation_ / 2;
-      transform.transform.translation.y = -wheel_separation_ / 2;
+      x = -wheel_separation_ / 2;
+      y = -wheel_separation_ / 2;
     } else if (joint.find("back_right") != std::string::npos) {
-      transform.transform.translation.x = wheel_separation_ / 2;
-      transform.transform.translation.y = -wheel_separation_ / 2;
+      x = wheel_separation_ / 2;
+      y = -wheel_separation_ / 2;
     }
 
-    // Set rotation based on joint position
-    tf2::Quaternion q;
-    q.setRPY(0, 0, axis_positions_[joint]);
-    transform.transform.rotation = tf2::toMsg(q);
+    transforms.push_back(create_transform("base_link", joint, x, y, 0, 0, 0, axis_positions_[joint], now));
+    transforms.push_back(create_transform(joint, "wheel_" + joint.substr(joint.find("base_axis_") + 10), wheel_radius_, 0, 0, 0, 0, 0, now));
 
-    tf_broadcaster_->sendTransform(transform);
-    log_debug("FourWheelDriveController", "publish_transforms", "Published transform for joint: " + joint);
-
-    // Publish wheel transform
-    geometry_msgs::msg::TransformStamped wheel_transform;
-    wheel_transform.header.stamp = now;
-    wheel_transform.header.frame_id = joint;
-    wheel_transform.child_frame_id = "wheel_" + joint.substr(joint.find_last_of("_") + 1);
-    wheel_transform.transform.translation.x = wheel_radius_;
-    wheel_transform.transform.rotation.w = 1.0;
-    tf_broadcaster_->sendTransform(wheel_transform);
-    log_debug("FourWheelDriveController", "publish_transforms", "Published wheel transform for: " + wheel_transform.child_frame_id);
+    log_debug("FourWheelDriveController", "publish_transforms", "Publishing transform for joint: " + joint);
+    log_debug("FourWheelDriveController", "publish_transforms", "Wheel name: wheel_" + joint.substr(joint.find("base_axis_") + 10));
   }
 
-  // Publish indicator_box transform
-  geometry_msgs::msg::TransformStamped indicator_transform;
-  indicator_transform.header.stamp = now;
-  indicator_transform.header.frame_id = "base_link";
-  indicator_transform.child_frame_id = "indicator_box";
-  indicator_transform.transform.translation.z = base_height_ / 2;
-  indicator_transform.transform.rotation.w = 1.0;
-  tf_broadcaster_->sendTransform(indicator_transform);
-  log_debug("FourWheelDriveController", "publish_transforms", "Published indicator_box transform");
+  tf_broadcaster_->sendTransform(transforms);
+  log_debug("FourWheelDriveController", "publish_transforms", "Published " + std::to_string(transforms.size()) + " transforms");
 
-  log_debug("FourWheelDriveController", "publish_transforms", "Completed transform publication");
 }
 
+geometry_msgs::msg::TransformStamped FourWheelDriveController::create_transform(
+    const std::string& frame_id, const std::string& child_frame_id,
+    double x, double y, double z, double roll, double pitch, double yaw,
+    const rclcpp::Time& stamp) {
+  geometry_msgs::msg::TransformStamped t;
+  t.header.stamp = stamp;
+  t.header.frame_id = frame_id;
+  t.child_frame_id = child_frame_id;
+  t.transform.translation.x = x;
+  t.transform.translation.y = y;
+  t.transform.translation.z = z;
+  tf2::Quaternion q;
+  q.setRPY(roll, pitch, yaw);
+  t.transform.rotation = tf2::toMsg(q);
+  return t;
+}
 }
 
 #include "pluginlib/class_list_macros.hpp"
