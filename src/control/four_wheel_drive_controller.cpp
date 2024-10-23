@@ -211,40 +211,36 @@ InterfaceConfiguration FourWheelDriveController::state_interface_configuration()
 
 void FourWheelDriveController::publish_transforms() {
   log_debug("FourWheelDriveController", "publish_transforms", "Starting transform publication");
-  auto now = clock_.now();
 
+  auto now = get_node()->now();
   std::vector<geometry_msgs::msg::TransformStamped> transforms;
 
-  // Base footprint to base_link transform
-  transforms.push_back(create_transform("base_footprint", "base_link", 0, 0, wheel_radius_, 0, 0, 0, now));
-
-  // Base_link to joints and wheels transforms
+  // Only publish the dynamic transforms from motors to base_axis
   for (const auto& joint : joint_names_) {
-    double x = 0, y = 0;
-    if (joint.find("front_left") != std::string::npos) {
-      x = -wheel_separation_ / 2;
-      y = wheel_separation_ / 2;
-    } else if (joint.find("front_right") != std::string::npos) {
-      x = wheel_separation_ / 2;
-      y = wheel_separation_ / 2;
-    } else if (joint.find("back_left") != std::string::npos) {
-      x = -wheel_separation_ / 2;
-      y = -wheel_separation_ / 2;
-    } else if (joint.find("back_right") != std::string::npos) {
-      x = wheel_separation_ / 2;
-      y = -wheel_separation_ / 2;
-    }
+    geometry_msgs::msg::TransformStamped transform;
+    transform.header.stamp = now;
+    
+    // Extract the corresponding motor name from the joint name
+    std::string motor_name = "motor_" + joint.substr(joint.find("base_axis_") + 10);
+    std::string base_axis_name = "base_axis_" + joint.substr(joint.find("base_axis_") + 10);
+    
+    transform.header.frame_id = motor_name;
+    transform.child_frame_id = base_axis_name;
+    transform.transform.translation.x = 0.1;  // motor_length/2
+    
+    // Set rotation based on joint position
+    tf2::Quaternion q;
+    q.setRPY(0, 0, axis_positions_[joint]);
+    transform.transform.rotation = tf2::toMsg(q);
 
-    transforms.push_back(create_transform("base_link", joint, x, y, 0, 0, 0, axis_positions_[joint], now));
-    transforms.push_back(create_transform(joint, "wheel_" + joint.substr(joint.find("base_axis_") + 10), wheel_radius_, 0, 0, 0, 0, 0, now));
-
-    log_debug("FourWheelDriveController", "publish_transforms", "Publishing transform for joint: " + joint);
-    log_debug("FourWheelDriveController", "publish_transforms", "Wheel name: wheel_" + joint.substr(joint.find("base_axis_") + 10));
+    transforms.push_back(transform);
+    log_debug("FourWheelDriveController", "publish_transforms", 
+              "Published transform from " + motor_name + " to " + base_axis_name);
   }
 
   tf_broadcaster_->sendTransform(transforms);
-  log_debug("FourWheelDriveController", "publish_transforms", "Published " + std::to_string(transforms.size()) + " transforms");
-
+  log_debug("FourWheelDriveController", "publish_transforms", 
+            "Published " + std::to_string(transforms.size()) + " transforms");
 }
 
 geometry_msgs::msg::TransformStamped FourWheelDriveController::create_transform(
