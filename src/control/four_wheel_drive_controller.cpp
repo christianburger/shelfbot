@@ -109,7 +109,6 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
 
   // Publish joint states and transforms
   publish_joint_states();
-  publish_transforms();
 
   // Write commands to command interfaces
   for (size_t i = 0; i < joint_names_.size(); ++i) {
@@ -209,56 +208,6 @@ InterfaceConfiguration FourWheelDriveController::state_interface_configuration()
   return config;
 }
 
-void FourWheelDriveController::publish_transforms() {
-  log_debug("FourWheelDriveController", "publish_transforms", "Starting transform publication");
-
-  auto now = get_node()->now();
-  std::vector<geometry_msgs::msg::TransformStamped> transforms;
-
-  // Only publish the dynamic transforms from motors to base_axis
-  for (const auto& joint : joint_names_) {
-    geometry_msgs::msg::TransformStamped transform;
-    transform.header.stamp = now;
-    
-    // Extract the corresponding motor name from the joint name
-    std::string motor_name = "motor_" + joint.substr(joint.find("base_axis_") + 10);
-    std::string base_axis_name = "base_axis_" + joint.substr(joint.find("base_axis_") + 10);
-    
-    transform.header.frame_id = motor_name;
-    transform.child_frame_id = base_axis_name;
-    transform.transform.translation.x = 0.1;  // motor_length/2
-    
-    // Set rotation based on joint position
-    tf2::Quaternion q;
-    q.setRPY(0, 0, axis_positions_[joint]);
-    transform.transform.rotation = tf2::toMsg(q);
-
-    transforms.push_back(transform);
-    log_debug("FourWheelDriveController", "publish_transforms", 
-              "Published transform from " + motor_name + " to " + base_axis_name);
-  }
-
-  tf_broadcaster_->sendTransform(transforms);
-  log_debug("FourWheelDriveController", "publish_transforms", 
-            "Published " + std::to_string(transforms.size()) + " transforms");
-}
-
-geometry_msgs::msg::TransformStamped FourWheelDriveController::create_transform(
-    const std::string& frame_id, const std::string& child_frame_id,
-    double x, double y, double z, double roll, double pitch, double yaw,
-    const rclcpp::Time& stamp) {
-  geometry_msgs::msg::TransformStamped t;
-  t.header.stamp = stamp;
-  t.header.frame_id = frame_id;
-  t.child_frame_id = child_frame_id;
-  t.transform.translation.x = x;
-  t.transform.translation.y = y;
-  t.transform.translation.z = z;
-  tf2::Quaternion q;
-  q.setRPY(roll, pitch, yaw);
-  t.transform.rotation = tf2::toMsg(q);
-  return t;
-}
 }
 
 #include "pluginlib/class_list_macros.hpp"
