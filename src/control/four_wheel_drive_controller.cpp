@@ -62,8 +62,6 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
   cmd_sub_ = get_node()->create_subscription<std_msgs::msg::Float64MultiArray>(
       "~/commands", 10, std::bind(&FourWheelDriveController::cmd_callback, this, _1));
 
-  odom_pub_ = get_node()->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
-
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(get_node());
 
   log_info("FourWheelDriveController", "on_configure", "Joint state broadcaster initialization check");
@@ -104,9 +102,6 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
     axis_positions_[joint_names_[i]] = state_interfaces_[i].get_value();
   }
 
-  // Update odometry
-  update_odometry(period);
-
   // Publish joint states and transforms
   publish_joint_states();
 
@@ -116,41 +111,6 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
   }
 
   return controller_interface::return_type::OK;
-}
-
-void FourWheelDriveController::update_odometry(const rclcpp::Duration& period) {
-  // Calculate wheel velocities
-  std::vector<double> wheel_velocities(joint_names_.size());
-  for (size_t i = 0; i < joint_names_.size(); ++i) {
-    wheel_velocities[i] = axis_positions_[joint_names_[i]] / period.seconds();
-  }
-
-  // Calculate robot velocity
-  double vx = std::accumulate(wheel_velocities.begin(), wheel_velocities.end(), 0.0) * wheel_radius_ / joint_names_.size();
-  double vy = 0.0;  // Assuming no lateral movement
-  double vth = (wheel_velocities[1] + wheel_velocities[3] - wheel_velocities[0] - wheel_velocities[2]) * wheel_radius_ / (2.0 * wheel_separation_);
-
-  // Update position
-  double delta_x = (vx * std::cos(theta_) - vy * std::sin(theta_)) * period.seconds();
-  double delta_y = (vx * std::sin(theta_) + vy * std::cos(theta_)) * period.seconds();
-  double delta_th = vth * period.seconds();
-
-  x_ += delta_x;
-  y_ += delta_y;
-  theta_ += delta_th;
-
-  // Create and publish odometry message
-  auto odom_msg = std::make_unique<nav_msgs::msg::Odometry>();
-  odom_msg->header.stamp = clock_.now();
-  odom_msg->header.frame_id = "odom";
-  odom_msg->child_frame_id = "base_link";
-  odom_msg->pose.pose.position.x = x_;
-  odom_msg->pose.pose.position.y = y_;
-  odom_msg->pose.pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
-  odom_msg->twist.twist.linear.x = vx;
-  odom_msg->twist.twist.linear.y = vy;
-  odom_msg->twist.twist.angular.z = vth;
-  odom_pub_->publish(std::move(odom_msg));
 }
 
 void FourWheelDriveController::cmd_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
