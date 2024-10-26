@@ -4,6 +4,7 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <functional>
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
+#include "four_wheel_drive_odometry.hpp"
 #include <map>
 #include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
@@ -53,9 +54,14 @@ class FourWheelDriveController : public controller_interface::ControllerInterfac
 
   void cmd_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg);
   void publish_joint_states();
+
+private:
+  void init_odometry();
   void update_odometry(const rclcpp::Duration& period);
-  private:
+
+  std::unique_ptr<FourWheelDriveOdometry> odometry_;
   rclcpp::Clock clock_;
+
 };
 } 
 
