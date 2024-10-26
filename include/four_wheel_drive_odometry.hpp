@@ -42,6 +42,11 @@ class FourWheelDriveOdometry {
     double prev_right_front_pos_{0.0};
     double prev_left_rear_pos_{0.0};
     double prev_right_rear_pos_{0.0};
+    double prev_linear_vel_{0.0};
+    double prev_angular_vel_{0.0};
+    std::array<double, 36> pose_covariance_;
+    std::array<double, 36> twist_covariance_;
+    std::vector<double> prev_wheel_positions_;
 };
 
 }

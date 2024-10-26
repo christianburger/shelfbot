@@ -32,7 +32,12 @@ bool MockCommunication::writeCommandsToHardware(const std::vector<double>& hw_co
     return false;
   }
 
-  log_info("MockCommunication", "writeCommandsToHardware", "Writing commands to mock hardware");
+  log_info("MockCommunication", "writeCommandsToHardware", 
+            "Writing commands: [" + std::to_string(hw_commands[0]) + "," + 
+            std::to_string(hw_commands[1]) + "," + 
+            std::to_string(hw_commands[2]) + "," + 
+            std::to_string(hw_commands[3]) + "]");
+
   hw_positions_ = hw_commands;
   return true;
 }
@@ -42,7 +47,12 @@ bool MockCommunication::readStateFromHardware(std::vector<double>& hw_positions)
     log_error("MockCommunication", "readStateFromHardware", "Mock port is not open");
     return false;
   }
-
+  log_info("MockCommunication", "readStateFromHardware", 
+           "Current positions: [" + std::to_string(hw_positions_[0]) + "," + 
+           std::to_string(hw_positions_[1]) + "," + 
+           std::to_string(hw_positions_[2]) + "," + 
+           std::to_string(hw_positions_[3]) + "]");
+    
   log_info("MockCommunication", "readStateFromHardware", "Reading state from mock hardware");
   for (size_t i = 0; i < hw_positions_.size(); ++i) {
     hw_positions_[i] += 0.01 * std::sin(rclcpp::Clock().now().seconds());  // Simulate small oscillations
