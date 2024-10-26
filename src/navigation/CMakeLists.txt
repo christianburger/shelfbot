@@ -2,6 +2,11 @@ add_library(four_wheel_drive_odometry SHARED
   four_wheel_drive_odometry.cpp
 )
 
+target_include_directories(four_wheel_drive_odometry PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
 target_link_libraries(four_wheel_drive_odometry
   shelfbot_utils
   ${rclcpp_LIBRARIES}

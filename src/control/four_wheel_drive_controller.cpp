@@ -24,6 +24,7 @@ CallbackReturn FourWheelDriveController::on_init() {
     auto_declare<double>("wheel_radius", 0.0);
     auto_declare<double>("base_height", 0.0);
     log_info("FourWheelDriveController", "on_init", "Parameters declared");
+
   } catch (const std::exception& e) {
     log_error("FourWheelDriveController", "on_init", string("Exception: ") + e.what());
     return CallbackReturn::ERROR;
@@ -76,6 +77,9 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
     log_debug("FourWheelDriveController", "on_configure", "Configured joint: " + joint);
   }
 
+  // In on_configure():
+  init_odometry();
+
   log_info("FourWheelDriveController", "on_configure", "Completed successfully");
   return CallbackReturn::SUCCESS;
 }
@@ -93,8 +97,7 @@ CallbackReturn FourWheelDriveController::on_deactivate(const rclcpp_lifecycle::S
   return CallbackReturn::SUCCESS;
 }
 
-controller_interface::return_type FourWheelDriveController::update(const rclcpp::Time& time,
-                                                                   const rclcpp::Duration& period) {
+controller_interface::return_type FourWheelDriveController::update(const rclcpp::Time& time, const rclcpp::Duration& period) {
   log_debug("FourWheelDriveController", "update", "Called");
 
   // Read current joint states from state interfaces
@@ -102,6 +105,7 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
     axis_positions_[joint_names_[i]] = state_interfaces_[i].get_value();
   }
 
+  update_odometry(period);
   // Publish joint states and transforms
   publish_joint_states();
 
@@ -166,6 +170,24 @@ InterfaceConfiguration FourWheelDriveController::state_interface_configuration()
     config.names.push_back(joint + "/" + hardware_interface::HW_IF_POSITION);
   }
   return config;
+}
+
+void FourWheelDriveController::init_odometry() {
+    odometry_ = std::make_unique<FourWheelDriveOdometry>(
+        get_node(),
+        std::make_shared<rclcpp::Clock>(RCL_SYSTEM_TIME),
+        wheel_separation_,
+        wheel_radius_
+    );
+    log_info("FourWheelDriveController", "init_odometry", "Odometry initialized");
+}
+
+void FourWheelDriveController::update_odometry(const rclcpp::Duration& period) {
+    std::vector<double> wheel_positions;
+    for (const auto& joint : joint_names_) {
+        wheel_positions.push_back(axis_positions_[joint]);
+    }
+    odometry_->update(wheel_positions, period);
 }
 
 }
