@@ -43,6 +43,10 @@ def generate_launch_description():
         executable="ros2_control_node",
         parameters=[robot_description, controller_config, {"use_sim_time": use_sim_time}],
         output="both",
+        remappings=[
+            ("~/robot_description", "/robot_description"),
+            ("/four_wheel_drive_controller/tf_odometry", "/tf"),
+        ],
     )
 
     joint_state_broadcaster_spawner = Node(

@@ -13,9 +13,12 @@ FourWheelDriveOdometry::FourWheelDriveOdometry(
       wheel_separation_(wheel_separation), 
       wheel_radius_(wheel_radius),
       prev_wheel_positions_(4, 0.0) {
+    
     odom_pub_ = node_->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
+    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(node_);
     pose_covariance_.fill(0.0);
     twist_covariance_.fill(0.0);
+    
     log_info("FourWheelDriveOdometry", "Constructor", 
              "Initialized with separation: " + std::to_string(wheel_separation_) + 
              ", radius: " + std::to_string(wheel_radius_));
@@ -36,6 +39,7 @@ void FourWheelDriveOdometry::update(
         odom_msg->pose.covariance = pose_covariance_;
         odom_msg->twist.covariance = twist_covariance_;
         odom_pub_->publish(std::move(odom_msg));
+        broadcast_tf();
         return;
     }
     
@@ -68,13 +72,14 @@ void FourWheelDriveOdometry::update(
     odom_msg->twist.covariance = calculate_twist_covariance();
 
     odom_pub_->publish(std::move(odom_msg));
+    broadcast_tf();
+    
     log_info("FourWheelDriveOdometry", "update", 
              "Published odometry - pos[" + std::to_string(x_) + "," + 
              std::to_string(y_) + "," + std::to_string(theta_) + "] " +
              "vel[" + std::to_string(twist.linear.x) + "," + 
              std::to_string(twist.angular.z) + "]");
 }
-
 geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const {
     geometry_msgs::msg::Pose pose;
     pose.position.x = x_;
@@ -125,11 +130,16 @@ double FourWheelDriveOdometry::calculate_angular_velocity(
 
 std::array<double, 36> FourWheelDriveOdometry::calculate_pose_covariance() {
     pose_covariance_.fill(0.0);
+    pose_covariance_[0] = 0.1;   // x
+    pose_covariance_[7] = 0.1;   // y
+    pose_covariance_[35] = 0.2;  // yaw
     return pose_covariance_;
 }
 
 std::array<double, 36> FourWheelDriveOdometry::calculate_twist_covariance() {
     twist_covariance_.fill(0.0);
+    twist_covariance_[0] = 0.1;   // linear x
+    twist_covariance_[35] = 0.2;  // angular z
     return twist_covariance_;
 }
 
@@ -140,6 +150,20 @@ nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const {
     odom.child_frame_id = "base_link";
     odom.pose.pose = calculate_pose();
     return odom;
+}
+
+void FourWheelDriveOdometry::broadcast_tf() {
+    // First transform: odom -> base_footprint
+    geometry_msgs::msg::TransformStamped odom_tf;
+    odom_tf.header.stamp = clock_->now();
+    odom_tf.header.frame_id = "odom";
+    odom_tf.child_frame_id = "base_footprint";
+    odom_tf.transform.translation.x = x_;
+    odom_tf.transform.translation.y = y_;
+    odom_tf.transform.translation.z = 0.0;
+    odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
+    
+    tf_broadcaster_->sendTransform(odom_tf);
 }
 
 }

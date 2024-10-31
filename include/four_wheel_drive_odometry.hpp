@@ -4,6 +4,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_ros/transform_broadcaster.h>
 #include <vector>
 
 namespace shelfbot {
@@ -28,9 +29,11 @@ class FourWheelDriveOdometry {
     double calculate_angular_velocity(double left_wheel_vel, double right_wheel_vel);
     std::array<double, 36> calculate_pose_covariance();
     std::array<double, 36> calculate_twist_covariance();
+    void broadcast_tf();
 
     std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node_;
     rclcpp::Clock::SharedPtr clock_;
+    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
     
     double wheel_separation_;
