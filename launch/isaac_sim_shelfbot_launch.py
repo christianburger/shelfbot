@@ -1,3 +1,4 @@
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
@@ -49,12 +50,6 @@ def generate_launch_description():
         ],
     )
 
-    joint_state_broadcaster_spawner = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
-    )
-
     robot_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
@@ -83,7 +78,6 @@ def generate_launch_description():
     nodes = [
         robot_state_pub_node,
         control_node,
-        joint_state_broadcaster_spawner,
         robot_controller_spawner,
         delay_rviz_after_joint_state_broadcaster_spawner,
     ]
