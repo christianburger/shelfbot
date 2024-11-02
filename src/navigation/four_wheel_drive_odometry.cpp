@@ -3,83 +3,55 @@
 
 namespace shelfbot {
 
-FourWheelDriveOdometry::FourWheelDriveOdometry(
-    std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, 
-    const rclcpp::Clock::SharedPtr& clock,
-    double wheel_separation, 
-    double wheel_radius) 
-    : node_(node), 
-      clock_(clock), 
-      wheel_separation_(wheel_separation), 
-      wheel_radius_(wheel_radius),
-      prev_wheel_positions_(4, 0.0) {
-    
+FourWheelDriveOdometry::FourWheelDriveOdometry(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, const rclcpp::Clock::SharedPtr& clock, double wheel_separation, double wheel_radius) : node_(node), clock_(clock), wheel_separation_(wheel_separation), wheel_radius_(wheel_radius), prev_wheel_positions_(4, 0.0) {
+
     odom_pub_ = node_->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(node_);
     pose_covariance_.fill(0.0);
     twist_covariance_.fill(0.0);
-    
-    log_info("FourWheelDriveOdometry", "Constructor", 
-             "Initialized with separation: " + std::to_string(wheel_separation_) + 
-             ", radius: " + std::to_string(wheel_radius_));
+
+    log_info("FourWheelDriveOdometry", "Constructor", "Initialized with separation: " + std::to_string(wheel_separation_) + ", radius: " + std::to_string(wheel_radius_));
 }
 
 void FourWheelDriveOdometry::update(
-    const std::vector<double>& wheel_positions, 
+    const std::vector<double>& wheel_positions,
     const rclcpp::Duration& period) {
-    
-    if (wheel_positions == prev_wheel_positions_) {
-        auto odom_msg = std::make_unique<nav_msgs::msg::Odometry>();
-        odom_msg->header.stamp = clock_->now();
-        odom_msg->header.frame_id = "odom";
-        odom_msg->child_frame_id = "base_link";
-        odom_msg->pose.pose = calculate_pose();
-        odom_msg->twist.twist.linear.x = prev_linear_vel_;
-        odom_msg->twist.twist.angular.z = prev_angular_vel_;
-        odom_msg->pose.covariance = pose_covariance_;
-        odom_msg->twist.covariance = twist_covariance_;
-        odom_pub_->publish(std::move(odom_msg));
-        broadcast_tf();
-        return;
-    }
-    
-    auto twist = calculate_twist(wheel_positions, period);
-    
-    double dt = period.seconds();
-    double delta_x = twist.linear.x * cos(theta_) * dt;
-    double delta_y = twist.linear.x * sin(theta_) * dt;
-    double delta_theta = twist.angular.z * dt;
 
-    x_ += delta_x;
-    y_ += delta_y;
-    theta_ += delta_theta;
+    double left_pos = (wheel_positions[0] + wheel_positions[2]) / 2.0;
+    double right_pos = (wheel_positions[1] + wheel_positions[3]) / 2.0;
 
-    prev_left_front_pos_ = wheel_positions[0];
-    prev_right_front_pos_ = wheel_positions[1];
-    prev_left_rear_pos_ = wheel_positions[2];
-    prev_right_rear_pos_ = wheel_positions[3];
+    double left_diff = left_pos - (prev_wheel_positions_[0] + prev_wheel_positions_[2]) / 2.0;
+    double right_diff = right_pos - (prev_wheel_positions_[1] + prev_wheel_positions_[3]) / 2.0;
+
+    theta_ = (right_diff - left_diff) * wheel_radius_ / wheel_separation_;
+    double distance = (left_diff + right_diff) / 2.0 * wheel_radius_;
+    total_distance_ += std::abs(distance);
+    
+    x_ = total_distance_ * cos(theta_);
+    y_ = total_distance_ * sin(theta_);
+
     prev_wheel_positions_ = wheel_positions;
 
     auto odom_msg = std::make_unique<nav_msgs::msg::Odometry>();
     odom_msg->header.stamp = clock_->now();
     odom_msg->header.frame_id = "odom";
     odom_msg->child_frame_id = "base_link";
-    
     odom_msg->pose.pose = calculate_pose();
-    odom_msg->twist.twist = twist;
-    
+    odom_msg->twist.twist.linear.x = 0.0;
+    odom_msg->twist.twist.linear.y = 0.0;
+    odom_msg->twist.twist.linear.z = 0.0;
+    odom_msg->twist.twist.angular.x = 0.0;
+    odom_msg->twist.twist.angular.y = 0.0;
+    odom_msg->twist.twist.angular.z = 0.0;
     odom_msg->pose.covariance = calculate_pose_covariance();
     odom_msg->twist.covariance = calculate_twist_covariance();
 
     odom_pub_->publish(std::move(odom_msg));
     broadcast_tf();
     
-    log_info("FourWheelDriveOdometry", "update", 
-             "Published odometry - pos[" + std::to_string(x_) + "," + 
-             std::to_string(y_) + "," + std::to_string(theta_) + "] " +
-             "vel[" + std::to_string(twist.linear.x) + "," + 
-             std::to_string(twist.angular.z) + "]");
+    log_info("FourWheelDriveOdometry", "update", "Published odometry - pos[" + std::to_string(x_) + "," + std::to_string(y_) + "," + std::to_string(theta_) + "] " + "vel[0.0,0.0]"); 
 }
+
 geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const {
     geometry_msgs::msg::Pose pose;
     pose.position.x = x_;
@@ -89,19 +61,15 @@ geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const {
     return pose;
 }
 
-geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
-    const std::vector<double>& wheel_positions, 
-    const rclcpp::Duration& period) {
+geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist( const std::vector<double>& wheel_positions, const rclcpp::Duration& period) {
     
     double dt = period.seconds();
     if (dt < 1e-9) {
         dt = 1e-9;
     }
 
-    double left_wheel_vel = ((wheel_positions[0] - prev_left_front_pos_) + 
-                            (wheel_positions[2] - prev_left_rear_pos_)) / (2.0 * dt);
-    double right_wheel_vel = ((wheel_positions[1] - prev_right_front_pos_) + 
-                             (wheel_positions[3] - prev_right_rear_pos_)) / (2.0 * dt);
+    double left_wheel_vel = ((wheel_positions[0] - prev_left_front_pos_) + (wheel_positions[2] - prev_left_rear_pos_)) / (2.0 * dt);
+    double right_wheel_vel = ((wheel_positions[1] - prev_right_front_pos_) + (wheel_positions[3] - prev_right_rear_pos_)) / (2.0 * dt);
 
     geometry_msgs::msg::Twist twist;
     twist.linear.x = calculate_linear_velocity(left_wheel_vel, right_wheel_vel);
@@ -114,16 +82,12 @@ geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
     return twist;
 }
 
-double FourWheelDriveOdometry::calculate_linear_velocity(
-    double left_wheel_vel, 
-    double right_wheel_vel) {
+double FourWheelDriveOdometry::calculate_linear_velocity( double left_wheel_vel, double right_wheel_vel) {
     prev_linear_vel_ = (left_wheel_vel + right_wheel_vel) * wheel_radius_ / 2.0;
     return prev_linear_vel_;
 }
 
-double FourWheelDriveOdometry::calculate_angular_velocity(
-    double left_wheel_vel, 
-    double right_wheel_vel) {
+double FourWheelDriveOdometry::calculate_angular_velocity( double left_wheel_vel, double right_wheel_vel) {
     prev_angular_vel_ = (right_wheel_vel - left_wheel_vel) * wheel_radius_ / wheel_separation_;
     return prev_angular_vel_;
 }
@@ -161,8 +125,9 @@ void FourWheelDriveOdometry::broadcast_tf() {
     odom_tf.transform.translation.x = x_;
     odom_tf.transform.translation.y = y_;
     odom_tf.transform.translation.z = 0.0;
-    odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
-    
+    //odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
+    odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, -1.0 * std::sin((theta_ + M_PI/2) / 2), std::cos((theta_ + M_PI/2) / 2)));
+
     tf_broadcaster_->sendTransform(odom_tf);
 }
 
