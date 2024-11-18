@@ -62,6 +62,8 @@ private:
   std::unique_ptr<FourWheelDriveOdometry> odometry_;
   rclcpp::Clock clock_;
 
+  int get_controller_manager_update_rate();
+
 };
 } 
 
