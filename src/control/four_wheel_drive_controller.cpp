@@ -60,13 +60,14 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
     log_info("FourWheelDriveController", "on_configure", "Created publisher for joint: " + joint);
   }
 
-  cmd_sub_ = get_node()->create_subscription<std_msgs::msg::Float64MultiArray>(
-      "~/commands", 10, std::bind(&FourWheelDriveController::cmd_callback, this, _1));
+  cmd_sub_ = get_node()->create_subscription<std_msgs::msg::Float64MultiArray>("~/commands", 10, std::bind(&FourWheelDriveController::cmd_callback, this, _1));
 
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(get_node());
 
   log_info("FourWheelDriveController", "on_configure", "Joint state broadcaster initialization check");
+
   auto js_broadcaster = get_node()->get_parameter("use_joint_state_broadcaster").as_bool();
+
   if (js_broadcaster) {
     log_info("FourWheelDriveController", "on_configure", "Joint state broadcaster is enabled");
   } else {
@@ -77,10 +78,17 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
     log_debug("FourWheelDriveController", "on_configure", "Configured joint: " + joint);
   }
 
+  get_controller_manager_update_rate();
+
+  int update_rate = get_controller_manager_update_rate();
+
+  log_info("FourWheelDriveController", "on_configure", "update_rate: " + std::to_string(update_rate_));
+
   // In on_configure():
   init_odometry();
 
   log_info("FourWheelDriveController", "on_configure", "Completed successfully");
+
   return CallbackReturn::SUCCESS;
 }
 
@@ -125,9 +133,7 @@ void FourWheelDriveController::cmd_callback(const std_msgs::msg::Float64MultiArr
   }
   for (size_t i = 0; i < joint_names_.size(); ++i) {
     axis_commands_[joint_names_[i]] = msg->data[i];
-    log_info("FourWheelDriveController",
-             "cmd_callback",
-             "Setting " + joint_names_[i] + " command to " + std::to_string(msg->data[i]));
+    log_info("FourWheelDriveController", "cmd_callback", "Setting " + joint_names_[i] + " command to " + std::to_string(msg->data[i]));
   }
 }
 
@@ -142,16 +148,12 @@ void FourWheelDriveController::publish_joint_states() {
     joint_state_msg.name.push_back(joint);
     joint_state_msg.position.push_back(axis_positions_[joint]);
 
-    log_debug("FourWheelDriveController",
-              "publish_joint_states",
-              "Joint: " + joint + ", Position: " + std::to_string(axis_positions_[joint]));
+    log_debug("FourWheelDriveController", "publish_joint_states", "Joint: " + joint + ", Position: " + std::to_string(axis_positions_[joint]));
   }
 
   joint_state_publisher_->publish(joint_state_msg);
 
-  log_debug("FourWheelDriveController",
-            "publish_joint_states",
-            "Published joint states for " + std::to_string(joint_names_.size()) + " joints");
+  log_debug("FourWheelDriveController", "publish_joint_states", "Published joint states for " + std::to_string(joint_names_.size()) + " joints");
 }
 
 InterfaceConfiguration FourWheelDriveController::command_interface_configuration() const {
@@ -173,12 +175,7 @@ InterfaceConfiguration FourWheelDriveController::state_interface_configuration()
 }
 
 void FourWheelDriveController::init_odometry() {
-    odometry_ = std::make_unique<FourWheelDriveOdometry>(
-        get_node(),
-        std::make_shared<rclcpp::Clock>(RCL_SYSTEM_TIME),
-        wheel_separation_,
-        wheel_radius_
-    );
+    odometry_ = std::make_unique<FourWheelDriveOdometry>( get_node(), std::make_shared<rclcpp::Clock>(RCL_SYSTEM_TIME), wheel_separation_, wheel_radius_);
     log_info("FourWheelDriveController", "init_odometry", "Odometry initialized");
 }
 
@@ -189,6 +186,32 @@ void FourWheelDriveController::update_odometry(const rclcpp::Duration& period) {
     }
     odometry_->update(wheel_positions, period);
 }
+
+int FourWheelDriveController::get_controller_manager_update_rate() {
+    log_trace("FourWheelDriveController", "get_controller_manager_update_rate", "Enter method");
+    
+    auto params = get_node()->list_parameters({}, 10);
+    log_info("FourWheelDriveController", "get_controller_manager_update_rate", "Available parameters:");
+
+    for (const auto& param_name : params.names) {
+        auto param = get_node()->get_parameter(param_name);
+
+        log_info("FourWheelDriveController", "Parameter", param_name + " = " + param.value_to_string());
+    }
+
+    try {
+        int update_rate = get_node()->get_parameter("update_rate").as_int();
+        log_info("FourWheelDriveController", "get_controller_manager_update_rate", "Found update rate: " + std::to_string(update_rate));
+
+        return update_rate;
+
+    } catch (const std::exception& e) {
+        log_error("FourWheelDriveController", "get_controller_manager_update_rate", "NOT WORKING!");
+        return -1;
+    }
+}
+
+
 
 }
 
