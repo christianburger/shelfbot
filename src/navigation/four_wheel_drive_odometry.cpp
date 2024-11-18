@@ -23,7 +23,7 @@ void FourWheelDriveOdometry::update(const std::vector<double>& wheel_positions, 
     const double right_diff = right_pos - (prev_wheel_positions_[1] + prev_wheel_positions_[3]) / 2.0;
     log_trace("FourWheelDriveOdometry", "update", "Position differences - left: " + std::to_string(left_diff) + " right: " + std::to_string(right_diff));
     
-    const double forward_distance = -(left_diff - right_diff) * wheel_radius_;
+    const double forward_distance = (left_diff - right_diff) * wheel_radius_;
 
     const double rotation = (right_diff + left_diff) * wheel_radius_ / wheel_separation_;
 
