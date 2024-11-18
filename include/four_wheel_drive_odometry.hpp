@@ -22,9 +22,10 @@ class FourWheelDriveOdometry {
     nav_msgs::msg::Odometry get_odometry() const;
 
  private:
-    geometry_msgs::msg::Pose calculate_pose() const;
-    geometry_msgs::msg::Twist calculate_twist(const std::vector<double>& wheel_positions, 
-                                            const rclcpp::Duration& period);
+    geometry_msgs::msg::Pose calculate_pose(const double x, const double y, const double theta) const;
+
+    geometry_msgs::msg::Twist calculate_twist(const std::vector<double>& wheel_positions, const rclcpp::Duration& period);
+
     double calculate_linear_velocity(double left_wheel_vel, double right_wheel_vel);
     double calculate_angular_velocity(double left_wheel_vel, double right_wheel_vel);
     std::array<double, 36> calculate_pose_covariance();

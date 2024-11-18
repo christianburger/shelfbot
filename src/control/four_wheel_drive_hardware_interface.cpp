@@ -75,8 +75,7 @@ hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_activate(
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_deactivate(
-    const rclcpp_lifecycle::State& previous_state) {
+hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& previous_state) {
   log_info("FourWheelDriveHardwareInterface", "on_deactivate", "Deactivating hardware interface");
   log_debug("FourWheelDriveHardwareInterface", "on_deactivate", "Previous state: " + std::string(previous_state.label()));
   mock_comm_->close();
