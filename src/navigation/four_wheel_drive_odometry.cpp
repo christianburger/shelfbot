@@ -4,6 +4,7 @@
 namespace shelfbot {
 
 FourWheelDriveOdometry::FourWheelDriveOdometry(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, const rclcpp::Clock::SharedPtr& clock, double wheel_separation, double wheel_radius) : node_(node), clock_(clock), wheel_separation_(wheel_separation), wheel_radius_(wheel_radius), prev_wheel_positions_(4, 0.0) {
+
     odom_pub_ = node_->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(node_);
     pose_covariance_.fill(0.0);
@@ -13,56 +14,39 @@ FourWheelDriveOdometry::FourWheelDriveOdometry(std::shared_ptr<rclcpp_lifecycle:
 }
 
 void FourWheelDriveOdometry::update(const std::vector<double>& wheel_positions, const rclcpp::Duration& period) {
-    log_trace("FourWheelDriveOdometry", "update", "Starting odometry update");
-    
-    const double left_pos = (wheel_positions[0] + wheel_positions[2]) / 2.0;
-    const double right_pos = (wheel_positions[1] + wheel_positions[3]) / 2.0;
-    log_trace("FourWheelDriveOdometry", "update", "Averaged positions - left: " + std::to_string(left_pos) + " right: " + std::to_string(right_pos));
-    
-    const double left_diff = left_pos - (prev_wheel_positions_[0] + prev_wheel_positions_[2]) / 2.0;
-    const double right_diff = right_pos - (prev_wheel_positions_[1] + prev_wheel_positions_[3]) / 2.0;
-    log_trace("FourWheelDriveOdometry", "update", "Position differences - left: " + std::to_string(left_diff) + " right: " + std::to_string(right_diff));
-    
+    double left_pos = (wheel_positions[0] + wheel_positions[2]) / 2.0;
+    double right_pos = (wheel_positions[1] + wheel_positions[3]) / 2.0;
+
+    double left_diff = left_pos - (prev_wheel_positions_[0] + prev_wheel_positions_[2]) / 2.0;
+    double right_diff = right_pos - (prev_wheel_positions_[1] + prev_wheel_positions_[3]) / 2.0;
+
     const double forward_distance = (left_diff - right_diff) * wheel_radius_;
-
     const double rotation = (right_diff + left_diff) * wheel_radius_ / wheel_separation_;
-
-    log_trace("FourWheelDriveOdometry", "update", "Calculated motion - forward: " + std::to_string(forward_distance) + " rotation: " + std::to_string(rotation));
     
     theta_ += rotation;
     x_ += forward_distance * cos(theta_);
     y_ += forward_distance * sin(theta_);
-    log_trace("FourWheelDriveOdometry", "update", "Updated pose - x: " + std::to_string(x_) + " y: " + std::to_string(y_) + " theta: " + std::to_string(theta_));
-    
+
     prev_wheel_positions_ = wheel_positions;
-    
+
     auto odom_msg = std::make_unique<nav_msgs::msg::Odometry>();
     odom_msg->header.stamp = clock_->now();
     odom_msg->header.frame_id = "odom";
     odom_msg->child_frame_id = "base_link";
-    odom_msg->pose.pose = calculate_pose(x_, y_, theta_);
+    odom_msg->pose.pose = calculate_pose();
     odom_msg->pose.covariance = calculate_pose_covariance();
     odom_msg->twist.covariance = calculate_twist_covariance();
-    
-    log_trace("FourWheelDriveOdometry", "update", "Publishing odometry message");
+
     odom_pub_->publish(std::move(odom_msg));
-    
-    log_trace("FourWheelDriveOdometry", "update", "Broadcasting transform");
     broadcast_tf();
-    
-    log_trace("FourWheelDriveOdometry", "update", "Completed odometry update");
 }
 
-geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose(
-    const double x, const double y, const double theta) const {
-    log_trace("FourWheelDriveOdometry", "calculate_pose", "Creating pose from x: " + std::to_string(x) + " y: " + std::to_string(y) + " theta: " + std::to_string(theta));
+geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const {
     geometry_msgs::msg::Pose pose;
-    pose.position.x = x;
-    pose.position.y = y;
+    pose.position.x = x_;
+    pose.position.y = y_;
     pose.position.z = 0.0;
-    pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta / 2), std::cos(theta / 2)));
-
-    log_trace("FourWheelDriveOdometry", "calculate_pose", "Pose calculation completed");
+    pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
     return pose;
 }
 
@@ -117,7 +101,7 @@ nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const {
     odom.header.stamp = clock_->now();
     odom.header.frame_id = "odom";
     odom.child_frame_id = "base_link";
-    odom.pose.pose = calculate_pose(x_, y_, theta_);
+    odom.pose.pose = calculate_pose();
     return odom;
 }
 
