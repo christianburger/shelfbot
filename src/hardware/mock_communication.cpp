@@ -1,5 +1,4 @@
 #include "mock_communication.hpp"
-
 #include <msgpack.hpp>
 
 namespace shelfbot {

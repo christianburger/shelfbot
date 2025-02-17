@@ -14,6 +14,8 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(msgpack REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(CURL REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 include_directories(include)
 
@@ -49,6 +51,20 @@ target_link_libraries(mock_communication
   ${msgpack_LIBRARIES}
 )
 target_include_directories(mock_communication PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+add_library(rest_communication SHARED
+  src/hardware/rest_communication.cpp
+)
+target_link_libraries(rest_communication
+  shelfbot_utils
+  ${CURL_LIBRARIES}
+  nlohmann_json::nlohmann_json
+  ${msgpack_LIBRARIES}
+)
+target_include_directories(rest_communication PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
@@ -91,6 +107,7 @@ target_link_libraries(four_wheel_drive_hardware_interface
   shelfbot_utils
   serial_communication
   mock_communication
+  rest_communication
   ${rclcpp_LIBRARIES}
   ${hardware_interface_LIBRARIES}
   ${pluginlib_LIBRARIES}
@@ -108,6 +125,7 @@ install(TARGETS
   shelfbot_utils
   serial_communication
   mock_communication
+  rest_communication
   four_wheel_drive_controller
   four_wheel_drive_hardware_interface
   four_wheel_drive_odometry
@@ -150,6 +168,7 @@ ament_export_libraries(
   shelfbot_utils 
   serial_communication 
   mock_communication 
+  rest_communication
   four_wheel_drive_controller 
   four_wheel_drive_hardware_interface
   four_wheel_drive_odometry
@@ -167,6 +186,8 @@ ament_export_dependencies(
   msgpack
   sensor_msgs
   rclcpp_lifecycle
+  CURL
+  nlohmann_json
 )
 
 ament_package()
