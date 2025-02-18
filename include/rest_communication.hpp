@@ -10,7 +10,8 @@
 
 namespace shelfbot {
 
-class RestCommunication {
+class RestCommunication : public CommunicationInterface {
+
 public:
     RestCommunication();
     ~RestCommunication();

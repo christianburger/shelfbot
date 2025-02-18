@@ -151,33 +151,35 @@
     <origin xyz="0 0 ${base_height}" rpy="${-pi/2} 0 0"/>
   </joint>
 
-  <ros2_control name="FourWheelDriveSystem" type="system">
+<ros2_control name="FourWheelDriveSystem" type="system">
     <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
-      <hardware>
-        <plugin>gazebo_ros2_control/GazeboSystem</plugin>
-      </hardware>
+        <hardware>
+            <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+        </hardware>
     </xacro:if>
     <xacro:if value="${'$(arg sim_mode)' != 'gazebo'}">
-      <hardware>
-        <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
-      </hardware>
+        <hardware>
+            <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
+            <param name="communication_type">rest</param>
+            <param name="base_url">http://localhost:8080</param>
+        </hardware>
     </xacro:if>
+
     <joint name="joint_base_axis_front_left">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
+        <command_interface name="position"/>
+        <state_interface name="position"/>
     </joint>
     <joint name="joint_base_axis_front_right">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
+        <command_interface name="position"/>
+        <state_interface name="position"/>
     </joint>
     <joint name="joint_base_axis_back_left">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
+        <command_interface name="position"/>
+        <state_interface name="position"/>
     </joint>
     <joint name="joint_base_axis_back_right">
-      <command_interface name="position"/>
-      <state_interface name="position"/>
+        <command_interface name="position"/>
+        <state_interface name="position"/>
     </joint>
-  </ros2_control>
-
+</ros2_control>
 </robot>

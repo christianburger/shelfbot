@@ -1,5 +1,8 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <!-- Real hardware specific configurations -->
-  <!-- Add real hardware specific elements here -->
+<hardware>
+  <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
+  <param name="communication_type">rest</param>
+  <param name="base_url">http://localhost:8080</param>
+</hardware>
 </robot>

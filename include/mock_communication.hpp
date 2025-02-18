@@ -1,22 +1,22 @@
-
 #ifndef MOCK_COMMUNICATION_HPP
 #define MOCK_COMMUNICATION_HPP
 
-#include <vector>
-#include <string>
+#include "communication_interface.hpp"
 #include "shelfbot_utils.hpp"
+#include <string>
+#include <vector>
 
 namespace shelfbot {
 
-class MockCommunication {
+class MockCommunication : public CommunicationInterface {
 public:
     MockCommunication();
-    ~MockCommunication();
+    ~MockCommunication() override;
 
-    bool open(const std::string& port);
-    void close();
-    bool writeCommandsToHardware(const std::vector<double>& hw_commands);
-    bool readStateFromHardware(std::vector<double>& hw_positions);
+    bool open(const std::string& port) override;
+    void close() override;
+    bool writeCommandsToHardware(const std::vector<double>& hw_commands) override;
+    bool readStateFromHardware(std::vector<double>& hw_positions) override;
 
 private:
     bool is_open_;

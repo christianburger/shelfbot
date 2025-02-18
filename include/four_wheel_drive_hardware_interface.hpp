@@ -6,7 +6,9 @@
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "shelfbot_utils.hpp"
+#include "communication_interface.hpp"
 #include "mock_communication.hpp"
+#include "rest_communication.hpp"
 
 namespace shelfbot {
 
@@ -24,11 +26,10 @@ class FourWheelDriveHardwareInterface : public hardware_interface::SystemInterfa
   hardware_interface::return_type write(const rclcpp::Time& time, const rclcpp::Duration& period) override;
 
  private:
-  std::unique_ptr<MockCommunication> mock_comm_;
+  std::unique_ptr<CommunicationInterface> comm_;
   std::vector<double> hw_commands_;
   std::vector<double> hw_positions_;
 };
 
 }
-
 #endif
