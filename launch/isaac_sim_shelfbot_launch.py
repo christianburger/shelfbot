@@ -1,4 +1,3 @@
-
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
@@ -19,19 +18,22 @@ def generate_launch_description():
 
     pkg_share = FindPackageShare(package='shelfbot').find('shelfbot')
     urdf_file_path = PathJoinSubstitution([pkg_share, 'urdf', 'shelfbot.urdf.xacro'])
-    
+    controller_config = PathJoinSubstitution([pkg_share, 'config', 'isaac.sim.params.yaml'])
+    rviz_config_file = PathJoinSubstitution([FindPackageShare('shelfbot'), 'config', 'shelfbot.rviz'])
+
+    # Fixed robot description - explicitly set mock communication for Isaac sim
     robot_description_content = Command(
         [
             FindExecutable(name="xacro"),
             " ",
             urdf_file_path,
-            " sim_mode:=isaac"
+            " sim_mode:=isaac",
+            " communication_type:=mock"  # Hardcoded mock for Isaac sim
         ]
     )
     robot_description = {"robot_description": robot_description_content}
 
-    controller_config = PathJoinSubstitution([pkg_share, 'config', 'isaac.sim.params.yaml'])
-
+    # Rest of the nodes remain the same
     robot_state_pub_node = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
@@ -56,8 +58,6 @@ def generate_launch_description():
         arguments=["four_wheel_drive_controller", "--controller-manager", "/controller_manager"],
     )
 
-    rviz_config_file = PathJoinSubstitution([FindPackageShare('shelfbot'), 'config', 'shelfbot.rviz'])
-
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
@@ -81,4 +81,5 @@ def generate_launch_description():
         robot_controller_spawner,
         delay_rviz_after_joint_state_broadcaster_spawner,
     ]
+
     return LaunchDescription(declared_arguments + nodes)
