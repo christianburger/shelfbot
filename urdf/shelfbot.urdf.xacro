@@ -157,7 +157,13 @@
             <plugin>gazebo_ros2_control/GazeboSystem</plugin>
         </hardware>
     </xacro:if>
-    <xacro:if value="${'$(arg sim_mode)' != 'gazebo'}">
+    <xacro:if value="${'$(arg sim_mode)' == 'isaac'}">
+        <hardware>
+            <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
+            <param name="communication_type">mock</param>
+        </hardware>
+    </xacro:if>
+    <xacro:if value="${'$(arg sim_mode)' == 'real'}">
         <hardware>
             <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
             <param name="communication_type">rest</param>

@@ -9,6 +9,7 @@
 #include "communication_interface.hpp"
 #include "mock_communication.hpp"
 #include "rest_communication.hpp"
+#include <rclcpp/logging.hpp>
 
 namespace shelfbot {
 
