@@ -45,45 +45,84 @@ void RestCommunication::close() {
 
 std::string RestCommunication::makeRestCall(const std::string& endpoint, const std::string& method, const nlohmann::json& data) {
     if (!is_open_ || !curl_) {
-        log_error("RestCommunication", "makeRestCall", "Connection state: " + std::string(is_open_ ? "open" : "closed") + 
-                                                      ", CURL state: " + std::string(curl_ ? "initialized" : "null"));
+        log_error("RestCommunication", "makeRestCall",
+            "Connection state: " + std::string(is_open_ ? "open" : "closed") +
+            ", CURL state: " + std::string(curl_ ? "initialized" : "null"));
         return "";
     }
 
     std::string url = base_url_ + endpoint;
     std::string response;
-    
     log_info("RestCommunication", "makeRestCall", "REQUEST: " + method + " " + url);
+
+    curl_easy_reset(curl_);
     
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, "Accept: application/json");
     curl_easy_setopt(curl_, CURLOPT_HTTPHEADER, headers);
-    
-    if (!data.empty()) {
-        std::string json_str = data.dump(2); // Pretty print with indent=2
-        log_info("RestCommunication", "makeRestCall", "REQUEST PAYLOAD:\n" + json_str);
-        curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, json_str.c_str());
-    }
 
     curl_easy_setopt(curl_, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl_, CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(curl_, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(curl_, CURLOPT_CUSTOMREQUEST, method.c_str());
+
+    std::string json_str;
+    if (!data.empty()) {
+        json_str = data.dump();
+        log_info("RestCommunication", "makeRestCall", "REQUEST PAYLOAD:\n" + json_str);
+    }
+
+    switch(method[0]) {
+        case 'P':
+            if (method.compare("POST") == 0) {
+                curl_easy_setopt(curl_, CURLOPT_POST, 1L);
+                if (!json_str.empty()) {
+                    log_info("RestCommunication", "makeRestCall", "PAYLOAD LENGTH: " + std::to_string(json_str.length()));
+                    log_info("RestCommunication", "makeRestCall", "PAYLOAD RAW: " + json_str);
+                    curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, json_str.c_str());
+                    curl_easy_setopt(curl_, CURLOPT_POSTFIELDSIZE, json_str.length());
+                }
+            } else if (method.compare("PUT") == 0 || method.compare("PATCH") == 0) {
+                curl_easy_setopt(curl_, CURLOPT_CUSTOMREQUEST, method.c_str());
+                if (!json_str.empty()) {
+                    curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, json_str.c_str());
+                }
+            }
+            break;
+
+        case 'G':
+            if (method.compare("GET") == 0) {
+                curl_easy_setopt(curl_, CURLOPT_HTTPGET, 1L);
+            }
+            break;
+
+        case 'D':
+            if (method.compare("DELETE") == 0) {
+                curl_easy_setopt(curl_, CURLOPT_CUSTOMREQUEST, method.c_str());
+            }
+            break;
+
+        default:
+            log_error("RestCommunication", "makeRestCall", "Unsupported HTTP method: " + method);
+            curl_slist_free_all(headers);
+            return "";
+    }
 
     long http_code = 0;
     CURLcode res = curl_easy_perform(curl_);
     curl_easy_getinfo(curl_, CURLINFO_RESPONSE_CODE, &http_code);
-    
     curl_slist_free_all(headers);
 
     if (res != CURLE_OK) {
-        log_error("RestCommunication", "makeRestCall", "CURL ERROR: " + std::string(curl_easy_strerror(res)));
-        log_error("RestCommunication", "makeRestCall", "Failed URL: " + url);
+        log_error("RestCommunication", "makeRestCall",
+            "CURL ERROR: " + std::string(curl_easy_strerror(res)) +
+            "\nFailed URL: " + url);
         return "";
     }
 
-    log_info("RestCommunication", "makeRestCall", "RESPONSE CODE: " + std::to_string(http_code));
-    log_info("RestCommunication", "makeRestCall", "RESPONSE BODY:\n" + response);
+    log_info("RestCommunication", "makeRestCall",
+        "RESPONSE CODE: " + std::to_string(http_code) +
+        "\nRESPONSE BODY:\n" + response);
 
     return response;
 }
@@ -113,34 +152,51 @@ void RestCommunication::moveAllMotors(long position, long speed, bool nonBlockin
              "Moving all motors to position " + std::to_string(position) + 
              " at speed " + std::to_string(speed) + 
              " (nonBlocking: " + std::string(nonBlocking ? "true" : "false") + ")");
-
     nlohmann::json json_data = {
-        {"position", position},
+        {"positions", std::vector<long>(6, position)},  // Array of 6 positions
         {"speed", speed},
         {"nonBlocking", nonBlocking}
     };
-
     makeRestCall("/motors", "POST", json_data);
 }
 
 bool RestCommunication::writeCommandsToHardware(const std::vector<double>& hw_commands) {
     log_info("RestCommunication", "writeCommandsToHardware", "Writing commands to hardware");
     
-    std::stringstream ss;
-    ss << "Commands: [";
-    for (size_t i = 0; i < hw_commands.size(); ++i) {
-        ss << hw_commands[i];
-        if (i < hw_commands.size() - 1) ss << ", ";
+    if (hw_commands.empty() || hw_commands.size() > 6) {
+        log_error("RestCommunication", "writeCommandsToHardware", 
+                  "Invalid number of commands: " + std::to_string(hw_commands.size()));
+        return false;
     }
-    ss << "]";
-    log_debug("RestCommunication", "writeCommandsToHardware", ss.str());
 
     if (!is_open_ || !curl_) {
         log_error("RestCommunication", "writeCommandsToHardware", "REST connection not open");
         return false;
     }
 
-    moveAllMotors(hw_commands[0], 4000, true);
+    // Create JSON with only the positions array
+    nlohmann::json json_data = {
+        {"positions", std::vector<long>()}
+    };
+    
+    // Fill positions array
+    auto& positions = json_data["positions"];
+    for (const auto& cmd : hw_commands) {
+        positions.push_back(static_cast<long>(cmd));
+    }
+    
+    // Pad remaining positions with zeros if needed
+    while (positions.size() < 6) {
+        positions.push_back(0);
+    }
+
+    // Make REST call with simplified JSON
+    std::string response = makeRestCall("/motors", "POST", json_data);
+    
+    if (response.empty()) {
+        return false;
+    }
+
     hw_positions_ = hw_commands;
     return true;
 }
