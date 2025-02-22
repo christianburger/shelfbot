@@ -128,8 +128,7 @@ std::string RestCommunication::makeRestCall(const std::string& endpoint, const s
 }
 
 std::string RestCommunication::setMotorPosition(uint8_t index, long position) {
-    log_info("RestCommunication", "setMotorPosition", "Setting motor " + std::to_string(index) + 
-             " to position " + std::to_string(position));
+    log_info("RestCommunication", "setMotorPosition", "Setting motor " + std::to_string(index) + " to position " + std::to_string(position));
 
     nlohmann::json json_data = {
         {"motor", index},
@@ -148,10 +147,8 @@ std::string RestCommunication::setMotorPosition(uint8_t index, long position) {
 }
 
 void RestCommunication::moveAllMotors(long position, long speed, bool nonBlocking) {
-    log_info("RestCommunication", "moveAllMotors", 
-             "Moving all motors to position " + std::to_string(position) + 
-             " at speed " + std::to_string(speed) + 
-             " (nonBlocking: " + std::string(nonBlocking ? "true" : "false") + ")");
+    log_info("RestCommunication", "moveAllMotors", "Moving all motors to position " + std::to_string(position) + " at speed " + std::to_string(speed) + " (nonBlocking: " + std::string(nonBlocking ? "true" : "false") + ")");
+
     nlohmann::json json_data = {
         {"positions", std::vector<long>(6, position)},  // Array of 6 positions
         {"speed", speed},
@@ -164,8 +161,7 @@ bool RestCommunication::writeCommandsToHardware(const std::vector<double>& hw_co
     log_info("RestCommunication", "writeCommandsToHardware", "Writing commands to hardware");
     
     if (hw_commands.empty() || hw_commands.size() > 6) {
-        log_error("RestCommunication", "writeCommandsToHardware", 
-                  "Invalid number of commands: " + std::to_string(hw_commands.size()));
+        log_error("RestCommunication", "writeCommandsToHardware", "Invalid number of commands: " + std::to_string(hw_commands.size()));
         return false;
     }
 
