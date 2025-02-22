@@ -42,22 +42,22 @@ four_wheel_drive_controller:
       - joint_base_axis_back_right/position
 
     # Robot dimensions
-    base_width: 0.5
-    base_length: 0.7
-    base_height: 0.2
+    base_width: 0.45
+    base_length: 0.55
+    base_height: 0.02
     base_mass: 50.0
 
     motor_radius: 0.05
-    motor_length: 0.2
+    motor_length: 0.1
     motor_mass: 2.0
 
-    wheel_radius: 0.2
+    wheel_radius: 0.075
     wheel_width: 0.05
     wheel_mass: 5.0
 
-    camera_width: 0.2
-    camera_length: 0.2
-    camera_height: 0.1
+    camera_width: 0.02
+    camera_length: 0.02
+    camera_height: 0.01
     camera_lens_radius: 0.05
     camera_mount_height: 0.5
     camera_mass: 0.5
@@ -66,6 +66,6 @@ four_wheel_drive_controller:
     base_axis_length: 0.25  
     base_axis_mass: 2.0
 
-    gear_ratio: 2
+    gear_ratio: 1
 
     wheel_separation: 0.45
