@@ -1,6 +1,6 @@
 controller_manager: &four_wheel_controller
   ros__parameters:
-    update_rate: 20 # Hz
+    update_rate: 2 # Hz
     use_sim_time: false
     use_joint_state_broadcaster: true
 
@@ -14,7 +14,7 @@ four_wheel_drive_controller:
   ros__parameters:
     use_joint_state_broadcaster: true
 
-    update_rate: 20 # Hz
+    update_rate: 2 # Hz
     publish_rate: 1
 
     enable_odom_tf: true

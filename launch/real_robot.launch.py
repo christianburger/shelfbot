@@ -26,7 +26,7 @@ def generate_launch_description():
         urdf_file_path,
         " sim_mode:=real",
         " communication_type:=rest",
-        " base_url:=http://localhost:8080"
+        " base_url:=http://shelfbot.local/"
       ]
     )
 
@@ -50,6 +50,12 @@ def generate_launch_description():
             ("~/robot_description", "/robot_description"),
             ("/four_wheel_drive_controller/tf_odometry", "/tf"),
         ],
+    )
+
+    joint_state_broadcaster_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
     )
 
     robot_controller_spawner = Node(
@@ -80,6 +86,7 @@ def generate_launch_description():
     nodes = [
         robot_state_pub_node,
         control_node,
+        joint_state_broadcaster_spawner,
         robot_controller_spawner,
         delay_rviz_after_joint_state_broadcaster_spawner,
     ]

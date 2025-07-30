@@ -51,7 +51,12 @@ std::string RestCommunication::makeRestCall(const std::string& endpoint, const s
         return "";
     }
 
-    std::string url = base_url_ + endpoint;
+    // Handle trailing/leading slashes to avoid double slashes
+    std::string clean_base = base_url_;
+    if (!clean_base.empty() && clean_base.back() == '/') {
+        clean_base.pop_back();
+    }
+    std::string url = clean_base + endpoint;
     std::string response;
     log_info("RestCommunication", "makeRestCall", "REQUEST: " + method + " " + url);
 

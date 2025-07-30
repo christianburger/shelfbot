@@ -167,7 +167,7 @@
         <hardware>
             <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
             <param name="communication_type">rest</param>
-            <param name="base_url">http://192.168.10.100</param>
+            <param name="base_url">http://shelfbot.local/</param>
         </hardware>
     </xacro:if>
 
