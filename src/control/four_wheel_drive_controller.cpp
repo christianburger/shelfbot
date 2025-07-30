@@ -93,9 +93,15 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
 }
 
 CallbackReturn FourWheelDriveController::on_activate(const rclcpp_lifecycle::State& previous_state) {
-  log_info("FourWheelDriveController", "on_activate", "Starting activation process");
+  log_info("FourWheelDriveController", "on_activate", "=== ACTIVATION START ===");
   log_info("FourWheelDriveController", "on_activate", "Previous state: " + std::string(previous_state.label()));
-  log_info("FourWheelDriveController", "on_activate", "Activation process completed");
+  
+  log_info("FourWheelDriveController", "on_activate", "Command interfaces available: " + std::to_string(command_interfaces_.size()));
+  log_info("FourWheelDriveController", "on_activate", "State interfaces available: " + std::to_string(state_interfaces_.size()));
+  log_info("FourWheelDriveController", "on_activate", "Joint names configured: " + std::to_string(joint_names_.size()));
+  
+  // Just return SUCCESS - no complex validation for now
+  log_info("FourWheelDriveController", "on_activate", "=== ACTIVATION SUCCESS ===");
   return CallbackReturn::SUCCESS;
 }
 
