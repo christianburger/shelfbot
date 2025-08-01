@@ -82,7 +82,7 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
 
   int update_rate = get_controller_manager_update_rate();
 
-  log_info("FourWheelDriveController", "on_configure", "update_rate: " + std::to_string(update_rate_));
+  log_info("FourWheelDriveController", "on_configure", "update_rate: " + std::to_string(update_rate));
 
   // In on_configure():
   init_odometry();
