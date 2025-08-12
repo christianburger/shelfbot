@@ -177,13 +177,13 @@ bool RestCommunication::writeCommandsToHardware(const std::vector<double>& hw_co
 
     // Create JSON with only the positions array
     nlohmann::json json_data = {
-        {"positions", std::vector<long>()}
+        {"positions", std::vector<double>()}
     };
     
     // Fill positions array
     auto& positions = json_data["positions"];
     for (const auto& cmd : hw_commands) {
-        positions.push_back(static_cast<long>(cmd));
+        positions.push_back(cmd);  // Keep as double for precision
     }
     
     // Pad remaining positions with zeros if needed

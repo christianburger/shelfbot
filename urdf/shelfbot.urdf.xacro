@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="shelfbot">
 
+  <!-- Include all the component parts of the robot -->
   <xacro:include filename="$(find shelfbot)/urdf/common_properties.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/motor.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/wheel.xacro"/>
@@ -8,8 +9,12 @@
   <xacro:include filename="$(find shelfbot)/urdf/base_axis.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/box.xacro"/>
 
+  <!-- Declare the arguments that will be passed in from the launch file -->
   <xacro:arg name="sim_mode" default="gazebo"/>
+  <xacro:arg name="communication_type" default="rest"/>
+  <xacro:arg name="base_url" default="http://shelfbot.local/"/>
   
+  <!-- Include the correct hardware interface based on sim_mode -->
   <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
     <xacro:include filename="$(find shelfbot)/urdf/gazebo.urdf.xacro"/>
   </xacro:if>
@@ -18,9 +23,15 @@
     <xacro:include filename="$(find shelfbot)/urdf/isaac.sim.urdf.xacro"/>
   </xacro:if>
   
+  <!-- When using the real robot, include the real.robot.urdf.xacro and pass the communication arguments down to it -->
   <xacro:if value="${'$(arg sim_mode)' == 'real'}">
-    <xacro:include filename="$(find shelfbot)/urdf/real.robot.urdf.xacro"/>
+    <xacro:include filename="$(find shelfbot)/urdf/real.robot.urdf.xacro">
+      <xacro:arg name="communication_type" value="$(arg communication_type)"/>
+      <xacro:arg name="base_url" value="$(arg base_url)"/>
+    </xacro:include>
   </xacro:if>
+
+  <!-- Robot Physical Structure -->
   <link name="base_footprint"/>
 
   <link name="base_link">
@@ -151,41 +162,4 @@
     <origin xyz="0 0 ${base_height}" rpy="${-pi/2} 0 0"/>
   </joint>
 
-<ros2_control name="FourWheelDriveSystem" type="system">
-    <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
-        <hardware>
-            <plugin>gazebo_ros2_control/GazeboSystem</plugin>
-        </hardware>
-    </xacro:if>
-    <xacro:if value="${'$(arg sim_mode)' == 'isaac'}">
-        <hardware>
-            <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
-            <param name="communication_type">mock</param>
-        </hardware>
-    </xacro:if>
-    <xacro:if value="${'$(arg sim_mode)' == 'real'}">
-        <hardware>
-            <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
-            <param name="communication_type">rest</param>
-            <param name="base_url">http://shelfbot.local/</param>
-        </hardware>
-    </xacro:if>
-
-    <joint name="joint_base_axis_front_left">
-        <command_interface name="position"/>
-        <state_interface name="position"/>
-    </joint>
-    <joint name="joint_base_axis_front_right">
-        <command_interface name="position"/>
-        <state_interface name="position"/>
-    </joint>
-    <joint name="joint_base_axis_back_left">
-        <command_interface name="position"/>
-        <state_interface name="position"/>
-    </joint>
-    <joint name="joint_base_axis_back_right">
-        <command_interface name="position"/>
-        <state_interface name="position"/>
-    </joint>
-</ros2_control>
 </robot>

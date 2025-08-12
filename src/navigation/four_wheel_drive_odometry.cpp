@@ -14,14 +14,27 @@ FourWheelDriveOdometry::FourWheelDriveOdometry(std::shared_ptr<rclcpp_lifecycle:
 }
 
 void FourWheelDriveOdometry::update(const std::vector<double>& wheel_positions, const rclcpp::Duration& period) {
-    double left_pos = (wheel_positions[0] + wheel_positions[2]) / 2.0;
-    double right_pos = (wheel_positions[1] + wheel_positions[3]) / 2.0;
+    // Average positions for left and right sides
+    double left_pos = (wheel_positions[0] + wheel_positions[2]) / 2.0;   // front_left + back_left
+    double right_pos = (wheel_positions[1] + wheel_positions[3]) / 2.0; // front_right + back_right
 
+    // Calculate movement deltas
     double left_diff = left_pos - (prev_wheel_positions_[0] + prev_wheel_positions_[2]) / 2.0;
     double right_diff = right_pos - (prev_wheel_positions_[1] + prev_wheel_positions_[3]) / 2.0;
 
-    const double forward_distance = (left_diff - right_diff) * wheel_radius_;
-    const double rotation = (right_diff + left_diff) * wheel_radius_ / wheel_separation_;
+    // Account for wheel orientations and drive mechanics:
+    // For forward motion: left wheels rotate one way, right wheels rotate opposite way
+    // For rotation: all wheels rotate in same direction
+    
+    // Convert wheel rotations to linear contributions at wheel contact point
+    double left_linear = left_diff * wheel_radius_;   // left wheel linear motion
+    double right_linear = right_diff * wheel_radius_; // right wheel linear motion
+    
+    // For forward motion: average of wheel linear motions (accounting for opposite orientations)
+    const double forward_distance = (left_linear - right_linear) / 2.0;
+    
+    // For rotation: when wheels move in same direction, robot rotates
+    const double rotation = (left_linear + right_linear) / wheel_separation_;
     
     theta_ += rotation;
     x_ += forward_distance * cos(theta_);
@@ -72,12 +85,16 @@ geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist( const std::ve
 }
 
 double FourWheelDriveOdometry::calculate_linear_velocity( double left_wheel_vel, double right_wheel_vel) {
-    prev_linear_vel_ = (left_wheel_vel + right_wheel_vel) * wheel_radius_ / 2.0;
+    double left_linear = left_wheel_vel * wheel_radius_;
+    double right_linear = right_wheel_vel * wheel_radius_;
+    prev_linear_vel_ = (left_linear - right_linear) / 2.0;
     return prev_linear_vel_;
 }
 
 double FourWheelDriveOdometry::calculate_angular_velocity( double left_wheel_vel, double right_wheel_vel) {
-    prev_angular_vel_ = (right_wheel_vel - left_wheel_vel) * wheel_radius_ / wheel_separation_;
+    double left_linear = left_wheel_vel * wheel_radius_;
+    double right_linear = right_wheel_vel * wheel_radius_;
+    prev_angular_vel_ = (left_linear + right_linear) / wheel_separation_;
     return prev_angular_vel_;
 }
 
@@ -115,7 +132,7 @@ void FourWheelDriveOdometry::broadcast_tf() {
     odom_tf.transform.translation.y = y_;
     odom_tf.transform.translation.z = 0.0;
     //odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
-    odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, -1.0 * std::sin((theta_ + M_PI/2) / 2), std::cos((theta_ + M_PI/2) / 2)));
+    odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
 
     tf_broadcaster_->sendTransform(odom_tf);
 }

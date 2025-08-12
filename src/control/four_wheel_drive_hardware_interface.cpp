@@ -1,4 +1,7 @@
 #include "four_wheel_drive_hardware_interface.hpp"
+#include "rest_communication.hpp"
+#include "mock_communication.hpp"
+#include "microros_communication.hpp"
 
 namespace shelfbot {
 
@@ -52,6 +55,15 @@ hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_init(cons
         if (!comm_->open("mock")) {
             log_error("FourWheelDriveHardwareInterface", "on_init", 
                      "Failed to open mock communication");
+            return hardware_interface::CallbackReturn::ERROR;
+        }
+    } else if (comm_type == "microros") {
+        log_info("FourWheelDriveHardwareInterface", "on_init", 
+                 "Creating micro-ROS communication interface");
+        comm_ = std::make_unique<MicroRosCommunication>();
+        if (!comm_->open("")) { // Connection string not needed for micro-ROS
+            log_error("FourWheelDriveHardwareInterface", "on_init", 
+                     "Failed to open micro-ROS communication");
             return hardware_interface::CallbackReturn::ERROR;
         }
     }
