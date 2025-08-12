@@ -13,19 +13,14 @@ bool MicroRosCommunication::open(const std::string& /*connection_string*/) {
     try {
         node_ = std::make_shared<rclcpp::Node>("shelfbot_hardware_interface_microros_node");
 
-        // Publisher can use default reliable QoS
         command_publisher_ = node_->create_publisher<std_msgs::msg::Float32MultiArray>(
             "/shelfbot_firmware/motor_command", 10);
 
-        // Subscriber needs a QoS profile that matches the micro-ROS agent's publisher
-        auto qos = rclcpp::QoS(rclcpp::KeepLast(10));
-        qos.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
-
+        // Use the SensorDataQoS profile to match the BEST_EFFORT publisher on the ESP32.
         state_subscriber_ = node_->create_subscription<std_msgs::msg::Float32MultiArray>(
-            "/shelfbot_firmware/motor_state", qos,
+            "/shelfbot_firmware/motor_state", rclcpp::SensorDataQoS(),
             std::bind(&MicroRosCommunication::state_callback, this, std::placeholders::_1));
 
-        // Create and spin the executor in a separate thread
         executor_.add_node(node_);
         executor_thread_ = std::thread([this]() { this->executor_.spin(); });
 
@@ -69,11 +64,15 @@ bool MicroRosCommunication::readStateFromHardware(std::vector<double>& hw_positi
     }
 
     if (!state_received_) {
-        return false; // Not an error, just no data yet.
+        return false;
     }
 
     std::lock_guard<std::mutex> lock(state_mutex_);
-    hw_positions = latest_hw_positions_;
+    // This is the fix: copy element-by-element to prevent vector reallocation.
+    for (size_t i = 0; i < hw_positions.size() && i < latest_hw_positions_.size(); ++i) {
+        hw_positions[i] = latest_hw_positions_[i];
+    }
+    
     return true;
 }
 
