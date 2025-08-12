@@ -29,11 +29,7 @@ def generate_launch_description():
     robot_description_content = doc.toxml()
     robot_description = {"robot_description": robot_description_content}
 
-    # --- DIAGNOSTIC STEP: Print the generated URDF to the console ---
-    print("\n\n==================== GENERATED URDF ====================")
-    print(robot_description_content)
-    print("========================================================\n\n")
-    # --- END DIAGNOSTIC STEP ---
+    # --- End of Robust URDF Generation Method ---
 
     controller_config = os.path.join(pkg_share, 'config', 'real_robot_microros.params.yaml')
 
