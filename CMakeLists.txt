@@ -69,6 +69,20 @@ target_include_directories(rest_communication PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
+# --- NEW: Add the microros_communication library ---
+add_library(microros_communication SHARED
+  src/microros_communication.cpp
+)
+target_link_libraries(microros_communication
+  shelfbot_utils
+  ${rclcpp_LIBRARIES}
+)
+target_include_directories(microros_communication PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+# --- END NEW ---
+
 # Navigation components
 add_subdirectory(src/navigation)
 
@@ -103,16 +117,19 @@ ament_target_dependencies(four_wheel_drive_controller
 add_library(four_wheel_drive_hardware_interface SHARED
   src/control/four_wheel_drive_hardware_interface.cpp
 )
+# --- NEW: Link the hardware interface against the new library ---
 target_link_libraries(four_wheel_drive_hardware_interface
   shelfbot_utils
   serial_communication
   mock_communication
   rest_communication
+  microros_communication # <-- Add this line
   ${rclcpp_LIBRARIES}
   ${hardware_interface_LIBRARIES}
   ${pluginlib_LIBRARIES}
   ${msgpack_LIBRARIES}
 )
+# --- END NEW ---
 ament_target_dependencies(four_wheel_drive_hardware_interface
   rclcpp
   hardware_interface
@@ -126,6 +143,7 @@ install(TARGETS
   serial_communication
   mock_communication
   rest_communication
+  microros_communication # <-- Add this line
   four_wheel_drive_controller
   four_wheel_drive_hardware_interface
   four_wheel_drive_odometry
@@ -169,6 +187,7 @@ ament_export_libraries(
   serial_communication 
   mock_communication 
   rest_communication
+  microros_communication # <-- Add this line
   four_wheel_drive_controller 
   four_wheel_drive_hardware_interface
   four_wheel_drive_odometry
