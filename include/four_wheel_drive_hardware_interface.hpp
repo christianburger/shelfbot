@@ -30,6 +30,7 @@ class FourWheelDriveHardwareInterface : public hardware_interface::SystemInterfa
   std::unique_ptr<CommunicationInterface> comm_;
   std::vector<double> hw_commands_;
   std::vector<double> hw_positions_;
+  std::vector<double> hw_max_speeds_;
 };
 
 }
