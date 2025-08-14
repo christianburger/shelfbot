@@ -16,6 +16,7 @@ public:
     bool open(const std::string& connection_string) override;
     void close() override;
     bool writeCommandsToHardware(const std::vector<double>& hw_commands) override;
+    bool writeSpeedsToHardware(const std::vector<double>& hw_speeds) override;
     bool readStateFromHardware(std::vector<double>& hw_positions) override;
 
 private:
@@ -23,6 +24,7 @@ private:
 
     std::shared_ptr<rclcpp::Node> node_;
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr command_publisher_;
+    rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr speed_publisher_;
     rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr state_subscriber_;
     rclcpp::executors::SingleThreadedExecutor executor_;
     std::thread executor_thread_;

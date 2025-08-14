@@ -1,33 +1,36 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- Declare arguments that this file expects to receive -->
+  <!-- Declare arguments with default values -->
   <xacro:arg name="communication_type" default="rest"/>
   <xacro:arg name="base_url" default="http://shelfbot.local/"/>
 
-  <!-- Define the ros2_control system for the real robot -->
   <ros2_control name="FourWheelDriveSystem" type="system">
     <hardware>
       <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
-      <!-- Use the passed-in arguments to set the parameters -->
+      <!-- Use the arguments to set the parameters -->
       <param name="communication_type">$(arg communication_type)</param>
       <param name="base_url">$(arg base_url)</param>
     </hardware>
 
     <joint name="joint_base_axis_front_left">
       <command_interface name="position"/>
+      <command_interface name="max_speed"/>
       <state_interface name="position"/>
     </joint>
     <joint name="joint_base_axis_front_right">
       <command_interface name="position"/>
+      <command_interface name="max_speed"/>
       <state_interface name="position"/>
     </joint>
     <joint name="joint_base_axis_back_left">
       <command_interface name="position"/>
+      <command_interface name="max_speed"/>
       <state_interface name="position"/>
     </joint>
     <joint name="joint_base_axis_back_right">
       <command_interface name="position"/>
+      <command_interface name="max_speed"/>
       <state_interface name="position"/>
     </joint>
   </ros2_control>
