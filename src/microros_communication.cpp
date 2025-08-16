@@ -21,7 +21,7 @@ bool MicroRosCommunication::open(const std::string& /*connection_string*/) {
 
         // Use the SensorDataQoS profile to match the BEST_EFFORT publisher on the ESP32.
         state_subscriber_ = node_->create_subscription<std_msgs::msg::Float32MultiArray>(
-            "/shelfbot_firmware/motor_state", rclcpp::SensorDataQoS(),
+            "/shelfbot_firmware/motor_positions", rclcpp::SensorDataQoS(),
             std::bind(&MicroRosCommunication::state_callback, this, std::placeholders::_1));
 
         executor_.add_node(node_);

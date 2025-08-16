@@ -30,11 +30,11 @@ void FourWheelDriveOdometry::update(const std::vector<double>& wheel_positions, 
     double left_linear = left_diff * wheel_radius_;   // left wheel linear motion
     double right_linear = right_diff * wheel_radius_; // right wheel linear motion
     
-    // For forward motion: average of wheel linear motions (accounting for opposite orientations)
-    const double forward_distance = (left_linear - right_linear) / 2.0;
-    
-    // For rotation: when wheels move in same direction, robot rotates
-    const double rotation = (left_linear + right_linear) / wheel_separation_;
+    // Corrected Odometry Logic:
+    // Forward motion is the average of the wheel motions.
+    const double forward_distance = (left_linear + right_linear) / 2.0;
+    // Rotation is the difference of wheel motions scaled by wheel separation.
+    const double rotation = (right_linear - left_linear) / wheel_separation_;
     
     theta_ += rotation;
     x_ += forward_distance * cos(theta_);
@@ -45,7 +45,7 @@ void FourWheelDriveOdometry::update(const std::vector<double>& wheel_positions, 
     auto odom_msg = std::make_unique<nav_msgs::msg::Odometry>();
     odom_msg->header.stamp = clock_->now();
     odom_msg->header.frame_id = "odom";
-    odom_msg->child_frame_id = "base_link";
+    odom_msg->child_frame_id = "base_footprint";
     odom_msg->pose.pose = calculate_pose();
     odom_msg->pose.covariance = calculate_pose_covariance();
     odom_msg->twist.covariance = calculate_twist_covariance();
@@ -59,7 +59,8 @@ geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const {
     pose.position.x = x_;
     pose.position.y = y_;
     pose.position.z = 0.0;
-    pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
+    double final_theta = theta_ + M_PI;
+    pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(final_theta / 2), std::cos(final_theta / 2)));
     return pose;
 }
 
@@ -131,8 +132,8 @@ void FourWheelDriveOdometry::broadcast_tf() {
     odom_tf.transform.translation.x = x_;
     odom_tf.transform.translation.y = y_;
     odom_tf.transform.translation.z = 0.0;
-    //odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
-    odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(theta_ / 2), std::cos(theta_ / 2)));
+    double final_theta = theta_ + M_PI;
+    odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(final_theta / 2), std::cos(final_theta / 2)));
 
     tf_broadcaster_->sendTransform(odom_tf);
 }

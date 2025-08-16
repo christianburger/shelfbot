@@ -38,6 +38,7 @@ def generate_launch_description():
         executable="robot_state_publisher",
         output="both",
         parameters=[robot_description, {"use_sim_time": use_sim_time}],
+        arguments=['--ros-args', '--log-level', 'warn'],
     )
 
     control_node = Node(
@@ -49,6 +50,7 @@ def generate_launch_description():
             ("~/robot_description", "/robot_description"),
             ("/four_wheel_drive_controller/tf_odometry", "/tf"),
         ],
+        arguments=['--ros-args', '--log-level', 'warn'],
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -63,7 +65,7 @@ def generate_launch_description():
         arguments=["four_wheel_drive_controller", "--controller-manager", "/controller_manager"],
     )
 
-    rviz_config_file = os.path.join(pkg_share, 'config', 'shelfbot.rviz')
+    rviz_config_file = os.path.expanduser('~/.rviz2/shelfbot_successful.rviz')
 
     rviz_node = Node(
         package='rviz2',
