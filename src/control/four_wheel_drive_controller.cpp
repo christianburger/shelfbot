@@ -92,9 +92,9 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
       double linear_x = last_cmd_vel_->linear.x;
       double angular_z = last_cmd_vel_->angular.z;
 
-      double vel_front_left = (linear_x - angular_z * wheel_separation_ / 2.0) / wheel_radius_;
+      double vel_front_left = (linear_x + angular_z * wheel_separation_ / 2.0) / wheel_radius_;
       double vel_front_right = (linear_x + angular_z * wheel_separation_ / 2.0) / wheel_radius_;
-      double vel_back_left = (-linear_x - angular_z * wheel_separation_ / 2.0) / wheel_radius_;
+      double vel_back_left = (-linear_x + angular_z * wheel_separation_ / 2.0) / wheel_radius_;
       double vel_back_right = (-linear_x + angular_z * wheel_separation_ / 2.0) / wheel_radius_;
 
       double dt = period.seconds();
