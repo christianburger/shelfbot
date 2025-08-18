@@ -18,7 +18,7 @@ four_wheel_drive_controller:
     publish_rate: 1.0
 
     enable_odom_tf: true
-    open_loop: true
+    open_loop: false
 
     base_frame_id: base_footprint
     odom_frame_id: odom

@@ -18,6 +18,12 @@
   <material name="red">
     <color rgba="1.0 0.0 0.0 1.0"/>
   </material>
+  <material name="blue">
+    <color rgba="0.0 0.0 1.0 1.0"/>
+  </material>
+  <material name="light_grey">
+    <color rgba="0.8 0.8 0.8 1.0"/>
+  </material>
 
   <xacro:property name="base_width" value="${config['four_wheel_drive_controller']['ros__parameters']['base_width']}"/>
   <xacro:property name="base_length" value="${config['four_wheel_drive_controller']['ros__parameters']['base_length']}"/>
