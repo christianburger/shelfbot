@@ -30,11 +30,11 @@ void FourWheelDriveOdometry::update(const std::vector<double>& wheel_positions, 
     double left_linear = left_diff * wheel_radius_;   // left wheel linear motion
     double right_linear = right_diff * wheel_radius_; // right wheel linear motion
     
-    // Corrected Odometry Logic:
-    // Forward motion is the average of the wheel motions.
-    const double forward_distance = (left_linear + right_linear) / 2.0;
-    // Rotation is the difference of wheel motions scaled by wheel separation.
-    const double rotation = (right_linear - left_linear) / wheel_separation_;
+    // Per robot's specific kinematics:
+    // Forward motion is the difference of wheel motions (left/right wheels rotate opposite).
+    const double forward_distance = (left_linear - right_linear) / 2.0;
+    // Rotation is the sum of wheel motions (all wheels rotate same direction).
+    const double rotation = (left_linear + right_linear) / wheel_separation_;
     
     theta_ += rotation;
     x_ += forward_distance * cos(theta_);

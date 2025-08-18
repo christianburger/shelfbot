@@ -1,11 +1,7 @@
 controller_manager:
   ros__parameters:
-    update_rate: 2 # Hz
+    update_rate: 10 # Hz
     use_sim_time: false
-    use_joint_state_broadcaster: true
-
-    # This is the new parameter to switch the communication strategy.
-    communication_type: "microros"
 
     four_wheel_drive_controller:
       type: shelfbot/FourWheelDriveController
@@ -15,60 +11,40 @@ controller_manager:
 
 four_wheel_drive_controller:
   ros__parameters:
-    use_joint_state_broadcaster: true
-
-    update_rate: 2 # Hz
-    publish_rate: 1
-
-    enable_odom_tf: true
-    open_loop: true
-
-    base_frame_id: base_footprint
-    odom_frame_id: odom
-
-    joints:
+    # Kinematic parameters
+    joint_names:
       - joint_base_axis_front_left
       - joint_base_axis_front_right
       - joint_base_axis_back_left
       - joint_base_axis_back_right
-
-    command_interfaces:
-      - joint_base_axis_front_left/position
-      - joint_base_axis_front_right/position
-      - joint_base_axis_back_left/position
-      - joint_base_axis_back_right/position
-
-    state_interfaces:
-      - joint_base_axis_front_left/position
-      - joint_base_axis_front_right/position
-      - joint_base_axis_back_left/position
-      - joint_base_axis_back_right/position
-
-    # Robot dimensions
-    base_width: 0.45
-    base_length: 0.55
-    base_height: 0.02
-    base_mass: 50.0
-
-    motor_radius: 0.05
-    motor_length: 0.1
-    motor_mass: 2.0
-
-    wheel_radius: 0.075
-    wheel_width: 0.05
-    wheel_mass: 5.0
-
-    camera_width: 0.02
-    camera_length: 0.02
-    camera_height: 0.01
-    camera_lens_radius: 0.05
-    camera_mount_height: 0.5
-    camera_mass: 0.5
-
-    base_axis_radius: 0.02
-    base_axis_length: 0.25  
-    base_axis_mass: 2.0
-
-    gear_ratio: 1
+    
+    front_left_joint_names: ["joint_base_axis_front_left"]
+    back_left_joint_names: ["joint_base_axis_back_left"]
+    front_right_joint_names: ["joint_base_axis_front_right"]
+    back_right_joint_names: ["joint_base_axis_back_right"]
 
     wheel_separation: 0.45
+    wheel_radius: 0.075
+
+    # Odometry settings
+    odom_frame_id: odom
+    base_frame_id: base_footprint
+    enable_odom_tf: true
+
+    # Command topic and timeout
+    cmd_vel_timeout: 0.5 # seconds
+
+    # Velocity and acceleration limits
+    linear.x.has_velocity_limits: true
+    linear.x.has_acceleration_limits: true
+    linear.x.max_velocity: 0.2 # m/s
+    linear.x.min_velocity: -0.2 # m/s
+    linear.x.max_acceleration: 0.5 # m/s^2
+    linear.x.min_acceleration: -0.5 # m/s^2
+
+    angular.z.has_velocity_limits: true
+    angular.z.has_acceleration_limits: true
+    angular.z.max_velocity: 0.5 # rad/s
+    angular.z.min_velocity: -0.5 # rad/s
+    angular.z.max_acceleration: 0.5 # rad/s^2
+    angular.z.min_acceleration: -0.5 # rad/s^2

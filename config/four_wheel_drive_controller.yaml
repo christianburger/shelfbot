@@ -1,4 +1,4 @@
-controller_manager: &four_wheel_controller
+controller_manager:
   ros__parameters:
     update_rate: 20 # Hz
     use_sim_time: false
@@ -15,7 +15,7 @@ four_wheel_drive_controller:
     use_joint_state_broadcaster: true
 
     update_rate: 20 # Hz
-    publish_rate: 1
+    publish_rate: 1.0
 
     enable_odom_tf: true
     open_loop: true
@@ -23,25 +23,38 @@ four_wheel_drive_controller:
     base_frame_id: base_footprint
     odom_frame_id: odom
 
-    joints:
+    # Kinematic parameters
+    joint_names:
       - joint_base_axis_front_left
       - joint_base_axis_front_right
       - joint_base_axis_back_left
       - joint_base_axis_back_right
+    
+    left_wheel_names: ["joint_base_axis_front_left", "joint_base_axis_back_left"]
+    right_wheel_names: ["joint_base_axis_front_right", "joint_base_axis_back_right"]
 
-    command_interfaces:
-      - joint_base_axis_front_left/position
-      - joint_base_axis_front_right/position
-      - joint_base_axis_back_left/position
-      - joint_base_axis_back_right/position
+    wheel_separation: 0.45
+    wheel_radius: 0.075
 
-    state_interfaces:
-      - joint_base_axis_front_left/position
-      - joint_base_axis_front_right/position
-      - joint_base_axis_back_left/position
-      - joint_base_axis_back_right/position
+    # Command topic and timeout
+    cmd_vel_timeout: 0.5 # seconds
 
-    # Robot dimensions
+    # Velocity and acceleration limits
+    linear.x.has_velocity_limits: true
+    linear.x.has_acceleration_limits: true
+    linear.x.max_velocity: 1.0 # m/s
+    linear.x.min_velocity: -1.0 # m/s
+    linear.x.max_acceleration: 0.5 # m/s^2
+    linear.x.min_acceleration: -0.5 # m/s^2
+
+    angular.z.has_velocity_limits: true
+    angular.z.has_acceleration_limits: true
+    angular.z.max_velocity: 1.57 # rad/s
+    angular.z.min_velocity: -1.57 # rad/s
+    angular.z.max_acceleration: 0.5 # rad/s^2
+    angular.z.min_acceleration: -0.5 # rad/s^2
+
+    # Robot dimensions (for URDF and other nodes)
     base_width: 0.45
     base_length: 0.55
     base_height: 0.02
@@ -51,7 +64,6 @@ four_wheel_drive_controller:
     motor_length: 0.1
     motor_mass: 2.0
 
-    wheel_radius: 0.075
     wheel_width: 0.05
     wheel_mass: 5.0
 
@@ -67,5 +79,3 @@ four_wheel_drive_controller:
     base_axis_mass: 2.0
 
     gear_ratio: 1
-
-    wheel_separation: 0.45

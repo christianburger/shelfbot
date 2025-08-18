@@ -3,163 +3,129 @@
 using controller_interface::CallbackReturn;
 using controller_interface::InterfaceConfiguration;
 using std::string;
-using std::to_string;
 using std::vector;
-using std::placeholders::_1;
 
 namespace shelfbot {
 
-FourWheelDriveController::FourWheelDriveController() : controller_interface::ControllerInterface(), clock_(RCL_SYSTEM_TIME) {
-  log_info("FourWheelDriveController", "Constructor", "Called");
-  for (const auto& joint : joint_names_) {
-    log_debug("FourWheelDriveController", "Constructor", "Joint name: " + joint);
-  }
-
+FourWheelDriveController::FourWheelDriveController()
+: controller_interface::ControllerInterface(),
+  cmd_vel_timeout_(0, 0)
+{
 }
+
 CallbackReturn FourWheelDriveController::on_init() {
-  log_info("FourWheelDriveController", "on_init", "Called");
   try {
-    auto_declare<vector<string>>("joints", vector<string>());
+    auto_declare<vector<string>>("joint_names", vector<string>());
+    auto_declare<vector<string>>("front_left_joint_names", vector<string>());
+    auto_declare<vector<string>>("back_left_joint_names", vector<string>());
+    auto_declare<vector<string>>("front_right_joint_names", vector<string>());
+    auto_declare<vector<string>>("back_right_joint_names", vector<string>());
     auto_declare<double>("wheel_separation", 0.0);
     auto_declare<double>("wheel_radius", 0.0);
-    auto_declare<double>("base_height", 0.0);
-    log_info("FourWheelDriveController", "on_init", "Parameters declared");
-
+    auto_declare<double>("cmd_vel_timeout", 0.5);
   } catch (const std::exception& e) {
     log_error("FourWheelDriveController", "on_init", string("Exception: ") + e.what());
     return CallbackReturn::ERROR;
   }
-  log_info("FourWheelDriveController", "on_init", "Completed successfully");
   return CallbackReturn::SUCCESS;
 }
 
 CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::State& previous_state) {
-  log_info("FourWheelDriveController", "on_configure", "Starting configuration");
- 
-  // Initialize the clock
-  clock_ = rclcpp::Clock(RCL_SYSTEM_TIME);
-
-  joint_state_publisher_ = get_node()->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
-  joint_names_ = get_node()->get_parameter("joints").as_string_array();
+  joint_names_ = get_node()->get_parameter("joint_names").as_string_array();
+  front_left_joint_names_ = get_node()->get_parameter("front_left_joint_names").as_string_array();
+  back_left_joint_names_ = get_node()->get_parameter("back_left_joint_names").as_string_array();
+  front_right_joint_names_ = get_node()->get_parameter("front_right_joint_names").as_string_array();
+  back_right_joint_names_ = get_node()->get_parameter("back_right_joint_names").as_string_array();
   wheel_separation_ = get_node()->get_parameter("wheel_separation").as_double();
   wheel_radius_ = get_node()->get_parameter("wheel_radius").as_double();
-  base_height_ = get_node()->get_parameter("base_height").as_double();
-  if (joint_names_.empty()) {
-    log_error("FourWheelDriveController", "on_configure", "No joints specified");
-    return CallbackReturn::ERROR;
-  }
-
-  log_info("FourWheelDriveController", "on_configure", "Joints loaded: " + to_string(joint_names_.size()));
+  cmd_vel_timeout_ = rclcpp::Duration::from_seconds(get_node()->get_parameter("cmd_vel_timeout").as_double());
 
   for (const auto& joint : joint_names_) {
     axis_positions_[joint] = 0.0;
     axis_commands_[joint] = 0.0;
-    log_info("FourWheelDriveController", "on_configure", "Initialized joint: " + joint);
-
-    joint_state_pubs_[joint] = get_node()->create_publisher<std_msgs::msg::Float64>(joint + "/position", 10);
-    log_info("FourWheelDriveController", "on_configure", "Created publisher for joint: " + joint);
   }
 
-  cmd_sub_ = get_node()->create_subscription<std_msgs::msg::Float64MultiArray>("~/commands", 10, std::bind(&FourWheelDriveController::cmd_callback, this, _1));
+  cmd_vel_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Twist>(
+      "~/cmd_vel", 10, std::bind(&FourWheelDriveController::cmd_vel_callback, this, std::placeholders::_1));
 
+  direct_cmd_subscriber_ = get_node()->create_subscription<std_msgs::msg::Float64MultiArray>(
+      "~/direct_commands", 10, [this](const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
+        if (msg->data.size() == joint_names_.size()) {
+          for (size_t i = 0; i < joint_names_.size(); ++i) {
+            axis_commands_[joint_names_[i]] = msg->data[i];
+          }
+          last_cmd_vel_ = nullptr;
+        }
+      });
+
+  joint_state_publisher_ = get_node()->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(get_node());
 
-  log_info("FourWheelDriveController", "on_configure", "Joint state broadcaster initialization check");
-
-  auto js_broadcaster = get_node()->get_parameter("use_joint_state_broadcaster").as_bool();
-
-  if (js_broadcaster) {
-    log_info("FourWheelDriveController", "on_configure", "Joint state broadcaster is enabled");
-  } else {
-    log_debug("FourWheelDriveController", "on_configure", "Joint state broadcaster is disabled");
-  }
-  
-  for (const auto& joint : joint_names_) {
-    log_debug("FourWheelDriveController", "on_configure", "Configured joint: " + joint);
-  }
-
-  get_controller_manager_update_rate();
-
-  int update_rate = get_controller_manager_update_rate();
-
-  log_info("FourWheelDriveController", "on_configure", "update_rate: " + std::to_string(update_rate_));
-
-  // In on_configure():
   init_odometry();
-
-  log_info("FourWheelDriveController", "on_configure", "Completed successfully");
 
   return CallbackReturn::SUCCESS;
 }
 
+void FourWheelDriveController::cmd_vel_callback(const std::shared_ptr<geometry_msgs::msg::Twist> msg) {
+    last_cmd_vel_ = msg;
+    last_cmd_vel_time_ = get_node()->now();
+}
+
 CallbackReturn FourWheelDriveController::on_activate(const rclcpp_lifecycle::State& previous_state) {
-  log_info("FourWheelDriveController", "on_activate", "=== ACTIVATION START ===");
-  log_info("FourWheelDriveController", "on_activate", "Previous state: " + std::string(previous_state.label()));
-  
-  log_info("FourWheelDriveController", "on_activate", "Command interfaces available: " + std::to_string(command_interfaces_.size()));
-  log_info("FourWheelDriveController", "on_activate", "State interfaces available: " + std::to_string(state_interfaces_.size()));
-  log_info("FourWheelDriveController", "on_activate", "Joint names configured: " + std::to_string(joint_names_.size()));
-  
-  // Just return SUCCESS - no complex validation for now
-  log_info("FourWheelDriveController", "on_activate", "=== ACTIVATION SUCCESS ===");
+  for (size_t i = 0; i < joint_names_.size(); ++i) {
+    axis_commands_[joint_names_[i]] = state_interfaces_[i].get_value();
+  }
+  last_cmd_vel_ = nullptr;
   return CallbackReturn::SUCCESS;
 }
 
 CallbackReturn FourWheelDriveController::on_deactivate(const rclcpp_lifecycle::State& previous_state) {
-  log_info("FourWheelDriveController", "on_deactivate", "Called");
-  log_info("FourWheelDriveController", "on_deactivate", "Completed successfully");
   return CallbackReturn::SUCCESS;
 }
 
 controller_interface::return_type FourWheelDriveController::update(const rclcpp::Time& time, const rclcpp::Duration& period) {
-  log_debug("FourWheelDriveController", "update", "Called");
-
-  // Read current joint states from state interfaces
   for (size_t i = 0; i < joint_names_.size(); ++i) {
     axis_positions_[joint_names_[i]] = state_interfaces_[i].get_value();
   }
 
-  update_odometry(period);
-  // Publish joint states and transforms
-  publish_joint_states();
+  if (last_cmd_vel_ && (time - last_cmd_vel_time_) < cmd_vel_timeout_) {
+      double linear_x = last_cmd_vel_->linear.x;
+      double angular_z = last_cmd_vel_->angular.z;
 
-  // Write commands to command interfaces
+      double vel_front_left = (linear_x - angular_z * wheel_separation_ / 2.0) / wheel_radius_;
+      double vel_front_right = (linear_x + angular_z * wheel_separation_ / 2.0) / wheel_radius_;
+      double vel_back_left = (-linear_x - angular_z * wheel_separation_ / 2.0) / wheel_radius_;
+      double vel_back_right = (-linear_x + angular_z * wheel_separation_ / 2.0) / wheel_radius_;
+
+      double dt = period.seconds();
+      
+      axis_commands_[front_left_joint_names_[0]] += vel_front_left * dt;
+      axis_commands_[front_right_joint_names_[0]] += vel_front_right * dt;
+      axis_commands_[back_left_joint_names_[0]] += vel_back_left * dt;
+      axis_commands_[back_right_joint_names_[0]] += vel_back_right * dt;
+  }
+
   for (size_t i = 0; i < joint_names_.size(); ++i) {
     command_interfaces_[i].set_value(axis_commands_[joint_names_[i]]);
   }
 
-  return controller_interface::return_type::OK;
-}
+  update_odometry(period);
+  publish_joint_states();
 
-void FourWheelDriveController::cmd_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
-  log_info("FourWheelDriveController", "cmd_callback", "Called");
-  if (msg->data.size() != joint_names_.size()) {
-    log_error("FourWheelDriveController", "cmd_callback", "Received command size does not match number of joints");
-    return;
-  }
-  for (size_t i = 0; i < joint_names_.size(); ++i) {
-    axis_commands_[joint_names_[i]] = msg->data[i];
-    log_info("FourWheelDriveController", "cmd_callback", "Setting " + joint_names_[i] + " command to " + std::to_string(msg->data[i]));
-  }
+  return controller_interface::return_type::OK;
 }
 
 void FourWheelDriveController::publish_joint_states() {
   sensor_msgs::msg::JointState joint_state_msg;
-  joint_state_msg.header.stamp = clock_.now();
+  joint_state_msg.header.stamp = get_node()->now();
   joint_state_msg.header.frame_id = "base_link";
-
-  log_debug("FourWheelDriveController", "publish_joint_states", "Publishing joint states");
 
   for (const auto& joint : joint_names_) {
     joint_state_msg.name.push_back(joint);
     joint_state_msg.position.push_back(axis_positions_[joint]);
-
-    log_debug("FourWheelDriveController", "publish_joint_states", "Joint: " + joint + ", Position: " + std::to_string(axis_positions_[joint]));
   }
 
   joint_state_publisher_->publish(joint_state_msg);
-
-  log_debug("FourWheelDriveController", "publish_joint_states", "Published joint states for " + std::to_string(joint_names_.size()) + " joints");
 }
 
 InterfaceConfiguration FourWheelDriveController::command_interface_configuration() const {
@@ -181,8 +147,7 @@ InterfaceConfiguration FourWheelDriveController::state_interface_configuration()
 }
 
 void FourWheelDriveController::init_odometry() {
-    odometry_ = std::make_unique<FourWheelDriveOdometry>( get_node(), std::make_shared<rclcpp::Clock>(RCL_SYSTEM_TIME), wheel_separation_, wheel_radius_);
-    log_info("FourWheelDriveController", "init_odometry", "Odometry initialized");
+    odometry_ = std::make_unique<FourWheelDriveOdometry>( get_node(), get_node()->get_clock(), wheel_separation_, wheel_radius_);
 }
 
 void FourWheelDriveController::update_odometry(const rclcpp::Duration& period) {
@@ -192,32 +157,6 @@ void FourWheelDriveController::update_odometry(const rclcpp::Duration& period) {
     }
     odometry_->update(wheel_positions, period);
 }
-
-int FourWheelDriveController::get_controller_manager_update_rate() {
-    log_trace("FourWheelDriveController", "get_controller_manager_update_rate", "Enter method");
-    
-    auto params = get_node()->list_parameters({}, 10);
-    log_info("FourWheelDriveController", "get_controller_manager_update_rate", "Available parameters:");
-
-    for (const auto& param_name : params.names) {
-        auto param = get_node()->get_parameter(param_name);
-
-        log_info("FourWheelDriveController", "Parameter", param_name + " = " + param.value_to_string());
-    }
-
-    try {
-        int update_rate = get_node()->get_parameter("update_rate").as_int();
-        log_info("FourWheelDriveController", "get_controller_manager_update_rate", "Found update rate: " + std::to_string(update_rate));
-
-        return update_rate;
-
-    } catch (const std::exception& e) {
-        log_error("FourWheelDriveController", "get_controller_manager_update_rate", "NOT WORKING!");
-        return -1;
-    }
-}
-
-
 
 }
 
