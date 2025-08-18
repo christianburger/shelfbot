@@ -99,9 +99,9 @@ hardware_interface::return_type FourWheelDriveHardwareInterface::write(const rcl
     if (!comm_->writeCommandsToHardware(hw_commands_)) {
         return hardware_interface::return_type::ERROR;
     }
-    if (!comm_->writeSpeedsToHardware(hw_max_speeds_)) {
-        return hardware_interface::return_type::ERROR;
-    }
+    // if (!comm_->writeSpeedsToHardware(hw_max_speeds_)) {
+    //     return hardware_interface::return_type::ERROR;
+    // }
     return hardware_interface::return_type::OK;
 }
 

@@ -50,7 +50,7 @@ def generate_launch_description():
             ("~/robot_description", "/robot_description"),
             ("/four_wheel_drive_controller/tf_odometry", "/tf"),
         ],
-        arguments=['--ros-args', '--log-level', 'warn'],
+        arguments=['--ros-args', '--log-level', 'info'],
     )
 
     joint_state_broadcaster_spawner = Node(
