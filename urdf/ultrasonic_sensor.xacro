@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="ultrasonic_sensor" params="name">
+    <!-- Main link for the sensor, positioned at the center of the PCB -->
+    <link name="${name}">
+      <visual>
+        <!-- The main blue PCB -->
+        <geometry>
+          <box size="0.045 0.020 0.002"/>
+        </geometry>
+        <material name="blue"/>
+      </visual>
+      <collision>
+        <geometry>
+          <box size="0.045 0.020 0.015"/> <!-- Collision box covers the whole volume -->
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="0.01"/>
+        <xacro:box_inertia m="0.01" x="0.045" y="0.020" z="0.015"/>
+      </inertial>
+    </link>
+
+    <!-- Visual representation of the two silver transducers -->
+    <link name="${name}_transducer_1">
+      <visual>
+        <origin xyz="0 0 0.0075" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.008" length="0.015"/>
+        </geometry>
+        <material name="light_grey"/>
+      </visual>
+    </link>
+
+    <link name="${name}_transducer_2">
+      <visual>
+        <origin xyz="0 0 0.0075" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.008" length="0.015"/>
+        </geometry>
+        <material name="light_grey"/>
+      </visual>
+    </link>
+
+    <!-- Fixed joints to attach the transducers to the main sensor link -->
+    <joint name="joint_${name}_transducer_1" type="fixed">
+      <parent link="${name}"/>
+      <child link="${name}_transducer_1"/>
+      <origin xyz="0.0125 0 0" rpy="0 0 0"/> <!-- Position one transducer -->
+    </joint>
+
+    <joint name="joint_${name}_transducer_2" type="fixed">
+      <parent link="${name}"/>
+      <child link="${name}_transducer_2"/>
+      <origin xyz="-0.0125 0 0" rpy="0 0 0"/> <!-- Position the other transducer -->
+    </joint>
+
+  </xacro:macro>
+
+</robot>

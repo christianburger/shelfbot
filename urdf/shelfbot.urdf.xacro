@@ -8,6 +8,7 @@
   <xacro:include filename="$(find shelfbot)/urdf/camera.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/base_axis.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/box.xacro"/>
+  <xacro:include filename="$(find shelfbot)/urdf/ultrasonic_sensor.xacro"/>
 
   <!-- Declare the arguments that will be passed in from the launch file -->
   <xacro:arg name="sim_mode" default="gazebo"/>
@@ -162,4 +163,47 @@
     <origin xyz="0 0 ${base_height}" rpy="${-pi/2} 0 0"/>
   </joint>
 
+  <!-- Ultrasonic Sensors (3-Front, 3-Back Configuration) -->
+  <xacro:ultrasonic_sensor name="us_front_center"/>
+  <xacro:ultrasonic_sensor name="us_front_left_corner"/>
+  <xacro:ultrasonic_sensor name="us_front_right_corner"/>
+  <xacro:ultrasonic_sensor name="us_back_center"/>
+  <xacro:ultrasonic_sensor name="us_back_left_corner"/>
+  <xacro:ultrasonic_sensor name="us_back_right_corner"/>
+
+  <joint name="joint_us_front_center" type="fixed">
+    <parent link="base_link"/>
+    <child link="us_front_center"/>
+    <origin xyz="0 ${base_length / 2} 0.01" rpy="0 ${pi/2} ${pi/2}"/>
+  </joint>
+
+  <joint name="joint_us_front_left_corner" type="fixed">
+    <parent link="base_link"/>
+    <child link="us_front_left_corner"/>
+    <origin xyz="${base_width / 4} ${base_length / 2} 0.01" rpy="0 ${pi/2} ${pi/4}"/>
+  </joint>
+
+  <joint name="joint_us_front_right_corner" type="fixed">
+    <parent link="base_link"/>
+    <child link="us_front_right_corner"/>
+    <origin xyz="${-base_width / 4} ${base_length / 2} 0.01" rpy="0 ${pi/2} ${3*pi/4}"/>
+  </joint>
+
+  <joint name="joint_us_back_center" type="fixed">
+    <parent link="base_link"/>
+    <child link="us_back_center"/>
+    <origin xyz="0 ${-base_length / 2} 0.01" rpy="0 ${pi/2} ${-pi/2}"/>
+  </joint>
+
+  <joint name="joint_us_back_left_corner" type="fixed">
+    <parent link="base_link"/>
+    <child link="us_back_left_corner"/>
+    <origin xyz="${base_width / 4} ${-base_length / 2} 0.01" rpy="0 ${pi/2} ${-pi/4}"/>
+  </joint>
+
+  <joint name="joint_us_back_right_corner" type="fixed">
+    <parent link="base_link"/>
+    <child link="us_back_right_corner"/>
+    <origin xyz="${-base_width / 4} ${-base_length / 2} 0.01" rpy="0 ${pi/2} ${-3*pi/4}"/>
+  </joint>
 </robot>

@@ -7,7 +7,6 @@
           <cylinder length="${length}" radius="${radius}"/>
         </geometry>
         <origin xyz="${length/2} 0 0" rpy="0 ${pi/2} 0"/>
-        <material name="dark_red"/>
       </visual>
       <collision>
         <geometry>
