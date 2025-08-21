@@ -1,128 +1,52 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <gazebo reference="base_link">
-    <material>Gazebo/Gold</material>
-  </gazebo>
-
-  <gazebo reference="indicator_box">
-    <material>Gazebo/Red</material>
-  </gazebo>
-
-  <xacro:macro name="wheel_gazebo" params="name">
-    <gazebo reference="${name}">
-      <material>Gazebo/Black</material>
-      <mu1>1.8</mu1>
-      <mu2>1.8</mu2>
-      <kp>1000000.0</kp>
-      <kd>100.0</kd>
-      <minDepth>0.001</minDepth>
-      <maxVel>1000.0</maxVel>
-      <fdir1>1 0 0</fdir1>
-      <surface>
-        <friction>
-          <ode>
-            <mu>1.8</mu>
-            <mu2>1.8</mu2>
-            <fdir1>1 0 0</fdir1>
-          </ode>
-        </friction>
-        <contact>
-          <ode>
-            <kp>1e6</kp>
-            <kd>100.0</kd>
-            <max_vel>100.0</max_vel>
-            <min_depth>0.001</min_depth>
-          </ode>
-        </contact>
-      </surface>
-    </gazebo>
-  </xacro:macro>
-
-  <xacro:wheel_gazebo name="wheel_front_left"/>
-  <xacro:wheel_gazebo name="wheel_front_right"/>
-  <xacro:wheel_gazebo name="wheel_back_left"/>
-  <xacro:wheel_gazebo name="wheel_back_right"/>
-
-  <xacro:macro name="base_axis_gazebo" params="name">
-    <gazebo reference="${name}">
-      <material>Gazebo/Red</material>
-    </gazebo>
-  </xacro:macro>
-
-  <xacro:base_axis_gazebo name="base_axis_front_left"/>
-  <xacro:base_axis_gazebo name="base_axis_front_right"/>
-  <xacro:base_axis_gazebo name="base_axis_back_left"/>
-  <xacro:base_axis_gazebo name="base_axis_back_right"/>
-
-  <xacro:macro name="motor_gazebo" params="name">
-    <gazebo reference="${name}">
-      <material>Gazebo/Grey</material>
-    </gazebo>
-  </xacro:macro>
-
-  <xacro:motor_gazebo name="motor_front_left"/>
-  <xacro:motor_gazebo name="motor_front_right"/>
-  <xacro:motor_gazebo name="motor_back_left"/>
-  <xacro:motor_gazebo name="motor_back_right"/>
-
-  <gazebo reference="camera">
-    <material>Gazebo/Blue</material>
-    <sensor type="camera" name="camera">
-      <update_rate>30.0</update_rate>
-      <camera name="head">
-        <horizontal_fov>1.3962634</horizontal_fov>
-        <image>
-          <width>800</width>
-          <height>600</height>
-          <format>R8G8B8</format>
-        </image>
-        <clip>
-          <near>0.02</near>
-          <far>300</far>
-        </clip>
-        <pose>0 0 0 0 ${pi/2} 0</pose>
-      </camera>
-      <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
-        <alwaysOn>true</alwaysOn>
-        <updateRate>0.0</updateRate>
-        <cameraName>shelfbot/camera</cameraName>
-        <imageTopicName>image_raw</imageTopicName>
-        <cameraInfoTopicName>camera_info</cameraInfoTopicName>
-        <frameName>camera</frameName>
-      </plugin>
-    </sensor>
-  </gazebo>
-
-  <xacro:macro name="base_axis_joint_gazebo" params="name">
-    <gazebo reference="${name}">
-      <provideFeedback>true</provideFeedback>
-      <implicitSpringDamper>true</implicitSpringDamper>
-    </gazebo>
-  </xacro:macro>
-
-  <xacro:base_axis_joint_gazebo name="joint_base_axis_front_left"/>
-  <xacro:base_axis_joint_gazebo name="joint_base_axis_front_right"/>
-  <xacro:base_axis_joint_gazebo name="joint_base_axis_back_left"/>
-  <xacro:base_axis_joint_gazebo name="joint_base_axis_back_right"/>
-
-  <xacro:macro name="wheel_transmission" params="name">
-    <transmission name="${name}_transmission">
-      <type>transmission_interface/SimpleTransmission</type>
-      <joint name="${name}">
-        <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+  <xacro:macro name="shelfbot_gazebo">
+    <xacro:arg name="controller_config_file" default=""/>
+    <ros2_control name="GazeboSystem" type="system">
+      <hardware>
+        <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+      </hardware>
+      <joint name="joint_base_axis_front_left">
+        <command_interface name="velocity">
+          <param name="min">-10</param>
+          <param name="max">10</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
       </joint>
-      <actuator name="${name}_motor">
-        <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
-        <mechanicalReduction>1</mechanicalReduction>
-      </actuator>
-    </transmission>
+      <joint name="joint_base_axis_back_left">
+        <command_interface name="velocity">
+          <param name="min">-10</param>
+          <param name="max">10</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="joint_base_axis_back_right">
+        <command_interface name="velocity">
+          <param name="min">-10</param>
+          <param name="max">10</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="joint_base_axis_front_right">
+        <command_interface name="velocity">
+          <param name="min">-10</param>
+          <param name="max">10</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+    </ros2_control>
+
+    <gazebo>
+      <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+        <parameters>$(arg controller_config_file)</parameters>
+      </plugin>
+    </gazebo>
+
   </xacro:macro>
 
-  <gazebo>
-    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
-      <robotNamespace>/</robotNamespace>
-      <parameters>$(find shelfbot)/config/four_wheel_drive_controller.yaml</parameters>
-    </plugin>
-  </gazebo>
 </robot>

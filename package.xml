@@ -17,7 +17,6 @@
   <depend>tf2_ros</depend>
   <depend>rviz2</depend>
   <depend>gazebo_ros</depend>
-  <depend>gazebo_ros2_control</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>tf2</depend>
@@ -25,6 +24,8 @@
   <depend>hardware_interface</depend>
   <depend>realtime_tools</depend>
   <depend>pluginlib</depend>
+  <depend>gazebo_ros2_control</depend>
+  <depend>xacro</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

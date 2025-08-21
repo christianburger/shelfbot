@@ -18,6 +18,7 @@
   <!-- Include the correct hardware interface based on sim_mode -->
   <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
     <xacro:include filename="$(find shelfbot)/urdf/gazebo.urdf.xacro"/>
+    <xacro:shelfbot_gazebo/>
   </xacro:if>
   
   <xacro:if value="${'$(arg sim_mode)' == 'isaac'}">
