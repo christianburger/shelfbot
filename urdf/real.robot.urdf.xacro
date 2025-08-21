@@ -11,27 +11,33 @@
       <!-- Use the arguments to set the parameters -->
       <param name="communication_type">$(arg communication_type)</param>
       <param name="base_url">$(arg base_url)</param>
+      <param name="wheel_separation">0.45</param>
+      <param name="wheel_radius">0.075</param>
     </hardware>
 
     <joint name="joint_base_axis_front_left">
-      <command_interface name="position"/>
+      <command_interface name="velocity"/>
       <command_interface name="max_speed"/>
       <state_interface name="position"/>
+      <state_interface name="velocity"/>
     </joint>
     <joint name="joint_base_axis_front_right">
-      <command_interface name="position"/>
+      <command_interface name="velocity"/>
       <command_interface name="max_speed"/>
       <state_interface name="position"/>
+      <state_interface name="velocity"/>
     </joint>
     <joint name="joint_base_axis_back_left">
-      <command_interface name="position"/>
+      <command_interface name="velocity"/>
       <command_interface name="max_speed"/>
       <state_interface name="position"/>
+      <state_interface name="velocity"/>
     </joint>
     <joint name="joint_base_axis_back_right">
-      <command_interface name="position"/>
+      <command_interface name="velocity"/>
       <command_interface name="max_speed"/>
       <state_interface name="position"/>
+      <state_interface name="velocity"/>
     </joint>
   </ros2_control>
 

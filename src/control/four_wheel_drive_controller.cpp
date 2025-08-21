@@ -61,8 +61,6 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
   joint_state_publisher_ = get_node()->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(get_node());
 
-  init_odometry();
-
   return CallbackReturn::SUCCESS;
 }
 
@@ -92,24 +90,30 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
       double linear_x = last_cmd_vel_->linear.x;
       double angular_z = last_cmd_vel_->angular.z;
 
-      double vel_front_left = (linear_x + angular_z * wheel_separation_ / 2.0) / wheel_radius_;
+      // Combined kinematics: Preserves front/back inversion for linear motion
+      // and adds correct left/right differential for angular motion.
+      double vel_front_left  = (linear_x - angular_z * wheel_separation_ / 2.0) / wheel_radius_;
       double vel_front_right = (linear_x + angular_z * wheel_separation_ / 2.0) / wheel_radius_;
-      double vel_back_left = (-linear_x + angular_z * wheel_separation_ / 2.0) / wheel_radius_;
-      double vel_back_right = (-linear_x + angular_z * wheel_separation_ / 2.0) / wheel_radius_;
+      double vel_back_left   = (-linear_x - angular_z * wheel_separation_ / 2.0) / wheel_radius_;
+      double vel_back_right  = (-linear_x + angular_z * wheel_separation_ / 2.0) / wheel_radius_;
 
-      double dt = period.seconds();
-      
-      axis_commands_[front_left_joint_names_[0]] += vel_front_left * dt;
-      axis_commands_[front_right_joint_names_[0]] += vel_front_right * dt;
-      axis_commands_[back_left_joint_names_[0]] += vel_back_left * dt;
-      axis_commands_[back_right_joint_names_[0]] += vel_back_right * dt;
+      // Apply the calculated velocity to each specific joint
+      axis_commands_[front_left_joint_names_[0]] = vel_front_left;
+      axis_commands_[front_right_joint_names_[0]] = vel_front_right;
+      axis_commands_[back_left_joint_names_[0]] = vel_back_left;
+      axis_commands_[back_right_joint_names_[0]] = vel_back_right;
+
+  } else {
+      // Timeout: set all wheel velocities to zero
+      for (const auto& joint : joint_names_) {
+          axis_commands_[joint] = 0.0;
+      }
   }
 
   for (size_t i = 0; i < joint_names_.size(); ++i) {
     command_interfaces_[i].set_value(axis_commands_[joint_names_[i]]);
   }
 
-  update_odometry(period);
   publish_joint_states();
 
   return controller_interface::return_type::OK;
@@ -132,7 +136,7 @@ InterfaceConfiguration FourWheelDriveController::command_interface_configuration
   InterfaceConfiguration config;
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
   for (const auto& joint : joint_names_) {
-    config.names.push_back(joint + "/" + hardware_interface::HW_IF_POSITION);
+    config.names.push_back(joint + "/" + hardware_interface::HW_IF_VELOCITY);
   }
   return config;
 }
@@ -144,18 +148,6 @@ InterfaceConfiguration FourWheelDriveController::state_interface_configuration()
     config.names.push_back(joint + "/" + hardware_interface::HW_IF_POSITION);
   }
   return config;
-}
-
-void FourWheelDriveController::init_odometry() {
-    odometry_ = std::make_unique<FourWheelDriveOdometry>( get_node(), get_node()->get_clock(), wheel_separation_, wheel_radius_);
-}
-
-void FourWheelDriveController::update_odometry(const rclcpp::Duration& period) {
-    std::vector<double> wheel_positions;
-    for (const auto& joint : joint_names_) {
-        wheel_positions.push_back(axis_positions_[joint]);
-    }
-    odometry_->update(wheel_positions, period);
 }
 
 }

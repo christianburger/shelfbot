@@ -19,7 +19,6 @@
 #include "std_msgs/msg/float64_multi_array.hpp" // ADDED FOR DEBUGGING
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
-#include "four_wheel_drive_odometry.hpp"
 #include "shelfbot_utils.hpp"
 
 namespace shelfbot {
@@ -39,8 +38,6 @@ class FourWheelDriveController : public controller_interface::ControllerInterfac
  private:
   // Helper methods
   void publish_joint_states();
-  void init_odometry();
-  void update_odometry(const rclcpp::Duration& period);
   void cmd_vel_callback(const std::shared_ptr<geometry_msgs::msg::Twist> msg);
 
   // ROS 2 Publishers and Subscribers
@@ -57,9 +54,6 @@ class FourWheelDriveController : public controller_interface::ControllerInterfac
   std::vector<std::string> back_right_joint_names_;
   std::map<std::string, double> axis_positions_;
   std::map<std::string, double> axis_commands_;
-  
-  // Odometry
-  std::unique_ptr<FourWheelDriveOdometry> odometry_;
   
   // Robot parameters
   double wheel_separation_;
