@@ -21,6 +21,21 @@ The robot model is defined using URDF and Xacro files, which describe the physic
 - **Camera**: Integrated using `camera.xacro`, providing visual feedback for navigation.
 - **Common Properties**: Shared properties and materials are defined in `common_properties.xacro`.
 
+## Hardware Layout
+
+### Motor Wiring Order
+
+The physical motors are wired to the ESP32 controller in a specific, non-sequential order. The mapping from the motor's physical location on the robot to its index in the firmware (`FastAccelStepper` array) is as follows:
+
+| Motor Index (Firmware) | Physical Location |
+| :--------------------- | :---------------- |
+| 0                      | Front Left        |
+| 1                      | Back Left         |
+| 2                      | Back Right        |
+| 3                      | Front Right       |
+
+This order is critical and is reflected in the ROS 2 controller configuration.
+
 ## Building the Project
 
 To build the Shelfbot project, follow these steps:

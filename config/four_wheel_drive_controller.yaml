@@ -26,9 +26,9 @@ four_wheel_drive_controller:
     # Kinematic parameters
     joint_names:
       - joint_base_axis_front_left
-      - joint_base_axis_front_right
       - joint_base_axis_back_left
       - joint_base_axis_back_right
+      - joint_base_axis_front_right
     
     left_wheel_names: ["joint_base_axis_front_left", "joint_base_axis_back_left"]
     right_wheel_names: ["joint_base_axis_front_right", "joint_base_axis_back_right"]
