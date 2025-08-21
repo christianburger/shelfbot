@@ -123,10 +123,12 @@ target_link_libraries(four_wheel_drive_hardware_interface
   serial_communication
   mock_communication
   rest_communication
-  microros_communication # <-- Add this line
+  microros_communication 
+  four_wheel_drive_odometry # <-- Add this line
   ${rclcpp_LIBRARIES}
   ${hardware_interface_LIBRARIES}
   ${pluginlib_LIBRARIES}
+  ${nav_msgs_LIBRARIES} 
   ${msgpack_LIBRARIES}
 )
 # --- END NEW ---
@@ -134,6 +136,8 @@ ament_target_dependencies(four_wheel_drive_hardware_interface
   rclcpp
   hardware_interface
   pluginlib
+  nav_msgs # <-- Add nav_msgs
+  tf2_geometry_msgs # <-- Add tf2_geometry_msgs
   msgpack
 )
 

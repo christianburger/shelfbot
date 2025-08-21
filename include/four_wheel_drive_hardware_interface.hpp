@@ -9,7 +9,9 @@
 #include "communication_interface.hpp"
 #include "mock_communication.hpp"
 #include "rest_communication.hpp"
+#include "four_wheel_drive_odometry.hpp" // Include the odometry header
 #include <rclcpp/logging.hpp>
+#include <thread>
 
 namespace shelfbot {
 
@@ -27,10 +29,16 @@ class FourWheelDriveHardwareInterface : public hardware_interface::SystemInterfa
   hardware_interface::return_type write(const rclcpp::Time& time, const rclcpp::Duration& period) override;
 
  private:
+  std::shared_ptr<rclcpp::Node> node_;
+  std::thread node_spinner_;
   std::unique_ptr<CommunicationInterface> comm_;
-  std::vector<double> hw_commands_;
+  std::vector<double> hw_velocity_commands_;
   std::vector<double> hw_positions_;
+  std::vector<double> hw_velocities_;
   std::vector<double> hw_max_speeds_;
+  
+  // Odometry moved to the hardware interface
+  std::unique_ptr<FourWheelDriveOdometry> odometry_;
 };
 
 }

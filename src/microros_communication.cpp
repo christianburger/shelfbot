@@ -19,10 +19,10 @@ bool MicroRosCommunication::open(const std::string& /*connection_string*/) {
         speed_publisher_ = node_->create_publisher<std_msgs::msg::Float32MultiArray>(
             "/shelfbot_firmware/set_speed", 10);
 
-        // Use the SensorDataQoS profile to match the BEST_EFFORT publisher on the ESP32.
-        state_subscriber_ = node_->create_subscription<std_msgs::msg::Float32MultiArray>(
+        // Subscriber for motor position feedback
+        position_subscriber_ = node_->create_subscription<std_msgs::msg::Float32MultiArray>(
             "/shelfbot_firmware/motor_positions", rclcpp::SensorDataQoS(),
-            std::bind(&MicroRosCommunication::state_callback, this, std::placeholders::_1));
+            std::bind(&MicroRosCommunication::position_callback, this, std::placeholders::_1));
 
         executor_.add_node(node_);
         executor_thread_ = std::thread([this]() { this->executor_.spin(); });
@@ -44,7 +44,7 @@ void MicroRosCommunication::close() {
         }
         command_publisher_.reset();
         speed_publisher_.reset();
-        state_subscriber_.reset();
+        position_subscriber_.reset();
         node_.reset();
     }
 }
@@ -63,7 +63,9 @@ bool MicroRosCommunication::writeCommandsToHardware(const std::vector<double>& h
 
 bool MicroRosCommunication::writeSpeedsToHardware(const std::vector<double>& hw_speeds) {
     if (!rclcpp::ok() || !speed_publisher_) {
-        RCLCPP_ERROR(node_->get_logger(), "Cannot write speeds, micro-ROS communication is not active.");
+        if (node_) {
+            RCLCPP_ERROR(node_->get_logger(), "Cannot write speeds, micro-ROS communication is not active.");
+        }
         return false;
     }
 
@@ -92,7 +94,7 @@ bool MicroRosCommunication::readStateFromHardware(std::vector<double>& hw_positi
     return true;
 }
 
-void MicroRosCommunication::state_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
+void MicroRosCommunication::position_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     latest_hw_positions_.assign(msg->data.begin(), msg->data.end());
     state_received_ = true;

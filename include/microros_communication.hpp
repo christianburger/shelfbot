@@ -20,12 +20,12 @@ public:
     bool readStateFromHardware(std::vector<double>& hw_positions) override;
 
 private:
-    void state_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
+    void position_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
 
     std::shared_ptr<rclcpp::Node> node_;
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr command_publisher_;
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr speed_publisher_;
-    rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr state_subscriber_;
+    rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr position_subscriber_;
     rclcpp::executors::SingleThreadedExecutor executor_;
     std::thread executor_thread_;
 

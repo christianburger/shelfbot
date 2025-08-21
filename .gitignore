@@ -1,6 +1,8 @@
 # VS Code specific files
 .vscode/
 AGENT.md
+.gemini.md
+
 
 # Python files
 *.pyc

@@ -2,7 +2,7 @@
 #define FOUR_WHEEL_DRIVE_ODOMETRY_HPP
 
 #include <nav_msgs/msg/odometry.hpp>
-#include <rclcpp_lifecycle/lifecycle_node.hpp>
+#include <rclcpp/rclcpp.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/transform_broadcaster.h>
 #include <vector>
@@ -11,7 +11,7 @@ namespace shelfbot {
 
 class FourWheelDriveOdometry {
  public:
-    FourWheelDriveOdometry(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, 
+    FourWheelDriveOdometry(std::shared_ptr<rclcpp::Node> node, 
                           const rclcpp::Clock::SharedPtr& clock,
                           double wheel_separation, 
                           double wheel_radius);
@@ -31,7 +31,7 @@ class FourWheelDriveOdometry {
     std::array<double, 36> calculate_twist_covariance();
     void broadcast_tf();
 
-    std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node_;
+    std::shared_ptr<rclcpp::Node> node_;
     rclcpp::Clock::SharedPtr clock_;
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
@@ -55,6 +55,7 @@ class FourWheelDriveOdometry {
     std::array<double, 36> pose_covariance_;
     std::array<double, 36> twist_covariance_;
     std::vector<double> prev_wheel_positions_;
+    bool initialized_{false};
 };
 
 }
