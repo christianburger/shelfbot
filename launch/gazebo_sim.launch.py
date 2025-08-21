@@ -1,10 +1,12 @@
+import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, RegisterEventHandler, ExecuteProcess, TimerAction
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
-from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution, EnvironmentVariable
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
+from ament_index_python.packages import get_package_share_directory
+import xacro
 
 def generate_launch_description():
     declared_arguments = []
@@ -26,26 +28,14 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     gui = LaunchConfiguration("gui")
 
-    pkg_share = FindPackageShare(package='shelfbot').find('shelfbot')
-    urdf_file_path = PathJoinSubstitution([pkg_share, 'urdf', 'shelfbot.urdf.xacro'])
-    
-    robot_description_content = Command(
-        [
-            FindExecutable(name="xacro"),
-            " ",
-            urdf_file_path,
-            " sim_mode:=gazebo"
-        ]
-    )
-    robot_description = {"robot_description": robot_description_content}
+    pkg_share = get_package_share_directory('shelfbot')
 
-    controller_config = PathJoinSubstitution([pkg_share, 'config', 'four_wheel_drive_controller.yaml'])
-    
-    world_file_path = PathJoinSubstitution([
-        EnvironmentVariable('HOME'),
-        '.world',
-        'shelfbot_world.world'
-    ])
+    xacro_file = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
+    controller_config = os.path.join(pkg_share, 'config', 'gazebo_controller.yaml')
+    doc = xacro.process_file(xacro_file, mappings={'sim_mode': 'gazebo', 'controller_config_file': controller_config})
+    robot_description_content = doc.toxml()
+    robot_description = {"robot_description": robot_description_content}
+    world_file_path = os.path.join(pkg_share, 'worlds', 'empty.world')
 
     world_arg = DeclareLaunchArgument(
         'world',
@@ -53,11 +43,22 @@ def generate_launch_description():
         description='Path to the world file'
     )
 
-    gazebo_node = ExecuteProcess(
-        cmd=['gazebo', '--verbose', LaunchConfiguration('world'), '-s', 'libgazebo_ros_init.so', '-s', 'libgazebo_ros_factory.so'],
+    # --- Corrected Gazebo Launch ---
+    # Launch the Gazebo server with the correct plugins
+    gzserver_cmd = ExecuteProcess(
+        cmd=['gzserver', '--verbose', world_file_path,
+             '-s', 'libgazebo_ros_init.so',
+             '-s', 'libgazebo_ros_factory.so'],
+        output='screen'
+    )
+
+    # Launch the Gazebo client
+    gzclient_cmd = ExecuteProcess(
+        cmd=['gzclient'],
         output='screen',
         condition=IfCondition(gui)
     )
+    # --- End of Correction ---
 
     spawn_entity_node = Node(
         package='gazebo_ros',
@@ -70,14 +71,7 @@ def generate_launch_description():
         package="robot_state_publisher",
         executable="robot_state_publisher",
         output="both",
-        parameters=[robot_description],
-    )
-
-    control_node = Node(
-        package="controller_manager",
-        executable="ros2_control_node",
-        parameters=[robot_description, controller_config],
-        output="both",
+        parameters=[robot_description, {"use_sim_time": use_sim_time}],
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -92,47 +86,45 @@ def generate_launch_description():
         arguments=["four_wheel_drive_controller", "--controller-manager", "/controller_manager"],
     )
 
-    delay_robot_controller_spawner_after_joint_state_broadcaster_spawner = RegisterEventHandler(
+    # Delay controllers after robot spawn
+    delay_spawners_after_spawn = RegisterEventHandler(
         event_handler=OnProcessExit(
-            target_action=joint_state_broadcaster_spawner,
-            on_exit=[robot_controller_spawner],
+            target_action=spawn_entity_node,
+            on_exit=[
+                TimerAction(
+                    period=5.0,
+                    actions=[
+                        joint_state_broadcaster_spawner,
+                        robot_controller_spawner,
+                    ]
+                )
+            ]
         )
     )
 
-    # Add RViz2 configuration
-    rviz_config_file = PathJoinSubstitution([FindPackageShare('shelfbot'), 'config', 'shelfbot.rviz'])
-
-    # RViz2 node
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
         name='rviz2',
-        arguments=['-d', rviz_config_file],
         parameters=[
             {'use_sim_time': use_sim_time},
-            {'robot_description': robot_description_content}
-        ],
-        remappings=[
-            ('/tf', 'tf'),
-            ('/tf_static', 'tf_static'),
+            robot_description
         ],
         output='screen',
     )
 
-    # Delay RViz2 launch to ensure all topics are available
     delayed_rviz = TimerAction(
-        period=5.0,
+        period=10.0,
         actions=[rviz_node],
     )
 
     nodes = [
         world_arg,
-        gazebo_node,
+        gzserver_cmd,
+        gzclient_cmd,
         spawn_entity_node,
         robot_state_pub_node,
-        control_node,
-        joint_state_broadcaster_spawner,
-        delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
+        delay_spawners_after_spawn,
         delayed_rviz,
     ]
     return LaunchDescription(declared_arguments + nodes)

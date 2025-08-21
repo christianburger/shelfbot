@@ -7,6 +7,7 @@
 namespace shelfbot {
 
 void log_info(const std::string& logger_name, const std::string& tag, const std::string& message);
+void log_warn(const std::string& logger_name, const std::string& tag, const std::string& message);
 void log_error(const std::string& logger_name, const std::string& tag, const std::string& message);
 void log_debug(const std::string& logger_name, const std::string& tag, const std::string& message);
 void log_trace(const std::string& logger_name, const std::string& tag, const std::string& message);
