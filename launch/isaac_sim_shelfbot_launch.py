@@ -18,7 +18,7 @@ def generate_launch_description():
 
     pkg_share = FindPackageShare(package='shelfbot').find('shelfbot')
     urdf_file_path = PathJoinSubstitution([pkg_share, 'urdf', 'shelfbot.urdf.xacro'])
-    controller_config = PathJoinSubstitution([pkg_share, 'config', 'isaac.sim.params.yaml'])
+    controller_config = PathJoinSubstitution([pkg_share, 'config', 'four_wheel_drive_controller.yaml'])
     rviz_config_file = PathJoinSubstitution([FindPackageShare('shelfbot'), 'config', 'shelfbot.rviz'])
 
     # Fixed robot description - explicitly set mock communication for Isaac sim
