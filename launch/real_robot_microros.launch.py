@@ -31,7 +31,7 @@ def generate_launch_description():
 
     # --- End of Robust URDF Generation Method ---
 
-    controller_config = os.path.join(pkg_share, 'config', 'real_robot_microros.params.yaml')
+    controller_config = os.path.join(pkg_share, 'config', 'four_wheel_drive_controller.yaml')
 
     robot_state_pub_node = Node(
         package="robot_state_publisher",
