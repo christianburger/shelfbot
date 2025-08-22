@@ -31,7 +31,7 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('shelfbot')
 
     xacro_file = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
-    controller_config = os.path.join(pkg_share, 'config', 'gazebo_controller.yaml')
+    controller_config = os.path.join(pkg_share, 'config', 'four_wheel_drive_controller.yaml')
     doc = xacro.process_file(xacro_file, mappings={'sim_mode': 'gazebo', 'controller_config_file': controller_config})
     robot_description_content = doc.toxml()
     robot_description = {"robot_description": robot_description_content}
