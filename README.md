@@ -61,6 +61,8 @@ Isaac Sim: Launch the robot in Isaac Sim using:
 RViz Visualization: Visualize the robot in RViz using: 
   ros2 launch shelfbot rviz_launch.py
 
+Note: The Gazebo and Isaac Sim launchers automatically start RViz.
+
 ## Hardware Interface
 
 The Shelfbot includes a hardware interface for controlling and monitoring the robot's state:
@@ -70,15 +72,31 @@ State Interfaces: Provide feedback on the robot's current state, including joint
 
 ## Using ROS 2 Command Line Tools
 
-To interact with the hardware interface, you can use ROS 2 command line tools:
+To interact with the hardware interface, you can use ROS 2 command line tools.
 
-Send Commands: Use ros2 topic pub to send commands to the robot's joints:
+### Driving the Robot
 
-  ros2 topic pub /shelfbot/commands std_msgs/msg/Float64MultiArray "data: [1.0, 0.5, -0.5, -1.0]"
+To drive the robot forward at 0.5 m/s, publish a `Twist` message to the controller's `cmd_vel` topic:
 
-Receive State Information: Use ros2 topic echo to view the robot's state information:
+  ros2 topic pub /four_wheel_drive_controller/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.5, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" -1
 
-  ros2 topic echo /shelfbot/joint_states
+### Direct Wheel Control
+
+To command the individual wheel joints directly (e.g., for testing), publish to the `direct_commands` topic:
+
+  ros2 topic pub /four_wheel_drive_controller/direct_commands std_msgs/msg/Float64MultiArray "data: [1.0, 1.0, 1.0, 1.0]"
+
+### Monitoring State
+
+Receive state information by echoing the `joint_states` topic:
+
+  ros2 topic echo /joint_states
+
+## Performance Considerations
+
+The robot uses a skid-steer drive mechanism. Due to the physics of this design, turning maneuvers on high-friction surfaces (like concrete or carpet) can cause significant resistance. This requires high torque from the motors and can lead to jittering, sliding, or wheels struggling to turn, especially during zero-radius (in-place) pivots.
+
+The robot's heavy mass and direct-drive gearing amplify this issue. For best performance, it is recommended to command **arc turns** (where the robot moves forward or backward while turning) rather than stationary pivots. This can be achieved by always providing a non-zero linear velocity (`linear.x`) in the `Twist` command when an angular velocity (`angular.z`) is present.
 
 ## Conclusion
 
