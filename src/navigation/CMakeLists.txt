@@ -21,3 +21,19 @@ ament_target_dependencies(four_wheel_drive_odometry
   tf2_ros
   tf2_geometry_msgs
 )
+
+# --- Mission Control Node ---
+add_executable(mission_control_node path_planner.cpp)
+
+ament_target_dependencies(mission_control_node
+  rclcpp
+  geometry_msgs
+  tf2_ros
+  tf2_geometry_msgs
+  std_msgs
+)
+
+install(TARGETS
+  mission_control_node
+  DESTINATION lib/${PROJECT_NAME}
+)

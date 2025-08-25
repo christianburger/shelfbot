@@ -16,27 +16,14 @@ def generate_launch_description():
         )
     )
 
-    # Apriltag Detector Node
-    apriltag_detector_node = Node(
+    mission_control_node = Node(
         package='shelfbot',
-        executable='apriltag_detector_node',
-        name='apriltag_detector',
+        executable='mission_control_node',
+        name='mission_control_node',
         output='screen',
-        remappings=[
-            # Remap the image topic to your camera's topic.
-            # You may need to change '/camera/image_raw' if your camera publishes elsewhere.
-            ('image_rect', '/camera/image_raw'),
-            ('camera_info', '/camera/camera_info')
-        ],
-        parameters=[{
-            # The tag family your tags belong to
-            'family': 'tag36h11',
-            # The size of the tag's black square in meters
-            'size': 0.16,
-        }]
     )
 
     return LaunchDescription([
         real_robot_launch,
-        apriltag_detector_node
+        mission_control_node,
     ])
