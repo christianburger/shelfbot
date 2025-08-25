@@ -1,0 +1,182 @@
+<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <!--
+    This is the XML schema for the Unified Robot Description Format (URDF).
+    It is not complete, but covers most of the specification.
+    -->
+  <xs:element name="robot">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="link" type="linkType"/>
+        <xs:element name="joint" type="jointType"/>
+        <xs:element name="gazebo" type="gazeboType"/>
+        <xs:element name="transmission" type="transmissionType"/>
+        <xs:element name="material" type="materialType"/>
+      </xs:choice>
+      <xs:attribute name="name" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:complexType name="linkType">
+    <xs:choice minOccurs="0" maxOccurs="unbounded">
+      <xs:element name="inertial" type="inertialType"/>
+      <xs:element name="visual" type="visualType"/>
+      <xs:element name="collision" type="collisionType"/>
+    </xs:choice>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="jointType">
+    <xs:all>
+      <xs:element name="parent" type="parentType"/>
+      <xs:element name="child" type="childType"/>
+      <xs:element name="origin" type="originType" minOccurs="0"/>
+      <xs:element name="axis" type="axisType" minOccurs="0"/>
+      <xs:element name="calibration" type="calibrationType" minOccurs="0"/>
+      <xs:element name="dynamics" type="dynamicsType" minOccurs="0"/>
+      <xs:element name="limit" type="limitType" minOccurs="0"/>
+      <xs:element name="mimic" type="mimicType" minOccurs="0"/>
+      <xs:element name="safety_controller" type="safetyControllerType" minOccurs="0"/>
+    </xs:all>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="type" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="revolute"/>
+          <xs:enumeration value="continuous"/>
+          <xs:enumeration value="prismatic"/>
+          <xs:enumeration value="fixed"/>
+          <xs:enumeration value="floating"/>
+          <xs:enumeration value="planar"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="gazeboType">
+    <xs:choice minOccurs="0" maxOccurs="unbounded">
+      <xs:any processContents="skip"/>
+    </xs:choice>
+    <xs:attribute name="reference" type="xs:string" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="transmissionType">
+    <xs:all>
+      <xs:element name="type" type="xs:string"/>
+      <xs:element name="joint">
+        <xs:complexType>
+          <xs:attribute name="name" type="xs:string" use="required"/>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="actuator">
+        <xs:complexType>
+          <xs:attribute name="name" type="xs:string" use="required"/>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="mechanicalReduction" type="xs:double" minOccurs="0"/>
+    </xs:all>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="materialType">
+    <xs:choice minOccurs="0" maxOccurs="unbounded">
+      <xs:element name="color" type="colorType"/>
+      <xs:element name="texture" type="textureType"/>
+    </xs:choice>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="inertialType">
+    <xs:all>
+      <xs:element name="mass" type="massType"/>
+      <xs:element name="inertia" type="inertiaType"/>
+      <xs:element name="origin" type="originType" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+  <xs:complexType name="visualType">
+    <xs:all>
+      <xs:element name="geometry" type="geometryType"/>
+      <xs:element name="origin" type="originType" minOccurs="0"/>
+      <xs:element name="material" type="materialType" minOccurs="0"/>
+    </xs:all>
+    <xs:attribute name="name" type="xs:string" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="collisionType">
+    <xs:all>
+      <xs:element name="geometry" type="geometryType"/>
+      <xs:element name="origin" type="originType" minOccurs="0"/>
+    </xs:all>
+    <xs:attribute name="name" type="xs:string" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="parentType">
+    <xs:attribute name="link" type="xs:string" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="childType">
+    <xs:attribute name="link" type="xs:string" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="originType">
+    <xs:attribute name="xyz" type="xs:string" use="optional"/>
+    <xs:attribute name="rpy" type="xs:string" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="axisType">
+    <xs:attribute name="xyz" type="xs:string" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="calibrationType">
+    <xs:attribute name="rising" type="xs:double" use="optional"/>
+    <xs:attribute name="falling" type="xs:double" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="dynamicsType">
+    <xs:attribute name="damping" type="xs:double" use="optional"/>
+    <xs:attribute name="friction" type="xs:double" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="limitType">
+    <xs:attribute name="lower" type="xs:double" use="optional"/>
+    <xs:attribute name="upper" type="xs:double" use="optional"/>
+    <xs:attribute name="effort" type="xs:double" use="required"/>
+    <xs:attribute name="velocity" type="xs:double" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="mimicType">
+    <xs:attribute name="joint" type="xs:string" use="required"/>
+    <xs:attribute name="multiplier" type="xs:double" use="optional"/>
+    <xs:attribute name="offset" type="xs:double" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="safetyControllerType">
+    <xs:attribute name="soft_lower_limit" type="xs:double" use="optional"/>
+    <xs:attribute name="soft_upper_limit" type="xs:double" use="optional"/>
+    <xs:attribute name="k_position" type="xs:double" use="optional"/>
+    <xs:attribute name="k_velocity" type="xs:double" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="colorType">
+    <xs:attribute name="rgba" type="xs:string" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="textureType">
+    <xs:attribute name="filename" type="xs:string" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="massType">
+    <xs:attribute name="value" type="xs:double" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="inertiaType">
+    <xs:attribute name="ixx" type="xs:double" use="required"/>
+    <xs:attribute name="ixy" type="xs:double" use="required"/>
+    <xs:attribute name="ixz" type="xs:double" use="required"/>
+    <xs:attribute name="iyy" type="xs:double" use="required"/>
+    <xs:attribute name="iyz" type="xs:double" use="required"/>
+    <xs:attribute name="izz" type="xs:double" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="geometryType">
+    <xs:choice>
+      <xs:element name="box" type="boxType"/>
+      <xs:element name="cylinder" type="cylinderType"/>
+      <xs:element name="sphere" type="sphereType"/>
+      <xs:element name="mesh" type="meshType"/>
+    </xs:choice>
+  </xs:complexType>
+  <xs:complexType name="boxType">
+    <xs:attribute name="size" type="xs:string" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="cylinderType">
+    <xs:attribute name="radius" type="xs:double" use="required"/>
+    <xs:attribute name="length" type="xs:double" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="sphereType">
+    <xs:attribute name="radius" type="xs:double" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="meshType">
+    <xs:attribute name="filename" type="xs:string" use="required"/>
+    <xs:attribute name="scale" type="xs:string" use="optional"/>
+  </xs:complexType>
+</xs:schema>

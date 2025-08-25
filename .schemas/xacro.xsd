@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:xacro="http://www.ros.org/wiki/xacro"
+           targetNamespace="http://www.ros.org/wiki/xacro"
+           elementFormDefault="qualified">
+
+  <xs:element name="property">
+    <xs:complexType>
+      <xs:attribute name="name" type="xs:string" use="required"/>
+      <xs:attribute name="value" type="xs:string" use="optional"/>
+      <xs:attribute name="scope" use="optional">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="parent"/>
+            <xs:enumeration value="global"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="macro">
+    <xs:complexType>
+      <xs:attribute name="name" type="xs:string" use="required"/>
+      <xs:attribute name="params" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="include">
+    <xs:complexType>
+      <xs:attribute name="filename" type="xs:string" use="required"/>
+      <xs:attribute name="ns" type="xs:string" use="optional"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="if">
+    <xs:complexType>
+      <xs:attribute name="value" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="unless">
+    <xs:complexType>
+      <xs:attribute name="value" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="arg">
+    <xs:complexType>
+      <xs:attribute name="name" type="xs:string" use="required"/>
+      <xs:attribute name="default" type="xs:string" use="optional"/>
+      <xs:attribute name="value" type="xs:string" use="optional"/>
+      <xs:attribute name="doc" type="xs:string" use="optional"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="option">
+    <xs:complexType>
+      <xs:attribute name="name" type="xs:string" use="required"/>
+      <xs:attribute name="default" type="xs:string" use="optional"/>
+      <xs:attribute name="value" type="xs:string" use="optional"/>
+      <xs:attribute name="doc" type="xs:string" use="optional"/>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
