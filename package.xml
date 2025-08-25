@@ -26,6 +26,12 @@
   <depend>pluginlib</depend>
   <depend>gazebo_ros2_control</depend>
   <depend>xacro</depend>
+  <depend>ros2_controllers</depend>
+  <depend>apriltag_ros</depend>
+  <depend>apriltag_msgs</depend>
+  <depend>image_transport</depend>
+  <depend>cv_bridge</depend>
+  <depend>visualization_msgs</depend>
 
   <export>
     <build_type>ament_cmake</build_type>
