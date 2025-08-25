@@ -86,6 +86,7 @@ target_include_directories(microros_communication PUBLIC
 
 # Navigation components
 add_subdirectory(src/navigation)
+add_subdirectory(src/perception)
 
 # Controller
 add_library(four_wheel_drive_controller SHARED

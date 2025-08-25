@@ -36,18 +36,6 @@ The physical motors are wired to the ESP32 controller in a specific, non-sequent
 
 This order is critical and is reflected in the ROS 2 controller configuration.
 
-## Building the Project
-
-To build the Shelfbot project, follow these steps:
-
-1. **Install ROS 2**: Ensure that ROS 2 is installed and sourced on your system.
-2. **Clone the Repository**: Clone the Shelfbot repository into your workspace.
-3. **Build the Project**: Use `colcon` to build the project:
-  colcon build
-
-4. Source the Setup File: After building, source the setup file to overlay the workspace: 
-  source install/setup.bash
-
 ## Launching the Simulation
 
 To launch the Shelfbot in a simulation environment, use the provided launch files:
@@ -62,6 +50,50 @@ RViz Visualization: Visualize the robot in RViz using:
   ros2 launch shelfbot rviz_launch.py
 
 Note: The Gazebo and Isaac Sim launchers automatically start RViz.
+
+## Node Communication
+
+This section details the communication architecture of the Shelfbot system, outlining the key nodes and the topics they use to interact.
+
+### `/apriltag_detector_node`
+The `apriltag_detector_node` is responsible for detecting Apriltags in the environment.
+
+- **Subscribers**:
+  - `/camera/image_raw` (`sensor_msgs/msg/Image`): Consumes the raw image feed from the camera.
+  - `/camera/camera_info` (`sensor_msgs/msg/CameraInfo`): Consumes the camera's calibration data.
+- **Publishers**:
+  - `/tag_poses` (`geometry_msgs/msg/PoseArray`): Publishes the 3D poses of all detected Apriltags.
+  - `/tag_markers` (`visualization_msgs/msg/MarkerArray`): Publishes visual markers for RViz to display the detected tags.
+  - `/tf` (`tf2_msgs/msg/TFMessage`): Broadcasts the live transform for each detected tag relative to the camera.
+
+### `/controller_manager` (ros2_control)
+This is the main node from the `ros2_control` framework that manages the hardware interfaces and controllers.
+
+- **Subscribers**:
+  - `/four_wheel_drive_controller/cmd_vel` (`geometry_msgs/msg/Twist`): Receives velocity commands to drive the robot. This is the primary control topic for navigation.
+  - `/four_wheel_drive_controller/direct_commands` (`std_msgs/msg/Float64MultiArray`): Receives direct velocity commands for each wheel, typically used for testing.
+- **Publishers**:
+  - `/joint_states` (`sensor_msgs/msg/JointState`): Publishes the current state (position, velocity) of all robot joints.
+  - `/odom` (`nav_msgs/msg/Odometry`): Publishes the robot's estimated odometry based on wheel encoder feedback.
+  - `/tf` (`tf2_msgs/msg/TFMessage`): Broadcasts the `odom` -> `base_footprint` transform.
+
+### `/robot_state_publisher`
+This standard ROS 2 node uses the robot's URDF and the `/joint_states` topic to compute and publish the transforms for all the fixed and moving parts of the robot.
+
+- **Subscribers**:
+  - `/robot_description` (`std_msgs/msg/String`): Reads the URDF model of the robot on startup.
+  - `/joint_states` (`sensor_msgs/msg/JointState`): Consumes the joint states to calculate the transforms for moving parts (like wheels).
+- **Publishers**:
+  - `/tf` (`tf2_msgs/msg/TFMessage`): Broadcasts the transforms for all links in the robot model (e.g., `base_link` -> `wheel_link`).
+
+### Data Flow and Dependencies
+1.  The **Camera** (either simulated in Gazebo or a real hardware driver) publishes images to `/camera/image_raw`.
+2.  The `/apriltag_detector_node` subscribes to these images, detects tags, and publishes their 3D poses to `/tf` and `/tag_poses`.
+3.  A high-level navigation stack (like Nav2, not yet implemented) would consume the `/tf` data and the `/odom` data to determine the robot's position and issue velocity commands.
+4.  The navigation stack would publish these commands to `/four_wheel_drive_controller/cmd_vel`.
+5.  The `/controller_manager` receives these commands and passes them to the `FourWheelDriveHardwareInterface`, which sends the appropriate signals to the motors (either in simulation or via the Micro-ROS agent on the real robot).
+6.  The hardware interface reads the wheel encoders and publishes the joint states to `/joint_states`.
+7.  The `/robot_state_publisher` consumes `/joint_states` to publish the robot's internal transforms to `/tf`.
 
 ## Hardware Interface
 
