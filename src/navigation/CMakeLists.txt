@@ -35,6 +35,9 @@ ament_target_dependencies(shelfbot_bt_nodes
   behaviortree_cpp
   tf2_ros
   geometry_msgs
+  nav2_bt_navigator
+  nav2_common
+  rtabmap_ros
 )
 
 # --- Mission Control Node ---
@@ -54,6 +57,8 @@ ament_target_dependencies(mission_control_node
   tf2_geometry_msgs
   std_msgs
   ament_index_cpp
+  nav2_common
+  rtabmap_ros
 )
 
 target_link_libraries(mission_control_node

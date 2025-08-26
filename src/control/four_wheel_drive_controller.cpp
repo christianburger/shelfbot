@@ -45,8 +45,9 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
     axis_commands_[joint] = 0.0;
   }
 
+  // FIX: Use SystemDefaultsQoS to match Nav2 controller server publisher
   cmd_vel_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Twist>(
-      "~/cmd_vel", 10, std::bind(&FourWheelDriveController::cmd_vel_callback, this, std::placeholders::_1));
+      "~/cmd_vel", rclcpp::SystemDefaultsQoS(), std::bind(&FourWheelDriveController::cmd_vel_callback, this, std::placeholders::_1));
 
   direct_cmd_subscriber_ = get_node()->create_subscription<std_msgs::msg::Float64MultiArray>(
       "~/direct_commands", 10, [this](const std_msgs::msg::Float64MultiArray::SharedPtr msg) {

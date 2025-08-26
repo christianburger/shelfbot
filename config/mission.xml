@@ -1,32 +1,46 @@
 <root main_tree_to_execute="MissionTree" BTCPP_format="4">
+
   <BehaviorTree ID="MissionTree">
-    <Sequence name="Mission">
-      <!--
-        NOTE: The blocking FindOrigin step has been temporarily removed to test movement.
-        The robot will start its search patrol immediately.
-      -->
+    <Sequence>
+        <!-- 
+          1. Define the patrol route as a series of poses (x;y;z:qx;qy;qz;qw). 
+          This example defines a simple square patrol.
+        -->
+        <SetBlackboard output_key="patrol_route" 
+                       value="1.0;0.0;0.0:0.0;0.0;0.0;1.0 | 1.0;1.0;0.0:0.0;0.0;0.707;0.707 | 0.0;1.0;0.0:0.0;0.0;1.0;0.0 | 0.0;0.0;0.0:0.0;0.0;-0.707;0.707" />
 
-      <!-- Define the Twist message for our arc move on the blackboard -->
-      <SetBlackboard output_key="search_twist" value="0.2;0.0;0.0:0.0;0.0;0.4"/>
+        <!-- 
+          2. FIX: Move to the starting waypoint BEFORE starting the search.
+          This prevents the FindTagAction from succeeding immediately if the tag is visible at the origin.
+        -->
+        <SetBlackboard output_key="start_pose" value="1.0;0.0;0.0:0.0;0.0;0.0;1.0" />
+        <NavigateToPose goal="{start_pose}" />
 
-      <!-- 2. Search Loop: Keep patrolling until the destination tag is found -->
-      <KeepRunningUntilFailure name="SearchLoop">
-        <Sequence name="SearchPatrol">
-          <!-- Execute the arc move for 1.0 second -->
-          <MoveAction twist="{search_twist}" duration="1.0"/>
-          <!-- Check for the destination tag. The Inverter flips the result.
-               - If tag is NOT found, FindTag returns FAILURE -> Inverter returns SUCCESS -> Loop continues.
-               - If tag IS found, FindTag returns SUCCESS -> Inverter returns FAILURE -> Loop stops.
-          -->
-          <Inverter>
-              <FindTag tag_id="5" tag_frame_name="tag_5" output_pose="{destination_pose}"/>
-          </Inverter>
-        </Sequence>
-      </KeepRunningUntilFailure>
+        <!-- 
+          3. The main search block. This will repeat until the tag is found.
+          It runs two actions in parallel: navigating and checking for the tag.
+        -->
+        <RetryUntilSuccessful num_attempts="-1">
+            <Parallel success_threshold="1" failure_threshold="1">
 
-      <!-- 3. Stop the robot after the search is complete -->
-      <SetBlackboard output_key="stop_twist" value="0.0;0.0;0.0:0.0;0.0;0.0"/>
-      <MoveAction twist="{stop_twist}" duration="0.1"/>
+                <!-- Child A: The Navigation Task -->
+                <NavigateThroughPoses goals="{patrol_route}" controller_id="FollowPath"/>
+
+                <!-- Child B: The Perception Task -->
+                <FindTag tag_id="5" tag_frame_name="tag_5" output_pose="{destination_pose}"/>
+
+            </Parallel>
+        </RetryUntilSuccessful>
+
+        <!-- 
+          4. Once the Parallel node succeeds (because FindTag succeeded), we stop all navigation.
+        -->
+        <CancelAllNav2/>
+
+        <!-- 
+          5. Final approach to the tag's saved pose.
+        -->
+        <NavigateToPose goal="{destination_pose}" />
 
     </Sequence>
   </BehaviorTree>

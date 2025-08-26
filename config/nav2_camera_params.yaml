@@ -1,0 +1,128 @@
+
+# Shelfbot Nav2 Parameters for Camera-Only Dynamic Navigation
+
+controller_server:
+  ros__parameters:
+    use_sim_time: True
+    cmd_vel_topic: "/four_wheel_drive_controller/cmd_vel" # <-- THIS IS THE FIX
+    controller_plugins: ["FollowPath"]
+    FollowPath:
+      plugin: "nav2_core::Controller"
+      # We will use the Regulated Pure Pursuit controller as it's good for dynamic tasks
+      # and works well with skid-steer kinematics.
+      controller: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+      RegulatedPurePursuitController:
+        lookahead_dist: 1.0
+        min_lookahead_dist: 0.5
+        max_lookahead_dist: 2.0
+        lookahead_time: 1.5
+        use_velocity_scaled_lookahead_dist: true
+        min_approach_linear_velocity: 0.1
+        regulated_linear_scaling_min_radius: 0.5
+        use_cost_regulated_linear_velocity_scaling: false
+        allow_reversing: false
+        # Kinematic constraints for the Shelfbot
+        max_robot_pose_search_dist: 10.0
+        wheel_base: 0.45 # From your URDF
+        tread: 0.45 # Assuming same as wheel_base for skid-steer
+        max_angular_vel: 1.0
+        max_linear_vel: 0.5
+        min_linear_vel: 0.0
+        
+planner_server:
+  ros__parameters:
+    use_sim_time: True
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_navfn_planner/NavFnPlanner"
+      tolerance: 0.5
+      use_astar: false
+
+behavior_server:
+  ros__parameters:
+    use_sim_time: True
+    costmap_topic: "local_costmap/costmap_raw"
+    footprint_topic: "local_costmap/published_footprint"
+    cycle_frequency: 10.0
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "wait"]
+    spin:
+      plugin: "nav2_behaviors/Spin"
+    backup:
+      plugin: "nav2_behaviors/Backup"
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors/Wait"
+    global_frame: "odom"
+    robot_base_frame: "base_link"
+    
+bt_navigator:
+  ros__parameters:
+    use_sim_time: True
+    plugin_lib_names:
+      - nav2_compute_path_to_pose_action_bt_node
+      - nav2_follow_path_action_bt_node
+      - nav2_spin_action_bt_node
+      - nav2_wait_action_bt_node
+      - nav2_backup_action_bt_node
+      - nav2_drive_on_heading_bt_node
+    bt_xml_filename: "navigate_w_replanning_and_recovery.xml" # Default Nav2 BT
+
+# Common parameters for both costmaps
+local_costmap:
+  ros__parameters:
+    global_frame: odom
+    robot_base_frame: base_link
+    update_frequency: 5.0
+    publish_frequency: 2.0
+    robot_radius: 0.3 # Approximate radius of the robot
+    # This is the key part: we use the point cloud from RTAB-Map as the obstacle source
+    observation_sources: "pointcloud"
+    pointcloud:
+      sensor_frame: camera_link # Or whatever your camera's frame is
+      data_type: "PointCloud2"
+      topic: "/rtabmap/obstacles" # The topic RTAB-Map publishes obstacles on
+      marking: true
+      clearing: true
+      min_obstacle_height: 0.05
+      max_obstacle_height: 1.0
+
+global_costmap:
+  ros__parameters:
+    global_frame: odom
+    robot_base_frame: base_link
+    update_frequency: 1.0
+    publish_frequency: 1.0
+    # Make the global costmap a rolling window that moves with the robot
+    rolling_window: true
+    width: 10
+    height: 10
+    resolution: 0.05
+    # No static map, but we still need a source for marking. We can use the same point cloud.
+    observation_sources: "pointcloud"
+    pointcloud:
+      sensor_frame: camera_link
+      data_type: "PointCloud2"
+      topic: "/rtabmap/obstacles"
+      marking: true
+      clearing: true
+      min_obstacle_height: 0.05
+      max_obstacle_height: 1.0
+
+map_server:
+  ros__parameters:
+    use_sim_time: True
+    # We are not using a static map, so we use the default empty map.
+    # Nav2 still requires this server to be running.
+    yaml_filename: ""
+
+lifecycle_manager:
+  ros__parameters:
+    use_sim_time: True
+    autostart: True
+    node_names:
+      - planner_server
+      - controller_server
+      - behavior_server
+      - bt_navigator
+      - map_server

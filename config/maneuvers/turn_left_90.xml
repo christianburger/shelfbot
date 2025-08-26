@@ -1,0 +1,16 @@
+<root BTCPP_format="4">
+  <!-- This is a Subtree. It can be called by other trees. -->
+  <BehaviorTree ID="TurnLeft90">
+    <Sequence name="TurnLeftSequence">
+      <!-- Define the twist commands for the shuffle maneuver -->
+      <SetBlackboard output_key="turn_fwd_left" value="0.15;0.0;0.0:0.0;0.0;0.5"/>
+      <SetBlackboard output_key="turn_bwd_left" value="-0.15;0.0;0.0:0.0;0.0;-0.5"/>
+
+      <!-- Execute the shuffle twice to approximate 90 degrees -->
+      <MoveAction twist="{turn_fwd_left}" duration="0.8"/>
+      <MoveAction twist="{turn_bwd_left}" duration="0.8"/>
+      <MoveAction twist="{turn_fwd_left}" duration="0.8"/>
+      <MoveAction twist="{turn_bwd_left}" duration="0.8"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

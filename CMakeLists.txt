@@ -19,6 +19,16 @@ find_package(rclcpp_lifecycle REQUIRED)
 find_package(CURL REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
+# Nav2 and RTAB-Map dependencies
+find_package(nav2_bringup REQUIRED)
+find_package(nav2_bt_navigator REQUIRED)
+find_package(nav2_controller REQUIRED)
+find_package(nav2_planner REQUIRED)
+find_package(nav2_map_server REQUIRED)
+find_package(nav2_lifecycle_manager REQUIRED)
+find_package(nav2_common REQUIRED)
+find_package(rtabmap_ros REQUIRED)
+
 include_directories(include)
 
 
@@ -193,9 +203,21 @@ install(FILES
   DESTINATION share/${PROJECT_NAME}/config
 )
 
+# Install all maneuver subtrees
+install(DIRECTORY
+  config/maneuvers/
+  DESTINATION share/${PROJECT_NAME}/config/maneuvers
+)
+
 install(DIRECTORY
   launch/
   DESTINATION share/${PROJECT_NAME}/launch
+)
+
+# Install python scripts
+install(PROGRAMS
+  scripts/mission_starter.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 install(FILES
