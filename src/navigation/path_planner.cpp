@@ -1,134 +1,111 @@
 #include "rclcpp/rclcpp.hpp"
-#include "geometry_msgs/msg/twist.hpp"
-#include "geometry_msgs/msg/pose_array.hpp"
-#include "std_msgs/msg/string.hpp"  // Needed for state and diagnostic messages
+#include "behaviortree_cpp/bt_factory.h"
+#include "behaviortree_cpp/loggers/bt_cout_logger.h"
+#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp" // For TF conversions
-#include <memory>
-#include <string>
-#include <vector>
-#include "geometry_msgs/msg/transform_stamped.hpp"
 
-// Define the states for our mission
-enum class MissionState {
-    INITIALIZING,
-    SEARCHING_FOR_DESTINATION,
-    RETURNING_TO_ORIGIN,
-    CONFIRMING_ORIGIN,
-    MISSION_COMPLETE
-};
-
-// Utility function to convert MissionState enum to string
-std::string missionStateToString(MissionState state) {
-    switch (state) {
-        case MissionState::INITIALIZING: return "INITIALIZING";
-        case MissionState::SEARCHING_FOR_DESTINATION: return "SEARCHING_FOR_DESTINATION";
-        case MissionState::RETURNING_TO_ORIGIN: return "RETURNING_TO_ORIGIN";
-        case MissionState::CONFIRMING_ORIGIN: return "CONFIRMING_ORIGIN";
-        case MissionState::MISSION_COMPLETE: return "MISSION_COMPLETE";
-        default: return "UNKNOWN";
-    }
-}
+// Include our custom BT node headers
+#include "shelfbot/behavior_tree_nodes/find_tag_action.hpp"
+#include "shelfbot/behavior_tree_nodes/spin_action.hpp"
 
 class MissionControlNode : public rclcpp::Node
 {
 public:
     MissionControlNode() : Node("mission_control_node")
     {
-        // Publisher for robot velocity commands
-        cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/four_wheel_drive_controller/cmd_vel", 10);
+        // The constructor should do minimal work.
+        // Defer the main setup to a separate method.
+    }
 
-        // --- NEW: Publishers for state and diagnostics ---
-        state_pub_ = this->create_publisher<std_msgs::msg::String>("/mission_control/state", 10);
-        diagnostics_pub_ = this->create_publisher<std_msgs::msg::String>("/mission_control/diagnostics", 10);
+    // Use a separate setup method to be able to use shared_from_this()
+    void setup()
+    {
+        RCLCPP_INFO(this->get_logger(), "--- Mission Control Node Initialization ---");
 
-        // Subscriber to the AprilTag poses
-        tag_poses_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
-            "/tag_poses", 10, std::bind(&MissionControlNode::tagPosesCallback, this, std::placeholders::_1));
-
-        // Initialize TF2 listener
-        tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+        // Step 1: Initialize TF Buffer and Listener
+        RCLCPP_INFO(this->get_logger(), "[1/7] Initializing TF buffer and listener...");
+        tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+        RCLCPP_INFO(this->get_logger(), "      ...TF initialized successfully.");
 
-        // Timer to run the main state machine loop at 10 Hz
+        // Step 2: Create Behavior Tree Factory
+        RCLCPP_INFO(this->get_logger(), "[2/7] Creating Behavior Tree factory...");
+        BT::BehaviorTreeFactory factory;
+        RCLCPP_INFO(this->get_logger(), "      ...Factory created successfully.");
+
+        // Step 3: Register custom nodes
+        RCLCPP_INFO(this->get_logger(), "[3/7] Registering custom Behavior Tree nodes...");
+        factory.registerNodeType<BTNodes::FindTagAction>("FindTag", shared_from_this(), tf_buffer_);
+        RCLCPP_INFO(this->get_logger(), "      ...Registered 'FindTagAction'.");
+        factory.registerNodeType<BTNodes::SpinAction>("Spin", shared_from_this());
+        RCLCPP_INFO(this->get_logger(), "      ...Registered 'SpinAction'.");
+
+        // Step 4: Load the Behavior Tree from the XML file
+        RCLCPP_INFO(this->get_logger(), "[4/7] Locating and loading Behavior Tree XML file...");
+        std::string package_share_directory = ament_index_cpp::get_package_share_directory("shelfbot");
+        std::string xml_file = package_share_directory + "/config/mission.xml";
+        RCLCPP_INFO(this->get_logger(), "      ...Loading from: %s", xml_file.c_str());
+        try
+        {
+            tree_ = factory.createTreeFromFile(xml_file);
+            RCLCPP_INFO(this->get_logger(), "      ...Tree created successfully from file.");
+        }
+        catch (const BT::RuntimeError& e)
+        {
+            RCLCPP_ERROR(this->get_logger(), "FATAL: Failed to create Behavior Tree: %s", e.what());
+            rclcpp::shutdown();
+            return;
+        }
+        
+        // Step 5: Create a logger
+        RCLCPP_INFO(this->get_logger(), "[5/7] Creating BT console logger...");
+        logger_ = std::make_unique<BT::StdCoutLogger>(tree_);
+        RCLCPP_INFO(this->get_logger(), "      ...Logger created successfully.");
+
+        // Step 6: Create the tree ticker timer
+        RCLCPP_INFO(this->get_logger(), "[6/7] Creating BT ticker timer (10 Hz)...");
         timer_ = this->create_wall_timer(
             std::chrono::milliseconds(100),
-            std::bind(&MissionControlNode::stateMachineLoop, this));
+            std::bind(&MissionControlNode::tickTree, this));
+        RCLCPP_INFO(this->get_logger(), "      ...Timer created successfully.");
 
-        RCLCPP_INFO(this->get_logger(), "Mission Control Node has been initialized.");
-        RCLCPP_INFO(this->get_logger(), "Current state: %s", missionStateToString(current_state_).c_str());
+        RCLCPP_INFO(this->get_logger(), "[7/7] --- Initialization Complete ---");
     }
 
 private:
-    // Callback for the /tag_poses subscriber
-    void tagPosesCallback(const geometry_msgs::msg::PoseArray::SharedPtr msg)
+    void tickTree()
     {
-        if (!msg->poses.empty()) {
-            RCLCPP_DEBUG(this->get_logger(), "Received %zu tag poses.", msg->poses.size());
-        }
-    }
-
-    // Main state machine loop
-    void stateMachineLoop()
-    {
-        // --- NEW: Publish state and diagnostic messages ---
-        publishState();
-        publishDiagnostics();
-
-        // This function will contain the logic for each state.
-        switch (current_state_)
+        BT::NodeStatus status = tree_.tickOnce();
+        if (status == BT::NodeStatus::SUCCESS)
         {
-            case MissionState::INITIALIZING:
-                // TODO: Add logic to find the origin tag
-                break;
-            case MissionState::SEARCHING_FOR_DESTINATION:
-                // TODO: Add logic to search for the destination tag
-                break;
-            case MissionState::RETURNING_TO_ORIGIN:
-                // TODO: Add logic to return to the origin
-                break;
-            case MissionState::CONFIRMING_ORIGIN:
-                // TODO: Add logic to confirm the origin tag is visible again
-                break;
-            case MissionState::MISSION_COMPLETE:
-                // TODO: Stop the robot
-                break;
+            RCLCPP_INFO(this->get_logger(), "Mission SUCCESS");
+            timer_->cancel(); // Stop ticking
         }
-    }
-
-    // --- NEW: Publishing functions ---
-    void publishState()
-    {
-        auto state_msg = std_msgs::msg::String();
-        state_msg.data = missionStateToString(current_state_);
-        state_pub_->publish(state_msg);
-    }
-
-    void publishDiagnostics()
-    {
-        auto diag_msg = std_msgs::msg::String();
-        // TODO: Populate with real diagnostic data from the remote unit
-        diag_msg.data = "Remote Unit Status: OK | Battery: 98% | Last Heartbeat: 12ms ago";
-        diagnostics_pub_->publish(diag_msg);
+        else if (status == BT::NodeStatus::FAILURE)
+        {
+            RCLCPP_INFO(this->get_logger(), "Mission FAILURE");
+            timer_->cancel(); // Stop ticking
+        }
     }
 
     // Member Variables
-    MissionState current_state_ = MissionState::INITIALIZING;
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
-    rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr tag_poses_sub_;
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+    BT::Tree tree_;
     rclcpp::TimerBase::SharedPtr timer_;
-    std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
-    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
-    // --- NEW: Publisher member variables ---
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_pub_;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr diagnostics_pub_;
+    std::unique_ptr<BT::StdCoutLogger> logger_;
 };
 
 int main(int argc, char * argv[])
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<MissionControlNode>());
+    // Create the node
+    auto node = std::make_shared<MissionControlNode>();
+    // Call the setup method
+    node->setup();
+    // Spin the node
+    rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;
 }

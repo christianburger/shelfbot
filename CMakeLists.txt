@@ -3,6 +3,7 @@ project(shelfbot)
 
 # Find required packages
 find_package(ament_cmake REQUIRED)
+find_package(behaviortree_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -20,9 +21,15 @@ find_package(nlohmann_json REQUIRED)
 
 include_directories(include)
 
+
+
 # Build utilities
 add_library(shelfbot_utils SHARED
   src/shelfbot_utils.cpp
+)
+target_include_directories(shelfbot_utils PUBLIC
+  $<INSTALL_INTERFACE:include>
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
 )
 target_link_libraries(shelfbot_utils
   ${rclcpp_LIBRARIES}
@@ -153,6 +160,7 @@ install(TARGETS
   four_wheel_drive_controller
   four_wheel_drive_hardware_interface
   four_wheel_drive_odometry
+  shelfbot_bt_nodes
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -179,6 +187,12 @@ install(DIRECTORY
   FILES_MATCHING PATTERN "*.yaml"
 )
 
+# Explicitly install the mission XML file
+install(FILES
+  config/mission.xml
+  DESTINATION share/${PROJECT_NAME}/config
+)
+
 install(DIRECTORY
   launch/
   DESTINATION share/${PROJECT_NAME}/launch
@@ -203,6 +217,7 @@ ament_export_libraries(
   four_wheel_drive_controller 
   four_wheel_drive_hardware_interface
   four_wheel_drive_odometry
+  shelfbot_bt_nodes
 )
 
 ament_export_dependencies(
@@ -219,6 +234,7 @@ ament_export_dependencies(
   rclcpp_lifecycle
   CURL
   nlohmann_json
+  behaviortree_cpp
 )
 
 ament_package()

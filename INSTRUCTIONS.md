@@ -2,82 +2,83 @@
 
 This document provides detailed instructions for setting up the required dependencies to build and run the Shelfbot project.
 
-## System Dependencies Verification
+## 1. Automated Dependency Installation (Recommended)
 
-Before building the workspace, you must ensure that all required ROS 2 packages are installed.
+The recommended method for installing all required system dependencies is to use `rosdep`. This tool reads the `package.xml` file and automatically installs the correct versions of all required libraries for your specific OS and ROS 2 distribution.
 
-Run the verification script below in your terminal. Each command should return a path (e.g., `/opt/ros/humble`). If any command reports `Package not found`, you must install the corresponding package using the `apt` instructions provided in the next section.
-
-### Verification Script
+Run the following commands from the root of your workspace (e.g., `~/shelfbot_workspace`):
 
 ```bash
-#!/bin/bash
-PACKAGES=(
-    # Core
-    rclcpp
-    sensor_msgs
-    tf2_ros
-    rviz2
-    gazebo_ros
-    geometry_msgs
-    nav_msgs
-    tf2
-    controller_interface
-    hardware_interface
-    realtime_tools
-    pluginlib
-    gazebo_ros2_control
-    xacro
-    ros2_controllers
-    # Perception
-    apriltag
-    apriltag_ros
-    apriltag_msgs
-    image_transport
-    cv_bridge
-    visualization_msgs
-)
+# First, update the rosdep sources to ensure you have the latest package list
+rosdep update
 
-for pkg in "${PACKAGES[@]}"; do
-    if ros2 pkg prefix "$pkg" > /dev/null 2>&1; then
-        echo "✅ $pkg found"
-    else
-        echo "❌ $pkg NOT found"
-    fi
-done
+# Next, run the installer. This command finds all dependencies in the 'src'
+# directory, ignores packages that are already in your source tree,
+# and installs the rest.
+rosdep install --from-paths src --ignore-src -r -y
 ```
 
-## Installation Commands
+## 2. List of Project Dependencies
 
-If any package is missing, install it using the appropriate command from the list below.
+The `rosdep` command will install the ROS 2 system equivalents of the following packages, which are declared in `package.xml`:
 
-### Core Dependencies
+#### Core & Simulation
+- `rclcpp`
+- `sensor_msgs`
+- `tf2_ros`
+- `rviz2`
+- `gazebo_ros`
+- `geometry_msgs`
+- `nav_msgs`
+- `tf2`
+- `controller_interface`
+- `hardware_interface`
+- `realtime_tools`
+- `pluginlib`
+- `gazebo_ros2_control`
+- `xacro`
+- `ros2_controllers`
+
+#### Perception
+- `apriltag_ros`
+- `apriltag_msgs`
+- `image_transport`
+- `cv_bridge`
+- `visualization_msgs`
+
+#### Behavior & Logic
+- `behaviortree_cpp`
+
+
+## 3. Manual Verification (Optional)
+
+After running `rosdep`, you can optionally run the following commands to confirm that all packages were installed correctly. Each command should return a path (e.g., `/opt/ros/humble/share/rclcpp`). If a command returns nothing, the package is missing.
+
 ```bash
-sudo apt-get update && sudo apt-get install -y \
-  ros-humble-rclcpp \
-  ros-humble-sensor-msgs \
-  ros-humble-tf2-ros \
-  ros-humble-rviz2 \
-  ros-humble-gazebo-ros \
-  ros-humble-geometry-msgs \
-  ros-humble-nav-msgs \
-  ros-humble-tf2 \
-  ros-humble-controller-interface \
-  ros-humble-hardware-interface \
-  ros-humble-realtime-tools \
-  ros-humble-pluginlib \
-  ros-humble-gazebo-ros2-control \
-  ros-humble-xacro \
-  ros-humble-ros2-controllers
-```
+# Core & Simulation
+ros2 pkg prefix rclcpp
+ros2 pkg prefix sensor_msgs
+ros2 pkg prefix tf2_ros
+ros2 pkg prefix rviz2
+ros2 pkg prefix gazebo_ros
+ros2 pkg prefix geometry_msgs
+ros2 pkg prefix nav_msgs
+ros2 pkg prefix tf2
+ros2 pkg prefix controller_interface
+ros2 pkg prefix hardware_interface
+ros2 pkg prefix realtime_tools
+ros2 pkg prefix pluginlib
+ros2 pkg prefix gazebo_ros2_control
+ros2 pkg prefix xacro
+ros2 pkg prefix ros2_controllers
 
-### Perception Dependencies
-```bash
-sudo apt-get update && sudo apt-get install -y \
-  ros-humble-apriltag \
-  ros-humble-apriltag-ros \
-  ros-humble-apriltag-msgs \
-  ros-humble-image-transport \
-  ros-humble-cv-bridge \
-  ros-humble-visualization-msgs
+# Perception
+ros2 pkg prefix apriltag_ros
+ros2 pkg prefix apriltag_msgs
+ros2 pkg prefix image_transport
+ros2 pkg prefix cv_bridge
+ros2 pkg prefix visualization_msgs
+
+# Behavior & Logic
+ros2 pkg prefix behaviortree_cpp
 ```
