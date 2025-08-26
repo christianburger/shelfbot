@@ -4,6 +4,58 @@ Shelfbot is a ROS2 application of a delivery robot.
 
 The Shelfbot project is a comprehensive robotic system designed to simulate and control a four-wheeled robot. This project includes a detailed robot model, simulation environments, and control interfaces that allow for both simulated and real-time operation. The Shelfbot is equipped with a variety of components, including wheels, motors, and sensors, and is capable of performing complex maneuvers and tasks.
 
+## Autonomous Navigation with Behavior Trees
+
+High-level mission logic for the Shelfbot is defined using **Behavior Trees (BTs)**. This is a modern, modular, and flexible approach to robotics task management that is used by ROS 2's own Nav2 stack. It replaces a monolithic, hardcoded state machine with a "scriptable" system that is easy to read and modify.
+
+### How it Works
+
+The system is composed of three main parts:
+
+1.  **The Mission Plan (`mission.xml`):** The "script" that defines the robot's goals. This is a simple XML file located in `/config/mission.xml`. It describes the mission as a tree of nodes, where each node represents a goal or a logical operator.
+
+2.  **The BT Engine (`mission_control_node`):** This is the C++ "brain" of the robot. It reads the `mission.xml` file, and at a regular interval (10 Hz), it "ticks" the tree. Ticking the tree executes the logic defined in the XML, causing the robot to perform actions.
+
+3.  **The Actions & Conditions (C++ Classes):** These are the building blocks of the tree. Each C++ class is a small, self-contained, and reusable piece of code that performs a single task. For example:
+    *   `FindTagAction`: Checks if a specific AprilTag is visible to the robot.
+    *   `MoveAction`: Commands the robot to move with a specific velocity for a set duration.
+
+### Translating the Behavior Tree into Actions
+
+The `mission_control_node` translates the XML script into robot behavior through the following data flow:
+
+1.  **Tree Execution:** The BT engine ticks the tree. Let's say it's currently on a `<MoveAction>` node in the XML.
+2.  **Action Invocation:** The engine invokes the corresponding `MoveAction` C++ class.
+3.  **ROS 2 Communication:** The `MoveAction` class publishes a `geometry_msgs/msg/Twist` message to the `/four_wheel_drive_controller/cmd_vel` topic.
+4.  **Robot Movement:** The `ros2_control` system receives this message and commands the motors to move the robot, as described in the "Node Communication" section.
+
+### Role of AprilTags
+
+The AprilTags are the primary landmarks for navigation. The Behavior Tree uses them to make decisions:
+
+1.  The robot's camera publishes images.
+2.  The `/apriltag_detector_node` processes these images and publishes the 3D pose of any visible tags to the `/tf` topic.
+3.  The `FindTagAction` C++ class uses a TF2 listener to check if a specific tag's transform (e.g., `tag_5`) exists in the `/tf` tree.
+4.  If the transform exists, the `FindTagAction` returns `SUCCESS` to the Behavior Tree, which can then transition to the next step in the mission (e.g., stop searching and return home).
+
+### The Implemented Mission (`mission.xml`)
+
+The current mission implements a continuous search pattern. The logic can be read from top to bottom in the XML file:
+
+1.  **`SetBlackboard`:** First, a command is created to define an "arc move" (moving forward at 0.2 m/s while turning at 0.4 rad/s). This command is stored in a variable called `search_twist` on the BT's "Blackboard" (a shared memory space).
+
+2.  **`KeepRunningUntilFailure` (The Main Loop):** The tree enters a loop that will repeat forever until one of its children *fails*.
+
+3.  **`Sequence` (The Patrol Step):** Inside the loop, a sequence is executed:
+    a.  **`MoveAction`:** The robot executes the `search_twist` command for 1.0 second, causing it to move in an arc.
+    b.  **`Inverter` & `FindTag`:** Immediately after, it checks for the destination tag (ID 5). The `Inverter` flips the logic:
+        *   If the tag is **not** found, `FindTag` returns `FAILURE`, which the `Inverter` turns into `SUCCESS`. The sequence succeeds, and the main loop runs the patrol step again.
+        *   If the tag **is** found, `FindTag` returns `SUCCESS`, which the `Inverter` turns into `FAILURE`. The sequence fails, causing the main `KeepRunningUntilFailure` loop to stop.
+
+4.  **`MoveAction` (Stop):** Once the loop is broken (meaning the tag was found), a final `MoveAction` is called to send a zero-velocity command, stopping the robot.
+
+This creates a robust, non-blocking search where the robot is continuously moving and checking for the tag on every cycle.
+
 ## Capabilities
 
 - **Simulation and Real-Time Control**: The Shelfbot can be operated in both simulated environments (Gazebo and Isaac Sim) and real-time scenarios.

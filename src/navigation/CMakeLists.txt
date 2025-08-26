@@ -20,6 +20,7 @@ ament_target_dependencies(four_wheel_drive_odometry
 add_library(shelfbot_bt_nodes SHARED
   behavior_tree_nodes/find_tag_action.cpp
   behavior_tree_nodes/spin_action.cpp
+  behavior_tree_nodes/move_action.cpp
 )
 
 # Add include directories for behaviortree_cpp headers

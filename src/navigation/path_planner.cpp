@@ -8,40 +8,37 @@
 // Include our custom BT node headers
 #include "shelfbot/behavior_tree_nodes/find_tag_action.hpp"
 #include "shelfbot/behavior_tree_nodes/spin_action.hpp"
+#include "shelfbot/behavior_tree_nodes/move_action.hpp"
+
 
 class MissionControlNode : public rclcpp::Node
 {
 public:
     MissionControlNode() : Node("mission_control_node")
     {
-        // The constructor should do minimal work.
-        // Defer the main setup to a separate method.
     }
 
-    // Use a separate setup method to be able to use shared_from_this()
     void setup()
     {
         RCLCPP_INFO(this->get_logger(), "--- Mission Control Node Initialization ---");
 
-        // Step 1: Initialize TF Buffer and Listener
         RCLCPP_INFO(this->get_logger(), "[1/7] Initializing TF buffer and listener...");
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
         RCLCPP_INFO(this->get_logger(), "      ...TF initialized successfully.");
 
-        // Step 2: Create Behavior Tree Factory
         RCLCPP_INFO(this->get_logger(), "[2/7] Creating Behavior Tree factory...");
         BT::BehaviorTreeFactory factory;
         RCLCPP_INFO(this->get_logger(), "      ...Factory created successfully.");
 
-        // Step 3: Register custom nodes
         RCLCPP_INFO(this->get_logger(), "[3/7] Registering custom Behavior Tree nodes...");
         factory.registerNodeType<BTNodes::FindTagAction>("FindTag", shared_from_this(), tf_buffer_);
         RCLCPP_INFO(this->get_logger(), "      ...Registered 'FindTagAction'.");
         factory.registerNodeType<BTNodes::SpinAction>("Spin", shared_from_this());
         RCLCPP_INFO(this->get_logger(), "      ...Registered 'SpinAction'.");
+        factory.registerNodeType<BTNodes::MoveAction>("MoveAction", shared_from_this());
+        RCLCPP_INFO(this->get_logger(), "      ...Registered 'MoveAction'.");
 
-        // Step 4: Load the Behavior Tree from the XML file
         RCLCPP_INFO(this->get_logger(), "[4/7] Locating and loading Behavior Tree XML file...");
         std::string package_share_directory = ament_index_cpp::get_package_share_directory("shelfbot");
         std::string xml_file = package_share_directory + "/config/mission.xml";
@@ -58,12 +55,10 @@ public:
             return;
         }
         
-        // Step 5: Create a logger
         RCLCPP_INFO(this->get_logger(), "[5/7] Creating BT console logger...");
         logger_ = std::make_unique<BT::StdCoutLogger>(tree_);
         RCLCPP_INFO(this->get_logger(), "      ...Logger created successfully.");
 
-        // Step 6: Create the tree ticker timer
         RCLCPP_INFO(this->get_logger(), "[6/7] Creating BT ticker timer (10 Hz)...");
         timer_ = this->create_wall_timer(
             std::chrono::milliseconds(100),
@@ -80,16 +75,15 @@ private:
         if (status == BT::NodeStatus::SUCCESS)
         {
             RCLCPP_INFO(this->get_logger(), "Mission SUCCESS");
-            timer_->cancel(); // Stop ticking
+            timer_->cancel();
         }
         else if (status == BT::NodeStatus::FAILURE)
         {
             RCLCPP_INFO(this->get_logger(), "Mission FAILURE");
-            timer_->cancel(); // Stop ticking
+            timer_->cancel();
         }
     }
 
-    // Member Variables
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     BT::Tree tree_;
@@ -100,11 +94,8 @@ private:
 int main(int argc, char * argv[])
 {
     rclcpp::init(argc, argv);
-    // Create the node
     auto node = std::make_shared<MissionControlNode>();
-    // Call the setup method
     node->setup();
-    // Spin the node
     rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;

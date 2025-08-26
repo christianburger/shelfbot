@@ -49,9 +49,9 @@ BT::NodeStatus FindTagAction::onRunning()
     }
     catch (const tf2::TransformException& ex)
     {
-        RCLCPP_INFO(node_->get_logger(), "Could not find transform to '%s': %s", tag_frame.c_str(), ex.what());
-        // Return RUNNING to keep trying on the next tick
-        return BT::NodeStatus::RUNNING;
+        RCLCPP_INFO(node_->get_logger(), "FindTagAction: Could not find transform to '%s'. Returning FAILURE.", tag_frame.c_str());
+        // Return FAILURE to indicate the tag was not found on this tick
+        return BT::NodeStatus::FAILURE;
     }
 }
 

@@ -1,17 +1,33 @@
 <root main_tree_to_execute="MissionTree" BTCPP_format="4">
   <BehaviorTree ID="MissionTree">
     <Sequence name="Mission">
-      <RetryUntilSuccessful num_attempts="-1" name="FindOrigin">
-        <FindTag tag_id="0" tag_frame_name="tag_0" output_pose="{origin_pose}"/>
-      </RetryUntilSuccessful>
-      <RetryUntilSuccessful num_attempts="-1" name="FindDestination">
-        <Sequence>
-          <Spin speed="0.4" duration="10.0"/>
-          <FindTag tag_id="5" tag_frame_name="tag_5" output_pose="{destination_pose}"/>
+      <!--
+        NOTE: The blocking FindOrigin step has been temporarily removed to test movement.
+        The robot will start its search patrol immediately.
+      -->
+
+      <!-- Define the Twist message for our arc move on the blackboard -->
+      <SetBlackboard output_key="search_twist" value="0.2;0.0;0.0:0.0;0.0;0.4"/>
+
+      <!-- 2. Search Loop: Keep patrolling until the destination tag is found -->
+      <KeepRunningUntilFailure name="SearchLoop">
+        <Sequence name="SearchPatrol">
+          <!-- Execute the arc move for 1.0 second -->
+          <MoveAction twist="{search_twist}" duration="1.0"/>
+          <!-- Check for the destination tag. The Inverter flips the result.
+               - If tag is NOT found, FindTag returns FAILURE -> Inverter returns SUCCESS -> Loop continues.
+               - If tag IS found, FindTag returns SUCCESS -> Inverter returns FAILURE -> Loop stops.
+          -->
+          <Inverter>
+              <FindTag tag_id="5" tag_frame_name="tag_5" output_pose="{destination_pose}"/>
+          </Inverter>
         </Sequence>
-      </RetryUntilSuccessful>
-      <!-- GoHome action will be added here later -->
-      <AlwaysSuccess name="MissionComplete"/>
+      </KeepRunningUntilFailure>
+
+      <!-- 3. Stop the robot after the search is complete -->
+      <SetBlackboard output_key="stop_twist" value="0.0;0.0;0.0:0.0;0.0;0.0"/>
+      <MoveAction twist="{stop_twist}" duration="0.1"/>
+
     </Sequence>
   </BehaviorTree>
 </root>
