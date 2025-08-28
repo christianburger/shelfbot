@@ -38,13 +38,13 @@
 
   <!-- Nav2 and RTAB-Map Dependencies -->
   <depend>nav2_bringup</depend>
-  <depend>nav2_bt_navigator</depend>
   <depend>nav2_controller</depend>
   <depend>nav2_planner</depend>
   <depend>nav2_map_server</depend>
   <depend>nav2_lifecycle_manager</depend>
   <depend>nav2_common</depend>
   <depend>rtabmap_ros</depend>
+  <depend>robot_localization</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

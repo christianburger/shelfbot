@@ -42,4 +42,4 @@ npm-debug.log
 yarn-error.log
 .DS_Store
 *.priv
-integration.mission.control.plan.md
+*.err

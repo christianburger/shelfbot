@@ -3,7 +3,6 @@ project(shelfbot)
 
 # Find required packages
 find_package(ament_cmake REQUIRED)
-find_package(behaviortree_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -23,7 +22,6 @@ find_package(camera_info_manager REQUIRED)
 
 # Nav2 and RTAB-Map dependencies
 find_package(nav2_bringup REQUIRED)
-find_package(nav2_bt_navigator REQUIRED)
 find_package(nav2_controller REQUIRED)
 find_package(nav2_planner REQUIRED)
 find_package(nav2_map_server REQUIRED)
@@ -182,7 +180,6 @@ install(TARGETS
   four_wheel_drive_controller
   four_wheel_drive_hardware_interface
   four_wheel_drive_odometry
-  shelfbot_bt_nodes
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -207,18 +204,6 @@ install(DIRECTORY
   config/
   DESTINATION share/${PROJECT_NAME}/config
   FILES_MATCHING PATTERN "*.yaml"
-)
-
-# Explicitly install the mission XML file
-install(FILES
-  config/mission.xml
-  DESTINATION share/${PROJECT_NAME}/config
-)
-
-# Install all maneuver subtrees
-install(DIRECTORY
-  config/maneuvers/
-  DESTINATION share/${PROJECT_NAME}/config/maneuvers
 )
 
 install(DIRECTORY
@@ -251,7 +236,6 @@ ament_export_libraries(
   four_wheel_drive_controller 
   four_wheel_drive_hardware_interface
   four_wheel_drive_odometry
-  shelfbot_bt_nodes
 )
 
 ament_export_dependencies(
@@ -268,7 +252,6 @@ ament_export_dependencies(
   rclcpp_lifecycle
   CURL
   nlohmann_json
-  behaviortree_cpp
 )
 
 ament_package()

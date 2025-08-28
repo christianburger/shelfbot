@@ -60,7 +60,7 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
       });
 
   joint_state_publisher_ = get_node()->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
-  tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(get_node());
+  // tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(get_node());
 
   return CallbackReturn::SUCCESS;
 }

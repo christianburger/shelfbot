@@ -46,9 +46,6 @@ The `rosdep` command will install the ROS 2 system equivalents of the following 
 - `cv_bridge`
 - `visualization_msgs`
 
-#### Behavior & Logic
-- `behaviortree_cpp`
-
 #### Navigation & Mapping
 - `nav2_bringup`
 - `nav2_bt_navigator`
@@ -57,8 +54,8 @@ The `rosdep` command will install the ROS 2 system equivalents of the following 
 - `nav2_map_server`
 - `nav2_lifecycle_manager`
 - `nav2_common`
-- `rtabmap_slam`
-- `rtabmap_slam`
+- `rtabmap_ros`
+- `robot_localization`
 - `camera_info_manager`
 
 
@@ -91,12 +88,9 @@ ros2 pkg prefix image_transport
 ros2 pkg prefix cv_bridge
 ros2 pkg prefix visualization_msgs
 
-# Behavior & Logic
-ros2 pkg prefix behaviortree_cpp
-
 # Navigation & Mapping
 ros2 pkg prefix nav2_bringup
 ros2 pkg prefix rtabmap_ros
-ros2 pkg prefix rtabmap_slam
+ros2 pkg prefix robot_localization
 ros2 pkg prefix camera_info_manager
 ```
