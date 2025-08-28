@@ -42,7 +42,7 @@ behavior_server:
     spin:
       plugin: "nav2_behaviors/Spin"
     backup:
-      plugin: "nav2_behaviors/Backup"
+      plugin: "nav2_behaviors/BackUp"
     drive_on_heading:
       plugin: "nav2_behaviors/DriveOnHeading"
     wait:
@@ -58,15 +58,15 @@ bt_navigator:
       - nav2_follow_path_action_bt_node
       - nav2_spin_action_bt_node
       - nav2_wait_action_bt_node
-      - nav2_backup_action_bt_node
+      - nav2_back_up_action_bt_node
       - nav2_drive_on_heading_bt_node
       - shelfbot_bt_nodes
-    bt_xml_filename: "navigate_w_replanning_and_recovery.xml" # Default Nav2 BT
+    bt_xml_filename: "navigate_to_pose_w_replanning_and_recovery.xml" # Default Nav2 BT
 
 # Common parameters for both costmaps
 local_costmap:
   ros__parameters:
-    global_frame: odom
+    global_frame: map
     robot_base_frame: base_link
     update_frequency: 5.0
     publish_frequency: 2.0
@@ -84,7 +84,7 @@ local_costmap:
 
 global_costmap:
   ros__parameters:
-    global_frame: odom
+    global_frame: map
     robot_base_frame: base_link
     update_frequency: 1.0
     publish_frequency: 1.0

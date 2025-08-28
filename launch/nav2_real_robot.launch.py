@@ -9,9 +9,11 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     shelfbot_share_dir = get_package_share_directory('shelfbot')
+    nav2_bringup_dir = get_package_share_directory('nav2_bringup')
 
     # --- Launch Arguments ---
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
+    params_file = LaunchConfiguration('params_file', default=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml'))
 
     # --- 1. Launch the Real Robot Drivers (which includes the ESP32-CAM via Micro-ROS) ---
     real_robot_launch = IncludeLaunchDescription(
@@ -51,14 +53,36 @@ def generate_launch_description():
         output='screen'
     )
 
+    # --- 4. Launch Nav2 ---
+    nav2_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(nav2_bringup_dir, 'launch', 'bringup_launch.py')),
+        launch_arguments={
+            'map': '', # No map provided, Nav2 will start in localization-only mode
+            'use_sim_time': use_sim_time,
+            'params_file': params_file,
+            'autostart': 'true' # Automatically start Nav2 lifecycle nodes
+        }.items()
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
             description='Use simulation (Gazebo) clock if true'
         ),
+        DeclareLaunchArgument(
+            'params_file',
+            default_value=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml'),
+            description='Full path to the ROS2 parameters file to use for all launched nodes'
+        ),
 
         real_robot_launch,
         republish_node,
         camera_info_node,
+        
+        # Add a delay before launching Nav2 to allow RTAB-Map to initialize
+        TimerAction(
+            period=2.0,
+            actions=[nav2_launch]
+        )
     ])
