@@ -1,0 +1,77 @@
+@startuml
+!theme vibrant
+
+title Shelfbot System Architecture and Data Flow
+
+' Define the main containers for software and hardware
+cloud "ROS 2 Docker Container" {
+    package "High-Level Logic" {
+        component "Behavior Tree Engine\n(mission_control_node)" as BT_Engine
+        package "Nav2 Stack" {
+            component "BT Navigator" as Nav2_BT
+            component "Planner & Controller" as Nav2_PC
+        }
+    }
+
+    package "Perception" {
+        component "RTAB-Map (VSLAM)" as VSLAM
+        component "AprilTag Detector" as AprilTag
+    }
+
+    package "ros2_control" {
+        component "Controller Manager" as CM
+        component "FourWheelDriveController" as FWD_Controller
+        component "FourWheelDriveHardwareInterface" as FWD_HW
+        component "MicroROSCommunication" as MicroROS_Comm
+    }
+}
+
+frame "Hardware" {
+    node "ESP32-CAM" {
+        database "Camera Sensor" as Cam
+        component "Micro-ROS Agent" as Agent_Cam
+    }
+    node "ESP32-WROOM" {
+        database "Motors & Encoders" as Motors
+        component "Micro-ROS Agent" as Agent_Motors
+    }
+}
+
+' === Connections ===
+
+' High-Level Control Flow
+Nav2_BT -> BT_Engine : Ticks Behavior Tree
+BT_Engine -> Nav2_PC : (via Nav2 BT Actions like NavigateToPose)
+Nav2_PC --> FWD_Controller : **Topic:** /four_wheel_drive_controller/cmd_vel\n<geometry_msgs/msg/Twist>
+
+' ros2_control Internal Flow (not ROS topics)
+FWD_Controller -> CM : Writes Command Interface (Wheel Velocities)
+CM -> FWD_HW : Reads Command Interface
+FWD_HW -> MicroROS_Comm : Calls writeSpeedsToHardware()
+
+' Low-Level Control to Hardware
+MicroROS_Comm --> Agent_Motors : **Topic:** /shelfbot_firmware/set_speed\n<std_msgs/msg/Float32MultiArray>
+Agent_Motors -> Motors : Sets Motor Speeds
+
+' Low-Level Feedback from Hardware
+Motors -> Agent_Motors : Reads Encoder Positions
+Agent_Motors --> MicroROS_Comm : **Topic:** /shelfbot_firmware/motor_positions\n<std_msgs/msg/Float32MultiArray>
+
+' ros2_control Feedback Flow
+MicroROS_Comm -> FWD_HW : Returns Positions via readStateFromHardware()
+FWD_HW --> VSLAM : **Topic:** /odom\n<nav_msgs/msg/Odometry>
+FWD_HW --> BT_Engine : **Topic:** /tf (odom -> base_footprint)
+FWD_HW -> CM : Writes State Interface (Wheel Positions)
+CM -> FWD_Controller : Reads State Interface
+FWD_Controller --> VSLAM : **Topic:** /joint_states\n<sensor_msgs/msg/JointState>
+
+' Perception Flow
+Cam -> Agent_Cam : Raw Image Data
+Agent_Cam --> AprilTag : **Topic:** /camera/image_raw\n<sensor_msgs/msg/Image>
+Agent_Cam --> VSLAM : **Topic:** /camera/image_raw\n<sensor_msgs/msg/Image>
+
+' Perception Results
+AprilTag --> BT_Engine : **Topic:** /tf (camera_link -> tag_X)
+VSLAM --> Nav2_PC : **Topic:** /map, /rtabmap/obstacles
+
+@enduml

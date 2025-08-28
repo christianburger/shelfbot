@@ -33,6 +33,8 @@
   <depend>image_transport</depend>
   <depend>cv_bridge</depend>
   <depend>visualization_msgs</depend>
+  <depend>camera_info_manager</depend>
+  <depend>std_msgs</depend>
 
   <!-- Nav2 and RTAB-Map Dependencies -->
   <depend>nav2_bringup</depend>

@@ -49,6 +49,18 @@ The `rosdep` command will install the ROS 2 system equivalents of the following 
 #### Behavior & Logic
 - `behaviortree_cpp`
 
+#### Navigation & Mapping
+- `nav2_bringup`
+- `nav2_bt_navigator`
+- `nav2_controller`
+- `nav2_planner`
+- `nav2_map_server`
+- `nav2_lifecycle_manager`
+- `nav2_common`
+- `rtabmap_slam`
+- `rtabmap_slam`
+- `camera_info_manager`
+
 
 ## 3. Manual Verification (Optional)
 
@@ -81,4 +93,10 @@ ros2 pkg prefix visualization_msgs
 
 # Behavior & Logic
 ros2 pkg prefix behaviortree_cpp
+
+# Navigation & Mapping
+ros2 pkg prefix nav2_bringup
+ros2 pkg prefix rtabmap_ros
+ros2 pkg prefix rtabmap_slam
+ros2 pkg prefix camera_info_manager
 ```

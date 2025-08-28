@@ -40,21 +40,25 @@ The AprilTags are the primary landmarks for navigation. The Behavior Tree uses t
 
 ### The Implemented Mission (`mission.xml`)
 
-The current mission implements a continuous search pattern. The logic can be read from top to bottom in the XML file:
+The current mission demonstrates a robust, multi-step autonomous navigation task using Nav2. The logic can be read from top to bottom in the `/config/mission.xml` file:
 
-1.  **`SetBlackboard`:** First, a command is created to define an "arc move" (moving forward at 0.2 m/s while turning at 0.4 rad/s). This command is stored in a variable called `search_twist` on the BT's "Blackboard" (a shared memory space).
+1.  **`SetBlackboard` (Define Patrol Route):** An array of four poses is defined and stored on the Behavior Tree's "Blackboard" (a shared memory space) under the key `patrol_route`. This defines a square patrol pattern.
 
-2.  **`KeepRunningUntilFailure` (The Main Loop):** The tree enters a loop that will repeat forever until one of its children *fails*.
+2.  **`NavigateToPose` (Move to Start):** Before starting the main search, the robot navigates to the first waypoint of the patrol route. This ensures the robot is in a known state and prevents it from immediately finding the tag if it happens to be visible from the starting origin.
 
-3.  **`Sequence` (The Patrol Step):** Inside the loop, a sequence is executed:
-    a.  **`MoveAction`:** The robot executes the `search_twist` command for 1.0 second, causing it to move in an arc.
-    b.  **`Inverter` & `FindTag`:** Immediately after, it checks for the destination tag (ID 5). The `Inverter` flips the logic:
-        *   If the tag is **not** found, `FindTag` returns `FAILURE`, which the `Inverter` turns into `SUCCESS`. The sequence succeeds, and the main loop runs the patrol step again.
-        *   If the tag **is** found, `FindTag` returns `SUCCESS`, which the `Inverter` turns into `FAILURE`. The sequence fails, causing the main `KeepRunningUntilFailure` loop to stop.
+3.  **`RetryUntilSuccessful` (The Main Search Loop):** The tree enters a loop that will repeat forever until its child succeeds. This makes the search pattern persistent.
 
-4.  **`MoveAction` (Stop):** Once the loop is broken (meaning the tag was found), a final `MoveAction` is called to send a zero-velocity command, stopping the robot.
+4.  **`Parallel` (Simultaneous Navigation & Perception):** Inside the loop, two actions are run at the same time:
+    *   **`NavigateThroughPoses`:** This Nav2 action commands the robot to follow the `patrol_route` waypoints sequentially.
+    *   **`FindTagAction`:** At the same time, this custom action continuously scans the environment for the destination AprilTag (ID 5). If the tag is found, its pose is saved to the Blackboard under the key `destination_pose`.
 
-This creates a robust, non-blocking search where the robot is continuously moving and checking for the tag on every cycle.
+5.  **Success Condition:** The `Parallel` node is configured to succeed as soon as **one** of its children succeeds. Since `NavigateThroughPoses` is a continuous action, the only way for the `Parallel` node to succeed is for `FindTagAction` to find the tag.
+
+6.  **`CancelAllNav2`:** Once the `Parallel` node succeeds (meaning the tag was found), this action is called to immediately stop all active Nav2 navigation goals. This halts the patrol instantly.
+
+7.  **`NavigateToPose` (Final Approach):** Finally, the robot navigates to the `destination_pose` that was saved on the Blackboard by the `FindTagAction`.
+
+This architecture creates a robust and flexible mission where the robot actively patrols a predefined area while simultaneously searching for its objective, and then proceeds to the objective once found.
 
 ## Capabilities
 
@@ -92,11 +96,33 @@ This order is critical and is reflected in the ROS 2 controller configuration.
 
 To launch the Shelfbot in a simulation environment, use the provided launch files:
 
-Gazebo Simulation: Launch the robot in Gazebo using: 
+**Basic Simulation (Robot Model and Controllers Only):**
+  ```bash
   ros2 launch shelfbot gazebo_sim.launch.py
+  ```
 
-Isaac Sim: Launch the robot in Isaac Sim using: 
-  ros2 launch shelfbot isaac_sim_shelfbot_launch.py
+**Full Autonomous Navigation Simulation (Gazebo + Nav2 + RTAB-Map):**
+  ```bash
+  ros2 launch shelfbot nav2_dynamic.launch.py
+  ```
+
+**Real Robot Operation**
+
+To operate the real robot, you need to launch the hardware drivers and the mapping/localization system (RTAB-Map) in separate terminals.
+
+*Note: The `nav2_real_robot.launch.py` file is currently misnamed. It only launches the robot's hardware drivers and camera processing, not the Nav2 stack.*
+
+1.  **Terminal 1: Launch Hardware Drivers**
+    This command starts the connection to the robot's microcontroller and publishes sensor data.
+    ```bash
+    ros2 launch shelfbot nav2_real_robot.launch.py
+    ```
+
+2.  **Terminal 2: Launch RTAB-Map for SLAM**
+    This command starts the RTAB-Map node in RGB-only mode, which will use the camera and odometry data to build a map.
+    ```bash
+    ros2 launch shelfbot rtabmap_rgb_only.launch.py
+    ```
 
 RViz Visualization: Visualize the robot in RViz using: 
   ros2 launch shelfbot rviz_launch.py
@@ -138,14 +164,155 @@ This standard ROS 2 node uses the robot's URDF and the `/joint_states` topic to 
 - **Publishers**:
   - `/tf` (`tf2_msgs/msg/TFMessage`): Broadcasts the transforms for all links in the robot model (e.g., `base_link` -> `wheel_link`).
 
+### `/mission_control_node` (Behavior Tree Engine)
+This node executes the high-level mission logic from the `mission.xml` file.
+
+- **Publishers**:
+  - `/four_wheel_drive_controller/cmd_vel` (`geometry_msgs/msg/Twist`): Publishes velocity commands when executing `MoveAction` or `SpinAction` nodes from the behavior tree.
+- **Subscribers**:
+  - `/tf` (`tf2_msgs/msg/TFMessage`): The `FindTagAction` node listens to TF to determine if a specific AprilTag is visible.
+
 ### Data Flow and Dependencies
 1.  The **Camera** (either simulated in Gazebo or a real hardware driver) publishes images to `/camera/image_raw`.
 2.  The `/apriltag_detector_node` subscribes to these images, detects tags, and publishes their 3D poses to `/tf` and `/tag_poses`.
-3.  A high-level navigation stack (like Nav2, not yet implemented) would consume the `/tf` data and the `/odom` data to determine the robot's position and issue velocity commands.
-4.  The navigation stack would publish these commands to `/four_wheel_drive_controller/cmd_vel`.
+3.  The **Nav2** stack or the **`mission_control_node`** consumes `/tf` data and `/odom` data to make decisions and issue velocity commands.
+4.  These commands are published to `/four_wheel_drive_controller/cmd_vel`.
 5.  The `/controller_manager` receives these commands and passes them to the `FourWheelDriveHardwareInterface`, which sends the appropriate signals to the motors (either in simulation or via the Micro-ROS agent on the real robot).
-6.  The hardware interface reads the wheel encoders and publishes the joint states to `/joint_states`.
-7.  The `/robot_state_publisher` consumes `/joint_states` to publish the robot's internal transforms to `/tf`.
+6.  The hardware interface reads the wheel encoders, calculates odometry, and publishes it to `/odom` and `/tf`. It also provides joint states to the `/controller_manager`.
+7.  The `/controller_manager` publishes the joint states to `/joint_states`.
+8.  The `/robot_state_publisher` consumes `/joint_states` to publish the robot's internal transforms to `/tf`.
+
+## Topic Data Structures
+
+This section provides a detailed breakdown of the message structures for the primary topics used in the Shelfbot system, as defined and used within the source code.
+
+### Control & Actuation Topics
+
+#### `/four_wheel_drive_controller/cmd_vel`
+- **Type:** `geometry_msgs/msg/Twist`
+- **Purpose:** High-level command for robot motion.
+- **Structure:**
+  ```c++
+  // geometry_msgs/msg/Vector3
+  struct Vector3 {
+    double x, y, z;
+  };
+
+  // geometry_msgs/msg/Twist
+  struct Twist {
+    Vector3  linear;  // linear.x is used for forward/backward velocity
+    Vector3  angular; // angular.z is used for rotational velocity
+  };
+  ```
+
+#### `/shelfbot_firmware/set_speed`
+- **Type:** `std_msgs/msg/Float32MultiArray`
+- **Purpose:** Low-level command sent to the ESP32 firmware.
+- **Structure:**
+  ```c++
+  // std_msgs/msg/MultiArrayLayout
+  struct MultiArrayLayout {
+    MultiArrayDimension[] dim;
+    uint32 data_offset;
+  };
+
+  // std_msgs/msg/Float32MultiArray
+  struct Float32MultiArray {
+    MultiArrayLayout layout;
+    float[]          data; // A vector of 4 floats for motor speeds in rad/s
+  };
+  ```
+
+### State & Odometry Topics
+
+#### `/odom`
+- **Type:** `nav_msgs/msg/Odometry`
+- **Purpose:** Provides the robot's estimated position and velocity.
+- **Structure:**
+  ```c++
+  // nav_msgs/msg/Odometry
+  struct Odometry {
+    std_msgs/msg/Header                  header;
+    string                               child_frame_id;
+    geometry_msgs/msg/PoseWithCovariance pose;
+    geometry_msgs/msg/TwistWithCovariance twist;
+  };
+  ```
+
+#### `/joint_states`
+- **Type:** `sensor_msgs/msg/JointState`
+- **Purpose:** Publishes the current angle of all wheel joints.
+- **Structure:**
+  ```c++
+  // sensor_msgs/msg/JointState
+  struct JointState {
+    std_msgs/msg/Header header;
+    string[]            name;     // Names of the joints
+    float64[]           position; // Position of the joints in radians
+    float64[]           velocity; // Velocity of the joints (optional)
+    float64[]           effort;   // Effort of the joints (optional)
+  };
+  ```
+
+#### `/tf`
+- **Type:** `tf2_msgs/msg/TFMessage`
+- **Purpose:** Broadcasts all coordinate frame transformations.
+- **Structure:**
+  ```c++
+  // tf2_msgs/msg/TFMessage
+  struct TFMessage {
+    geometry_msgs/msg/TransformStamped[] transforms;
+  };
+  ```
+
+### Perception Topics
+
+#### `/camera/image_raw`
+- **Type:** `sensor_msgs/msg/Image`
+- **Purpose:** Provides raw image data from the camera.
+- **Structure:**
+  ```c++
+  // sensor_msgs/msg/Image
+  struct Image {
+    std_msgs/msg/Header header;
+    uint32              height;
+    uint32              width;
+    string              encoding; // e.g., "mono8", "bgr8"
+    uint8               is_bigendian;
+    uint32              step;
+    uint8[]             data;
+  };
+  ```
+
+#### `/camera/camera_info`
+- **Type:** `sensor_msgs/msg/CameraInfo`
+- **Purpose:** Provides the camera's intrinsic calibration parameters.
+- **Structure:**
+  ```c++
+  // sensor_msgs/msg/CameraInfo
+  struct CameraInfo {
+    std_msgs/msg/Header header;
+    uint32              height;
+    uint32              width;
+    string              distortion_model;
+    float64[]           d; // Distortion coefficients
+    float64[9]          k; // Intrinsic camera matrix
+    float64[9]          r; // Rectification matrix
+    float64[12]         p; // Projection matrix
+  };
+  ```
+
+#### `/tag_poses`
+- **Type:** `geometry_msgs/msg/PoseArray`
+- **Purpose:** Publishes the poses of all detected AprilTags.
+- **Structure:**
+  ```c++
+  // geometry_msgs/msg/PoseArray
+  struct PoseArray {
+    std_msgs/msg/Header header;
+    geometry_msgs/msg/Pose[] poses; // Vector of poses for each detected tag
+  };
+  ```
 
 ## Hardware Interface
 

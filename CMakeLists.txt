@@ -16,8 +16,10 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(msgpack REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(CURL REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(camera_info_manager REQUIRED)
 
 # Nav2 and RTAB-Map dependencies
 find_package(nav2_bringup REQUIRED)
@@ -100,6 +102,16 @@ target_include_directories(microros_communication PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 # --- END NEW ---
+
+# --- Add camera_publisher node ---
+add_executable(camera_publisher src/camera_publisher.cpp)
+ament_target_dependencies(camera_publisher rclcpp sensor_msgs camera_info_manager)
+target_link_libraries(camera_publisher camera_info_manager::camera_info_manager)
+
+install(TARGETS
+  camera_publisher
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 # Navigation components
 add_subdirectory(src/navigation)

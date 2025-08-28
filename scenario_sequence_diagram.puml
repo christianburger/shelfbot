@@ -1,0 +1,94 @@
+@startuml
+!theme vibrant
+
+title Scenario Sequence: Autonomous Patrol and AprilTag Detection
+
+actor User
+
+participant "mission_starter.py" as MissionStarter
+participant "Nav2 BT Navigator" as Nav2BT
+participant "Behavior Tree Engine\n(mission_control_node)" as BTEngine
+participant "Nav2 Planner/Controller" as Nav2PC
+participant "FourWheelDriveController" as FWDController
+participant "FourWheelDriveHardwareInterface" as FWD_HW
+participant "MicroROSCommunication" as MicroROSComm
+participant "AprilTag Detector" as AprilTag
+participant "RTAB-Map (VSLAM)" as VSLAM
+participant "ESP32-CAM\n(Micro-ROS Agent)" as ESP_CAM
+participant "ESP32-WROOM\n(Micro-ROS Agent)" as ESP_WROOM
+
+User -> MissionStarter : Executes script
+
+== 1. Mission Initiation ==
+MissionStarter -> Nav2BT : **Action Goal:** /navigate_to_pose\n(behavior_tree = "MissionTree")
+activate Nav2BT
+Nav2BT -> BTEngine : Begins ticking "MissionTree"
+activate BTEngine
+
+== 2. Parallel Patrol and Perception Loop Starts ==
+BTEngine -> BTEngine : Enters Parallel Node (Patrol AND Search)
+
+loop Patrol Behavior (repeats every 100ms) 
+    BTEngine -> Nav2PC : **Action Goal:** /navigate_through_poses\n(goals = patrol_route)
+    activate Nav2PC
+    Nav2PC -> FWDController : **Publishes to:** /four_wheel_drive_controller/cmd_vel\n<geometry_msgs/msg/Twist>
+    activate FWDController
+    FWDController -> FWD_HW : **Internal Call:** Writes wheel velocities
+    activate FWD_HW
+    FWD_HW -> MicroROSComm : **Internal Call:** writeSpeedsToHardware()
+    activate MicroROSComm
+    MicroROSComm -> ESP_WROOM : **Publishes to:** /shelfbot_firmware/set_speed\n<std_msgs/msg/Float32MultiArray>
+    deactivate MicroROSComm
+    deactivate FWD_HW
+    deactivate FWDController
+    deactivate Nav2PC
+end
+
+loop Perception and State Feedback (asynchronous)
+    ESP_WROOM -> MicroROSComm : **Publishes to:** /shelfbot_firmware/motor_positions\n<std_msgs/msg/Float32MultiArray>
+    activate MicroROSComm
+    MicroROSComm -> FWD_HW : **Internal Call:** Returns encoder positions
+    deactivate MicroROSComm
+    activate FWD_HW
+    FWD_HW -> VSLAM : **Publishes to:** /odom\n<nav_msgs/msg/Odometry>
+    deactivate FWD_HW
+
+    ESP_CAM -> AprilTag : **Publishes to:** /camera/image_raw\n<sensor_msgs/msg/Image>
+    ESP_CAM -> VSLAM : **Publishes to:** /camera/image_raw\n<sensor_msgs/msg/Image>
+    activate VSLAM
+    VSLAM -> VSLAM : Processes images and odom to build map
+    deactivate VSLAM
+end
+
+== 3. AprilTag is Detected ==
+activate AprilTag
+AprilTag -> AprilTag : Detects tag in image
+AprilTag -> BTEngine : **Publishes to:** /tf\n(Adds 'camera_link' -> 'tag_5' transform)
+deactivate AprilTag
+note right of BTEngine : The FindTagAction node is subscribed to /tf and now sees the tag.
+
+== 4. Behavior Tree Reacts and Transitions ==
+BTEngine -> BTEngine : FindTagAction returns SUCCESS.
+BTEngine -> BTEngine : Parallel node succeeds, halting the patrol.
+BTEngine -> Nav2PC : **Action Goal:** CancelAll
+BTEngine -> Nav2PC : **Action Goal:** /navigate_to_pose\n(goal = pose from Blackboard)
+activate Nav2PC
+
+== 5. Final Approach to Tag ==
+Nav2PC -> FWDController : **Publishes to:** /four_wheel_drive_controller/cmd_vel\n<geometry_msgs/msg/Twist>
+activate FWDController
+FWDController -> FWD_HW : **Internal Call:** Writes wheel velocities
+activate FWD_HW
+FWD_HW -> MicroROSComm : **Internal Call:** writeSpeedsToHardware()
+activate MicroROSComm
+MicroROSComm -> ESP_WROOM : **Publishes to:** /shelfbot_firmware/set_speed\n<std_msgs/msg/Float32MultiArray>
+deactivate MicroROSComm
+deactivate FWD_HW
+deactivate FWDController
+deactivate Nav2PC
+...
+BTEngine -> BTEngine : Mission completes upon reaching the goal.
+deactivate BTEngine
+deactivate Nav2BT
+
+@enduml

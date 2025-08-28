@@ -156,11 +156,11 @@
     <origin xyz="${base_axis_length/2} 0 0" rpy="0 0 0"/>
   </joint>
 
-  <xacro:camera name="camera" width="${camera_width}" length="${camera_length}" height="${camera_height}" radius="${camera_lens_radius}"/>
+  <xacro:camera name="camera_link" width="${camera_width}" length="${camera_length}" height="${camera_height}" radius="${camera_lens_radius}"/>
 
   <joint name="joint_camera" type="fixed">
     <parent link="base_link"/>
-    <child link="camera"/>
+    <child link="camera_link"/>
     <origin xyz="0 0 ${base_height}" rpy="${-pi/2} 0 0"/>
   </joint>
 

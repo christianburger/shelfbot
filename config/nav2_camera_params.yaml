@@ -4,37 +4,31 @@
 controller_server:
   ros__parameters:
     use_sim_time: True
-    cmd_vel_topic: "/four_wheel_drive_controller/cmd_vel" # <-- THIS IS THE FIX
     controller_plugins: ["FollowPath"]
     FollowPath:
-      plugin: "nav2_core::Controller"
-      # We will use the Regulated Pure Pursuit controller as it's good for dynamic tasks
-      # and works well with skid-steer kinematics.
-      controller: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      RegulatedPurePursuitController:
-        lookahead_dist: 1.0
-        min_lookahead_dist: 0.5
-        max_lookahead_dist: 2.0
-        lookahead_time: 1.5
-        use_velocity_scaled_lookahead_dist: true
-        min_approach_linear_velocity: 0.1
-        regulated_linear_scaling_min_radius: 0.5
-        use_cost_regulated_linear_velocity_scaling: false
-        allow_reversing: false
-        # Kinematic constraints for the Shelfbot
-        max_robot_pose_search_dist: 10.0
-        wheel_base: 0.45 # From your URDF
-        tread: 0.45 # Assuming same as wheel_base for skid-steer
-        max_angular_vel: 1.0
-        max_linear_vel: 0.5
-        min_linear_vel: 0.0
+      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+      lookahead_dist: 1.0
+      min_lookahead_dist: 0.5
+      max_lookahead_dist: 2.0
+      lookahead_time: 1.5
+      use_velocity_scaled_lookahead_dist: true
+      min_approach_linear_velocity: 0.1
+      regulated_linear_scaling_min_radius: 0.5
+      use_cost_regulated_linear_velocity_scaling: false
+      allow_reversing: false
+      max_robot_pose_search_dist: 10.0
+      wheel_base: 0.45
+      tread: 0.45
+      max_angular_vel: 1.0
+      max_linear_vel: 0.5
+      min_linear_vel: 0.0
         
 planner_server:
   ros__parameters:
     use_sim_time: True
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_navfn_planner/NavFnPlanner"
+      plugin: "nav2_navfn_planner/NavfnPlanner"
       tolerance: 0.5
       use_astar: false
 
@@ -66,6 +60,7 @@ bt_navigator:
       - nav2_wait_action_bt_node
       - nav2_backup_action_bt_node
       - nav2_drive_on_heading_bt_node
+      - shelfbot_bt_nodes
     bt_xml_filename: "navigate_w_replanning_and_recovery.xml" # Default Nav2 BT
 
 # Common parameters for both costmaps
