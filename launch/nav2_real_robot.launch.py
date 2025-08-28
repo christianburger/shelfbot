@@ -1,21 +1,20 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, TimerAction
-from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
     shelfbot_share_dir = get_package_share_directory('shelfbot')
-    nav2_bringup_dir = get_package_share_directory('nav2_bringup')
 
     # --- Launch Arguments ---
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     params_file = LaunchConfiguration('params_file', default=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml'))
 
-    # --- 1. Launch the Real Robot Drivers (which includes the ESP32-CAM via Micro-ROS) ---
+    # --- 1. Launch the Real Robot Drivers ---
     real_robot_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(shelfbot_share_dir, 'launch', 'real_robot_microros.launch.py')
@@ -53,16 +52,108 @@ def generate_launch_description():
         output='screen'
     )
 
-    # --- 4. Launch Nav2 ---
-    nav2_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(nav2_bringup_dir, 'launch', 'bringup_launch.py')),
-        launch_arguments={
-            'map': '', # No map provided, Nav2 will start in localization-only mode
-            'use_sim_time': use_sim_time,
-            'params_file': params_file,
-            'autostart': 'true' # Automatically start Nav2 lifecycle nodes
-        }.items()
+    # --- 4. Launch Robot Localization (EKF) ---
+    ekf_config = os.path.join(shelfbot_share_dir, 'config', 'ekf.yaml')
+    ekf_node = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_filter_node',
+        output='screen',
+        parameters=[ekf_config, {'use_sim_time': use_sim_time}]
     )
+
+    # --- 5. Launch RTAB-Map Node ---
+    static_tf_base_footprint_to_base_link = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_base_footprint_to_base_link',
+        arguments=['0', '0', '0.085', '-1.57079632679', '0', '0', 'base_footprint', 'base_link'],
+        output='screen'
+    )
+    static_tf_base_link_to_camera_link = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_base_link_to_camera_link',
+        arguments=['0', '0', '0.02', '0', '0', '-1.57079632679', 'base_link', 'camera_link'],
+        output='screen'
+    )
+    rtabmap_node = Node(
+        package='rtabmap_slam',
+        executable='rtabmap',
+        name='rtabmap',
+        parameters=[{
+            'frame_id': 'base_footprint',
+            'subscribe_depth': False,
+            'subscribe_rgb': True,
+            'approx_sync': True,
+            'use_sim_time': use_sim_time,
+            'Reg/Strategy': '1',
+            'Vis/MinInliers': '15',
+            'RGBD/Enabled': 'false',
+            'Grid/FromDepth': 'false',
+            'tf_delay': 0.1,
+        }],
+        remappings=[
+            ('rgb/image', '/camera/image_raw'),
+            ('rgb/camera_info', '/camera/camera_info'),
+            ('odom', '/odom')
+        ],
+        arguments=['--ros-args', '--log-level', 'info', '--', '--delete_db_on_start'],
+        output='screen'
+    )
+
+    # --- 6. Launch Nav2 Nodes ---
+    nav2_nodes = [
+        Node(
+            package='nav2_controller',
+            executable='controller_server',
+            name='controller_server',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_planner',
+            executable='planner_server',
+            name='planner_server',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_smoother',
+            executable='smoother_server',
+            name='smoother_server',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_behaviors',
+            executable='behavior_server',
+            name='behavior_server',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_bt_navigator',
+            executable='bt_navigator',
+            name='bt_navigator',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_waypoint_follower',
+            executable='waypoint_follower',
+            name='waypoint_follower',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_lifecycle_manager',
+            executable='lifecycle_manager',
+            name='lifecycle_manager_navigation',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_time},
+                        {'autostart': True},
+                        {'node_names': ['planner_server',
+                                        'controller_server',
+                                        'smoother_server',
+                                        'behavior_server',
+                                        'bt_navigator',
+                                        'waypoint_follower']}])
+    ]
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -79,10 +170,6 @@ def generate_launch_description():
         real_robot_launch,
         republish_node,
         camera_info_node,
-        
-        # Add a delay before launching Nav2 to allow RTAB-Map to initialize
-        TimerAction(
-            period=2.0,
-            actions=[nav2_launch]
-        )
-    ])
+        ekf_node,
+        rtabmap_node,
+    ] + nav2_nodes)

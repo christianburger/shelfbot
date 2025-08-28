@@ -15,7 +15,7 @@ def generate_launch_description():
         executable='rtabmap',
         name='rtabmap',
         parameters=[{
-            'frame_id': 'base_link',
+            'frame_id': 'base_footprint',
             'subscribe_depth': False,
             'subscribe_rgb': True,
             'subscribe_stereo': False,

@@ -27,13 +27,27 @@ def generate_launch_description():
     )
 
     # --- 2. Launch the VSLAM System (RTAB-Map) ---
+    static_tf_base_footprint_to_base_link = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_base_footprint_to_base_link',
+        arguments=['0', '0', '0.085', '-1.57079632679', '0', '0', 'base_footprint', 'base_link'],
+        output='screen'
+    )
+    static_tf_base_link_to_camera_link = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_base_link_to_camera_link',
+        arguments=['0', '0', '0.02', '0', '0', '-1.57079632679', 'base_link', 'camera_link'],
+        output='screen'
+    )
     rtabmap_launch_include = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(rtabmap_launch_dir, 'launch', 'rtabmap.launch.py')
         ),
         launch_arguments={
             'use_sim_time': use_sim_time,
-            'frame_id': 'base_link',
+            'frame_id': 'base_footprint',
             'subscribe_depth': 'true',
             'subscribe_rgb': 'true',
             'rgb_topic': '/camera/image_raw',
@@ -42,23 +56,63 @@ def generate_launch_description():
             'odom_topic': '/odom',
             'qos': '2',
             'rtabmap_args': '-d',
-            'approx_sync': 'true' 
+            'approx_sync': 'true',
+            'tf_delay': 0.1 
         }.items()
     )
 
     # --- 3. Launch the Nav2 Stack ---
-    nav2_bringup_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(nav2_bringup_share_dir, 'launch', 'bringup_launch.py')
-        ),
-        launch_arguments={
-            'use_sim_time': use_sim_time,
-            'params_file': params_file,
-            'autostart': 'true',
-            'map': '',
-            'bt_xml_filename': bt_xml_file
-        }.items(),
-    )
+    nav2_nodes = [
+        Node(
+            package='nav2_controller',
+            executable='controller_server',
+            name='controller_server',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_planner',
+            executable='planner_server',
+            name='planner_server',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_smoother',
+            executable='smoother_server',
+            name='smoother_server',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_behaviors',
+            executable='behavior_server',
+            name='behavior_server',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_bt_navigator',
+            executable='bt_navigator',
+            name='bt_navigator',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_waypoint_follower',
+            executable='waypoint_follower',
+            name='waypoint_follower',
+            output='screen',
+            parameters=[params_file]),
+        Node(
+            package='nav2_lifecycle_manager',
+            executable='lifecycle_manager',
+            name='lifecycle_manager_navigation',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_time},
+                        {'autostart': True},
+                        {'node_names': ['planner_server',
+                                        'controller_server',
+                                        'smoother_server',
+                                        'behavior_server',
+                                        'bt_navigator',
+                                        'waypoint_follower']}])
+    ]
 
     # --- 4. Launch the Mission Starter Node ---
     mission_starter_node = Node(
@@ -87,7 +141,8 @@ def generate_launch_description():
         ),
 
         gazebo_sim_launch,
+        static_tf_base_footprint_to_base_link,
+        static_tf_base_link_to_camera_link,
         rtabmap_launch_include,
-        nav2_bringup_launch,
         mission_starter_node
-    ])
+    ] + nav2_nodes)
