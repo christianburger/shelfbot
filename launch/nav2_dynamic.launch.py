@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, Command
 from launch_ros.actions import Node
 
 def generate_launch_description():
@@ -17,6 +17,19 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     params_file = LaunchConfiguration('params_file', default=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml'))
     bt_xml_file = LaunchConfiguration('bt_xml_file', default=os.path.join(shelfbot_share_dir, 'config', 'mission.xml'))
+
+    # --- Robot State Publisher ---
+    robot_description_content = Command(['xacro ', os.path.join(shelfbot_share_dir, 'urdf', 'shelfbot.urdf.xacro')])
+    robot_state_publisher_node = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        output='screen',
+        parameters=[{
+            'robot_description': robot_description_content,
+            'use_sim_time': use_sim_time
+        }]
+    )
 
     # --- 1. Launch the Gazebo Simulation ---
     gazebo_sim_launch = IncludeLaunchDescription(
@@ -57,7 +70,8 @@ def generate_launch_description():
             'qos': '2',
             'rtabmap_args': '-d',
             'approx_sync': 'true',
-            'tf_delay': 0.1 
+            'tf_delay': 0.5,
+            'use_sim_time': use_sim_time 
         }.items()
     )
 
@@ -140,6 +154,7 @@ def generate_launch_description():
             description='Full path to the custom behavior tree XML file'
         ),
 
+        robot_state_publisher_node,
         gazebo_sim_launch,
         static_tf_base_footprint_to_base_link,
         static_tf_base_link_to_camera_link,

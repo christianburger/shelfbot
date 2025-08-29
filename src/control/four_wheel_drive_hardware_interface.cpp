@@ -147,7 +147,7 @@ hardware_interface::return_type FourWheelDriveHardwareInterface::read(const rclc
         ss << hw_positions_[i] << (i < hw_positions_.size() - 1 ? ", " : "");
     }
     ss << "]";
-    log_info("FourWheelDriveHardwareInterface", "read", ss.str());
+    RCLCPP_INFO(node_->get_logger(), ss.str().c_str());
 
     return hardware_interface::return_type::OK;
 }
@@ -169,7 +169,7 @@ hardware_interface::return_type FourWheelDriveHardwareInterface::write(const rcl
         ss << hw_velocity_commands_[i] << (i < hw_velocity_commands_.size() - 1 ? ", " : "");
     }
     ss << "]";
-    log_info("FourWheelDriveHardwareInterface", "write", ss.str());
+    RCLCPP_INFO(node_->get_logger(), ss.str().c_str());
 
     if (!comm_->writeSpeedsToHardware(hw_velocity_commands_)) {
         log_error("FourWheelDriveHardwareInterface", "write", "Failed to write speeds to hardware.");

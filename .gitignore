@@ -26,6 +26,7 @@ lib/python*/site-packages/
 
 # Log subdirectory
 log/
+*.log
 
 # IntelliJ IDEA files
 .idea/

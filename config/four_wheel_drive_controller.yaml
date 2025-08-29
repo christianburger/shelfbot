@@ -8,6 +8,12 @@ controller_manager:
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
 
+    hardware_interface:
+      type: shelfbot/FourWheelDriveHardwareInterface
+      communication_type: "microros"
+      wheel_separation: 0.45
+      wheel_radius: 0.075
+
 four_wheel_drive_controller:
   ros__parameters:
     # Kinematic parameters used by the controller

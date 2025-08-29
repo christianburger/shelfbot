@@ -4,7 +4,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
@@ -15,6 +15,12 @@ def generate_launch_description():
     params_file = LaunchConfiguration('params_file', default=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml'))
 
     # --- 1. Launch the Real Robot Drivers ---
+    ros2_control_node = Node(
+        package='controller_manager',
+        executable='ros2_control_node',
+        parameters=[os.path.join(shelfbot_share_dir, 'config', 'four_wheel_drive_controller.yaml')],
+        output='screen',
+    )
     real_robot_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(shelfbot_share_dir, 'launch', 'real_robot_microros.launch.py')
@@ -62,7 +68,7 @@ def generate_launch_description():
         parameters=[ekf_config, {'use_sim_time': use_sim_time}]
     )
 
-    # --- 5. Launch RTAB-Map Node ---
+    # --- Static Transforms ---
     static_tf_base_footprint_to_base_link = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -77,6 +83,8 @@ def generate_launch_description():
         arguments=['0', '0', '0.02', '0', '0', '-1.57079632679', 'base_link', 'camera_link'],
         output='screen'
     )
+
+    # --- 5. Launch RTAB-Map Node ---
     rtabmap_node = Node(
         package='rtabmap_slam',
         executable='rtabmap',
@@ -84,6 +92,7 @@ def generate_launch_description():
         parameters=[{
             'frame_id': 'base_footprint',
             'subscribe_depth': False,
+            'subscribe_rgbd': False,
             'subscribe_rgb': True,
             'approx_sync': True,
             'use_sim_time': use_sim_time,
@@ -91,7 +100,8 @@ def generate_launch_description():
             'Vis/MinInliers': '15',
             'RGBD/Enabled': 'false',
             'Grid/FromDepth': 'false',
-            'tf_delay': 0.1,
+            'tf_delay': 0.5,
+            'odom_queue_size': 100,
         }],
         remappings=[
             ('rgb/image', '/camera/image_raw'),
@@ -140,20 +150,23 @@ def generate_launch_description():
             name='waypoint_follower',
             output='screen',
             parameters=[params_file]),
-        Node(
-            package='nav2_lifecycle_manager',
-            executable='lifecycle_manager',
-            name='lifecycle_manager_navigation',
-            output='screen',
-            parameters=[{'use_sim_time': use_sim_time},
-                        {'autostart': True},
-                        {'node_names': ['planner_server',
-                                        'controller_server',
-                                        'smoother_server',
-                                        'behavior_server',
-                                        'bt_navigator',
-                                        'waypoint_follower']}])
     ]
+
+    lifecycle_manager_node = Node(
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='lifecycle_manager_navigation',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time},
+                    {'autostart': True},
+                    {'node_names': ['planner_server',
+                                    'controller_server',
+                                    'smoother_server',
+                                    'behavior_server',
+                                    'bt_navigator',
+                                    'waypoint_follower']}])
+    
+    delayed_lifecycle_manager = TimerAction(period=2.0, actions=[lifecycle_manager_node])
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -167,9 +180,13 @@ def generate_launch_description():
             description='Full path to the ROS2 parameters file to use for all launched nodes'
         ),
 
+        ros2_control_node,
         real_robot_launch,
         republish_node,
         camera_info_node,
         ekf_node,
+        static_tf_base_footprint_to_base_link,
+        static_tf_base_link_to_camera_link,
         rtabmap_node,
+        delayed_lifecycle_manager,
     ] + nav2_nodes)

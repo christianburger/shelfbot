@@ -77,20 +77,36 @@ bool MicroRosCommunication::writeSpeedsToHardware(const std::vector<double>& hw_
 
 bool MicroRosCommunication::readStateFromHardware(std::vector<double>& hw_positions) {
     if (!rclcpp::ok()) {
-        RCLCPP_ERROR(node_->get_logger(), "Cannot read state, micro-ROS communication is not active.");
-        return false;
-    }
-
-    if (!state_received_) {
+        if (node_) {
+            RCLCPP_ERROR(node_->get_logger(), "Cannot read state, micro-ROS communication is not active.");
+        }
         return false;
     }
 
     std::lock_guard<std::mutex> lock(state_mutex_);
-    // This is the fix: copy element-by-element to prevent vector reallocation.
-    for (size_t i = 0; i < hw_positions.size() && i < latest_hw_positions_.size(); ++i) {
-        hw_positions[i] = latest_hw_positions_[i];
+    if (!state_received_) {
+        if (node_) {
+            RCLCPP_WARN(node_->get_logger(), "No motor position data received from firmware yet.");
+        }
+        return false; // Return false if no data has ever been received
     }
+
+    // Ensure the destination vector has the same size to avoid out-of-bounds access
+    if (hw_positions.size() != latest_hw_positions_.size()) {
+        hw_positions.resize(latest_hw_positions_.size());
+    }
+
+    hw_positions = latest_hw_positions_;
     
+    // Log the read positions for debugging
+    std::stringstream ss;
+    ss << "Reading positions: [";
+    for (size_t i = 0; i < hw_positions.size(); ++i) {
+        ss << hw_positions[i] << (i < hw_positions.size() - 1 ? ", " : "");
+    }
+    ss << "]";
+    RCLCPP_INFO(node_->get_logger(), ss.str().c_str());
+
     return true;
 }
 
@@ -98,6 +114,15 @@ void MicroRosCommunication::position_callback(const std_msgs::msg::Float32MultiA
     std::lock_guard<std::mutex> lock(state_mutex_);
     latest_hw_positions_.assign(msg->data.begin(), msg->data.end());
     state_received_ = true;
+
+    // Log the received positions for debugging
+    std::stringstream ss;
+    ss << "Received new motor positions: [";
+    for (size_t i = 0; i < latest_hw_positions_.size(); ++i) {
+        ss << latest_hw_positions_[i] << (i < latest_hw_positions_.size() - 1 ? ", " : "");
+    }
+    ss << "]";
+    RCLCPP_INFO(node_->get_logger(), ss.str().c_str());
 }
 
 }

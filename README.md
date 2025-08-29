@@ -16,15 +16,15 @@ The project is a comprehensive robotic system designed to simulate and control a
 
 The robot's navigation capability is built on a foundation of several key ROS 2 packages that work in concert:
 
-1.  **RTAB-Map (SLAM)**: This is the core of the mapping and localization system. It processes sensor data (`/odom` and `/camera/image_raw`) to build a 3D map of the environment and continuously estimates the robot's position within that map. It provides the critical `map` -> `odom` transform.
+1.  **RTAB-Map (Visual Odometry)**: The core of the localization system. In its current configuration (RGB camera only), it functions as a Visual Odometry (VO) system. It processes sensor data (`/odom` from wheel encoders and `/camera/image_raw`) to produce a drift-corrected, smooth odometry estimate. It **does not** produce a global, fixed `map` frame.
 
-2.  **robot_localization (EKF)**: The Extended Kalman Filter node fuses wheel odometry to produce a smooth and reliable `odom` -> `base_footprint` transform. This helps to filter out noise and inconsistencies from the wheel encoders.
+2.  **robot_localization (EKF)**: The Extended Kalman Filter node fuses the raw wheel odometry to produce a stable `odom` -> `base_footprint` transform.
 
-3.  **Nav2 (Navigation Stack)**: This is the high-level "brain" for autonomous movement. It takes a goal pose and orchestrates the entire process of planning a path, avoiding obstacles, and commanding the robot's motors. Its key components include:
-    *   **Planner Server**: Creates a global path from the robot's current position to the goal.
-    *   **Controller Server**: Follows the global path, generating local velocity commands while reacting to immediate obstacles.
-    *   **Costmaps (Global and Local)**: 2D grid representations of the environment used by the planner and controller to identify obstacles. These are populated with data from RTAB-Map.
-    *   **BT Navigator**: Executes a Behavior Tree to manage the navigation logic (e.g., "compute path," "follow path," "recover from failure").
+3.  **Nav2 (Navigation Stack)**: The high-level "brain" for autonomous movement. The entire stack has been configured to operate in the `odom` frame, allowing for navigation relative to the robot's starting point. Its key components include:
+    *   **Planner Server**: Creates a global path from the robot's current position to the goal within the `odom` frame.
+    *   **Controller Server**: Follows the global path, generating local velocity commands.
+    *   **Costmaps (Global and Local)**: 2D grid representations of obstacles, populated with data from RTAB-Map's point cloud. Both are configured to operate in the `odom` frame.
+    *   **BT Navigator**: Executes a Behavior Tree to manage the navigation logic.
 
 ## Launching
 
@@ -51,22 +51,22 @@ ros2 launch shelfbot rviz_launch.py
 ## Node Communication
 
 1.  The **Camera** (simulated or real) publishes images to `/camera/image_raw`.
-2.  **RTAB-Map** subscribes to `/camera/image_raw` and `/odom` to build a map and determine the robot's pose. It publishes the map, the `map`->`odom` transform, and an obstacle point cloud.
+2.  **RTAB-Map** subscribes to `/camera/image_raw` and `/odom` to generate a corrected odometry estimate and an obstacle point cloud.
 3.  The **Nav2 Costmaps** subscribe to the obstacle point cloud from RTAB-Map to build their representation of the environment for planning.
 4.  When a goal is sent via the **Nav2 Action Server** (`/navigate_to_pose`), the **BT Navigator** orchestrates the navigation process.
-5.  The **Planner Server** creates a global plan.
+5.  The **Planner Server** creates a global plan within the `odom` frame.
 6.  The **Controller Server** follows the plan, publishing velocity commands to `/cmd_vel`.
 7.  The `/controller_manager` (`ros2_control`) receives these commands, sends them to the hardware interface, and reads wheel encoder data.
-8.  The hardware interface calculates odometry and publishes it to `/odom`.
+8.  The hardware interface calculates raw odometry and publishes it to `/odom`.
 9.  The `/robot_state_publisher` uses `/joint_states` to publish the robot's internal transforms (e.g., `base_link` -> `wheel_link`).
 10. The `/robot_localization` node fuses the wheel odometry and publishes the final `odom` -> `base_footprint` transform.
 
 ## Using ROS 2 Command Line Tools
 
 ### Sending a Navigation Goal
-To command the robot to navigate to a specific pose (e.g., x=1.0, y=0.0) in the map frame:
+To command the robot to navigate to a specific pose (e.g., x=1.0, y=0.0) relative to its starting position, you must send the goal in the `odom` frame:
 ```bash
-ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "pose: {header: {frame_id: 'map'}, pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}"
+ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "pose: {header: {frame_id: 'odom'}, pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}"
 ```
 
 ### Driving the Robot Manually
