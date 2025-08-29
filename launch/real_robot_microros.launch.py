@@ -53,7 +53,7 @@ def generate_launch_description():
         arguments=["four_wheel_drive_controller", "--controller-manager", "/controller_manager"],
     )
 
-    rviz_config_file = os.path.expanduser('~/.rviz2/shelfbot_successful.rviz')
+    rviz_config_file = os.path.join(pkg_share, 'config', 'nav2_troubleshoot.rviz')
 
     rviz_node = Node(
         package='rviz2',

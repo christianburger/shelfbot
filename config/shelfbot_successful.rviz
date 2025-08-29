@@ -1,5 +1,5 @@
 Panels:
-  - Class: rviz_default_plugins/Displays
+  - Class: rviz_common/Displays
     Help Height: 85
     Name: Displays
     Property Tree Widget:
@@ -11,20 +11,20 @@ Panels:
         - /TF1
       Splitter Ratio: 0.5
     Tree Height: 863
-  - Class: rviz_default_plugins/Selection
+  - Class: rviz_common/Selection
     Name: Selection
-  - Class: rviz_default_plugins/Tool Properties
+  - Class: rviz_common/Tool Properties
     Expanded:
       - /2D Goal Pose1
       - /Publish Point1
     Name: Tool Properties
     Splitter Ratio: 0.5886790156364441
-  - Class: rviz_default_plugins/Views
+  - Class: rviz_common/Views
     Expanded:
       - /Current View1
     Name: Views
     Splitter Ratio: 0.5
-  - Class: rviz_default_plugins/Time
+  - Class: rviz_common/Time
     Experimental: false
     Name: Time
     SyncMode: 0
@@ -97,7 +97,7 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        camera:
+        camera_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -118,6 +118,96 @@ Visualization Manager:
           Show Trail: false
           Value: true
         motor_front_right:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_back_center:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_back_center_transducer_1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_back_center_transducer_2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_back_left_corner:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_back_left_corner_transducer_1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_back_left_corner_transducer_2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_back_right_corner:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_back_right_corner_transducer_1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_back_right_corner_transducer_2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_front_center:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_front_center_transducer_1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_front_center_transducer_2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_front_left_corner:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_front_left_corner_transducer_1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_front_left_corner_transducer_2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_front_right_corner:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_front_right_corner_transducer_1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        us_front_right_corner_transducer_2:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -206,7 +296,9 @@ Visualization Manager:
           Value: true
         base_link:
           Value: true
-        camera:
+        camera_link:
+          Value: true
+        map:
           Value: true
         motor_back_left:
           Value: true
@@ -217,6 +309,42 @@ Visualization Manager:
         motor_front_right:
           Value: true
         odom:
+          Value: true
+        us_back_center:
+          Value: true
+        us_back_center_transducer_1:
+          Value: true
+        us_back_center_transducer_2:
+          Value: true
+        us_back_left_corner:
+          Value: true
+        us_back_left_corner_transducer_1:
+          Value: true
+        us_back_left_corner_transducer_2:
+          Value: true
+        us_back_right_corner:
+          Value: true
+        us_back_right_corner_transducer_1:
+          Value: true
+        us_back_right_corner_transducer_2:
+          Value: true
+        us_front_center:
+          Value: true
+        us_front_center_transducer_1:
+          Value: true
+        us_front_center_transducer_2:
+          Value: true
+        us_front_left_corner:
+          Value: true
+        us_front_left_corner_transducer_1:
+          Value: true
+        us_front_left_corner_transducer_2:
+          Value: true
+        us_front_right_corner:
+          Value: true
+        us_front_right_corner_transducer_1:
+          Value: true
+        us_front_right_corner_transducer_2:
           Value: true
         wheel_back_left:
           Value: true
@@ -232,10 +360,12 @@ Visualization Manager:
       Show Axes: true
       Show Names: false
       Tree:
-        odom:
-          base_footprint:
+        map:
+          odom:
+            base_footprint:
+              {}
             base_link:
-              camera:
+              camera_link:
                 {}
               motor_back_left:
                 base_axis_back_left:
@@ -253,12 +383,42 @@ Visualization Manager:
                 base_axis_front_right:
                   wheel_front_right:
                     {}
+              us_back_center:
+                us_back_center_transducer_1:
+                  {}
+                us_back_center_transducer_2:
+                  {}
+              us_back_left_corner:
+                us_back_left_corner_transducer_1:
+                  {}
+                us_back_left_corner_transducer_2:
+                  {}
+              us_back_right_corner:
+                us_back_right_corner_transducer_1:
+                  {}
+                us_back_right_corner_transducer_2:
+                  {}
+              us_front_center:
+                us_front_center_transducer_1:
+                  {}
+                us_front_center_transducer_2:
+                  {}
+              us_front_left_corner:
+                us_front_left_corner_transducer_1:
+                  {}
+                us_front_left_corner_transducer_2:
+                  {}
+              us_front_right_corner:
+                us_front_right_corner_transducer_1:
+                  {}
+                us_front_right_corner_transducer_2:
+                  {}
       Update Interval: 0
       Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: base_footprint
+    Fixed Frame: odom
     Frame Rate: 30
   Name: root
   Tools:
@@ -301,7 +461,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 2.504319906234741
+      Distance: 3.3541665077209473
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1

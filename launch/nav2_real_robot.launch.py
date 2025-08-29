@@ -99,7 +99,7 @@ def generate_launch_description():
             'Vis/MinInliers': '15',
             'RGBD/Enabled': 'false',
             'Grid/FromDepth': 'false',
-            'tf_delay': 0.5,
+            'tf_delay': 0.1,
             'odom_queue_size': 100,
         }],
         remappings=[
