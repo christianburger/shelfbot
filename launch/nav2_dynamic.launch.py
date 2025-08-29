@@ -14,7 +14,6 @@ def generate_launch_description():
     rtabmap_launch_dir = get_package_share_directory('rtabmap_launch')
 
     # --- Launch Arguments ---
-    use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     params_file = LaunchConfiguration('params_file', default=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml'))
     bt_xml_file = LaunchConfiguration('bt_xml_file', default=os.path.join(shelfbot_share_dir, 'config', 'mission.xml'))
 
@@ -27,19 +26,11 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'robot_description': robot_description_content,
-            'use_sim_time': use_sim_time
+            'use_sim_time': False
         }]
     )
 
-    # --- 1. Launch the Gazebo Simulation ---
-    gazebo_sim_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(shelfbot_share_dir, 'launch', 'gazebo_sim.launch.py')
-        ),
-        launch_arguments={'gui': 'true'}.items()
-    )
-
-    # --- 2. Launch the VSLAM System (RTAB-Map) ---
+    # --- 1. Launch the VSLAM System (RTAB-Map) ---
     static_tf_base_footprint_to_base_link = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -59,7 +50,7 @@ def generate_launch_description():
             os.path.join(rtabmap_launch_dir, 'launch', 'rtabmap.launch.py')
         ),
         launch_arguments={
-            'use_sim_time': use_sim_time,
+            'use_sim_time': False,
             'frame_id': 'base_footprint',
             'subscribe_depth': 'true',
             'subscribe_rgb': 'true',
@@ -71,7 +62,6 @@ def generate_launch_description():
             'rtabmap_args': '-d',
             'approx_sync': 'true',
             'tf_delay': 0.5,
-            'use_sim_time': use_sim_time 
         }.items()
     )
 
@@ -118,7 +108,7 @@ def generate_launch_description():
             executable='lifecycle_manager',
             name='lifecycle_manager_navigation',
             output='screen',
-            parameters=[{'use_sim_time': use_sim_time},
+            parameters=[{'use_sim_time': False},
                         {'autostart': True},
                         {'node_names': ['planner_server',
                                         'controller_server',
@@ -134,15 +124,10 @@ def generate_launch_description():
         executable='mission_starter.py',
         name='mission_starter',
         output='screen',
-        parameters=[{'use_sim_time': use_sim_time}]
+        parameters=[{'use_sim_time': False}]
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument(
-            'use_sim_time',
-            default_value='true',
-            description='Use simulation (Gazebo) clock if true'
-        ),
         DeclareLaunchArgument(
             'params_file',
             default_value=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml'),
@@ -155,7 +140,6 @@ def generate_launch_description():
         ),
 
         robot_state_publisher_node,
-        gazebo_sim_launch,
         static_tf_base_footprint_to_base_link,
         static_tf_base_link_to_camera_link,
         rtabmap_launch_include,

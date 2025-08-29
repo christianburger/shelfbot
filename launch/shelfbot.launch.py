@@ -7,17 +7,6 @@ from ament_index_python.packages import get_package_share_directory
 import xacro
 
 def generate_launch_description():
-    declared_arguments = []
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "use_sim_time",
-            default_value="false",
-            description="Use system clock for real robot",
-        )
-    )
-
-    use_sim_time = LaunchConfiguration("use_sim_time")
-
     # --- The Robust URDF Generation Method ---
 
     # 1. Find the xacro file
@@ -25,7 +14,7 @@ def generate_launch_description():
     xacro_file = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
 
     # 2. Process the xacro file in-memory, passing the correct arguments.
-    doc = xacro.process_file(xacro_file, mappings={'sim_mode': 'real', 'communication_type': 'microros'})
+    doc = xacro.process_file(xacro_file, mappings={'communication_type': 'microros'})
     robot_description_content = doc.toxml()
     robot_description = {"robot_description": robot_description_content}
 
@@ -37,14 +26,14 @@ def generate_launch_description():
         package="robot_state_publisher",
         executable="robot_state_publisher",
         output="both",
-        parameters=[robot_description, {"use_sim_time": use_sim_time}],
+        parameters=[robot_description, {"use_sim_time": False}],
         arguments=['--ros-args', '--log-level', 'warn'],
     )
 
     control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[robot_description, controller_config, {"use_sim_time": use_sim_time}],
+        parameters=[robot_description, controller_config, {"use_sim_time": False}],
         output="both",
         remappings=[
             ("~/robot_description", "/robot_description"),
@@ -73,7 +62,7 @@ def generate_launch_description():
         name='rviz2',
         arguments=['-d', rviz_config_file],
         parameters=[
-            {'use_sim_time': use_sim_time},
+            {'use_sim_time': False},
             robot_description
         ],
         output='screen',
@@ -91,4 +80,4 @@ def generate_launch_description():
         robot_controller_spawner,
         delay_rviz_after_joint_state_broadcaster_spawner,
     ]
-    return LaunchDescription(declared_arguments + nodes)
+    return LaunchDescription(nodes)

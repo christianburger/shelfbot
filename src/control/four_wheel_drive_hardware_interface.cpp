@@ -1,6 +1,4 @@
 #include "four_wheel_drive_hardware_interface.hpp"
-#include "rest_communication.hpp"
-#include "mock_communication.hpp"
 #include "microros_communication.hpp"
 #include <sstream>
 
@@ -29,12 +27,6 @@ hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_init(cons
     std::string comm_type = info_.hardware_parameters.at("communication_type");
     log_info("FourWheelDriveHardwareInterface", "on_init", "Communication type parameter found: " + comm_type);
 
-    if (comm_type == "gazebo") {
-        log_info("FourWheelDriveHardwareInterface", "on_init", "Gazebo simulation mode selected. Skipping real hardware setup.");
-        log_info("FourWheelDriveHardwareInterface", "on_init", "--- on_init successful (Gazebo) ---");
-        return hardware_interface::CallbackReturn::SUCCESS;
-    }
-    
     log_info("FourWheelDriveHardwareInterface", "on_init", "Real robot mode selected. Initializing ROS node for odometry.");
     node_ = std::make_shared<rclcpp::Node>("shelfbot_odometry_node");
     node_spinner_ = std::thread([this]() { rclcpp::spin(node_); });
@@ -107,8 +99,6 @@ hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_activate(
     if (comm_) {
         log_info("FourWheelDriveHardwareInterface", "on_activate", "Writing zero velocity to hardware on activation.");
         comm_->writeSpeedsToHardware(hw_velocity_commands_);
-    } else {
-        log_info("FourWheelDriveHardwareInterface", "on_activate", "Simulation mode: skipping write to hardware.");
     }
     log_info("FourWheelDriveHardwareInterface", "on_activate", "--- on_activate successful ---");
     return hardware_interface::CallbackReturn::SUCCESS;
@@ -119,19 +109,12 @@ hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_deactivat
     if (comm_) {
         log_info("FourWheelDriveHardwareInterface", "on_deactivate", "Closing hardware communication.");
         comm_->close();
-    } else {
-        log_info("FourWheelDriveHardwareInterface", "on_deactivate", "Simulation mode: no communication to close.");
     }
     log_info("FourWheelDriveHardwareInterface", "on_deactivate", "--- on_deactivate successful ---");
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 hardware_interface::return_type FourWheelDriveHardwareInterface::read(const rclcpp::Time& time, const rclcpp::Duration& period) {
-    if (info_.hardware_parameters.at("communication_type") == "gazebo") {
-        // In simulation, Gazebo updates the state directly. No action needed.
-        return hardware_interface::return_type::OK;
-    }
-
     if (!comm_ || !comm_->readStateFromHardware(hw_positions_)) {
         log_warn("FourWheelDriveHardwareInterface", "read", "Failed to read from hardware or communication not available.");
         return hardware_interface::return_type::OK; // Keep controller running
@@ -153,11 +136,6 @@ hardware_interface::return_type FourWheelDriveHardwareInterface::read(const rclc
 }
 
 hardware_interface::return_type FourWheelDriveHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& period) {
-    if (info_.hardware_parameters.at("communication_type") == "gazebo") {
-        // In simulation, Gazebo receives commands directly. No action needed.
-        return hardware_interface::return_type::OK;
-    }
-
     if (!comm_) {
         log_error("FourWheelDriveHardwareInterface", "write", "Communication interface not available.");
         return hardware_interface::return_type::ERROR;

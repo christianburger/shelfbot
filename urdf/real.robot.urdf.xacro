@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <!-- Declare arguments with default values -->
-  <xacro:arg name="communication_type" default="rest"/>
+  <xacro:arg name="communication_type" default="microros"/>
   <xacro:arg name="base_url" default="http://shelfbot.local/"/>
 
   <ros2_control name="FourWheelDriveSystem" type="system">

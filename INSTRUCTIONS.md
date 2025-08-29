@@ -22,7 +22,7 @@ rosdep install --from-paths src --ignore-src -r -y
 
 The `rosdep` command will install the ROS 2 system equivalents of the following packages, which are declared in `package.xml`:
 
-#### Core & Simulation
+#### Core
 - `rclcpp`
 - `sensor_msgs`
 - `tf2_ros`
@@ -64,7 +64,7 @@ The `rosdep` command will install the ROS 2 system equivalents of the following 
 After running `rosdep`, you can optionally run the following commands to confirm that all packages were installed correctly. Each command should return a path (e.g., `/opt/ros/humble/share/rclcpp`). If a command returns nothing, the package is missing.
 
 ```bash
-# Core & Simulation
+# Core
 ros2 pkg prefix rclcpp
 ros2 pkg prefix sensor_msgs
 ros2 pkg prefix tf2_ros

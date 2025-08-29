@@ -2,14 +2,14 @@
 
 Shelfbot is a ROS 2 application for a delivery robot, featuring autonomous navigation using the Nav2 stack and visual SLAM with RTAB-Map.
 
-The project is a comprehensive robotic system designed to simulate and control a four-wheeled robot. It includes a detailed robot model, simulation environments, and control interfaces that allow for both simulated and real-time operation.
+The project is a comprehensive robotic system designed to control a four-wheeled robot. It includes a detailed robot model and control interfaces that allow for real-time operation.
 
 ## Features
 
 - **Autonomous Navigation**: Utilizes the industry-standard ROS 2 Nav2 stack for robust and flexible path planning, obstacle avoidance, and goal execution.
 - **Visual SLAM**: Employs RTAB-Map for real-time Simultaneous Localization and Mapping (SLAM) using the robot's camera, allowing it to navigate in previously unseen environments.
 - **Sensor Fusion**: Uses `robot_localization` (EKF) to fuse data from wheel odometry, providing a more accurate and stable estimate of the robot's position.
-- **Simulation and Real-World Operation**: The robot can be operated in a Gazebo simulation or with real hardware.
+- **Real-World Operation**: The robot can be operated with real hardware.
 - **ROS 2 Control**: Integrated with `ros2_control` for a standardized hardware abstraction layer.
 
 ## System Architecture
@@ -28,7 +28,7 @@ The robot's navigation capability is built on a foundation of several key ROS 2 
 
 ## Launching
 
-### Full Autonomous Navigation Simulation (Gazebo + Nav2 + RTAB-Map)
+### Full Autonomous Navigation (Nav2 + RTAB-Map)
 This is the recommended way to test the full software stack. It launches Gazebo, the robot model, RViz, RTAB-Map, and the complete Nav2 stack.
 
 ```bash
@@ -43,14 +43,14 @@ ros2 launch shelfbot nav2_real_robot.launch.py
 ```
 
 ### Visualization
-To visualize the robot's state, sensor data, and navigation costmaps, use RViz. The simulation and real robot launch files will start RViz automatically. If you need to launch it separately:
+To visualize the robot's state, sensor data, and navigation costmaps, use RViz. The real robot launch files will start RViz automatically. If you need to launch it separately:
 ```bash
 ros2 launch shelfbot rviz_launch.py
 ```
 
 ## Node Communication
 
-1.  The **Camera** (simulated or real) publishes images to `/camera/image_raw`.
+1.  The **Camera** (real) publishes images to `/camera/image_raw`.
 2.  **RTAB-Map** subscribes to `/camera/image_raw` and `/odom` to generate a corrected odometry estimate and an obstacle point cloud.
 3.  The **Nav2 Costmaps** subscribe to the obstacle point cloud from RTAB-Map to build their representation of the environment for planning.
 4.  When a goal is sent via the **Nav2 Action Server** (`/navigate_to_pose`), the **BT Navigator** orchestrates the navigation process.

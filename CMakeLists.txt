@@ -7,7 +7,6 @@ find_package(rclcpp REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(controller_interface REQUIRED)
-find_package(gazebo_ros2_control REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -49,44 +48,6 @@ ament_target_dependencies(shelfbot_utils
 )
 
 # Communication libraries
-add_library(serial_communication SHARED
-  src/hardware/serial_communication.cpp
-)
-target_link_libraries(serial_communication
-  shelfbot_utils
-  ${msgpack_LIBRARIES}
-)
-target_include_directories(serial_communication PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-
-add_library(mock_communication SHARED
-  src/hardware/mock_communication.cpp
-)
-target_link_libraries(mock_communication
-  shelfbot_utils
-  ${msgpack_LIBRARIES}
-)
-target_include_directories(mock_communication PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-
-add_library(rest_communication SHARED
-  src/hardware/rest_communication.cpp
-)
-target_link_libraries(rest_communication
-  shelfbot_utils
-  ${CURL_LIBRARIES}
-  nlohmann_json::nlohmann_json
-  ${msgpack_LIBRARIES}
-)
-target_include_directories(rest_communication PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-
 # --- NEW: Add the microros_communication library ---
 add_library(microros_communication SHARED
   src/microros_communication.cpp
@@ -149,9 +110,6 @@ add_library(four_wheel_drive_hardware_interface SHARED
 # --- NEW: Link the hardware interface against the new library ---
 target_link_libraries(four_wheel_drive_hardware_interface
   shelfbot_utils
-  serial_communication
-  mock_communication
-  rest_communication
   microros_communication 
   four_wheel_drive_odometry # <-- Add this line
   ${rclcpp_LIBRARIES}
@@ -173,9 +131,6 @@ ament_target_dependencies(four_wheel_drive_hardware_interface
 # Installation
 install(TARGETS
   shelfbot_utils
-  serial_communication
-  mock_communication
-  rest_communication
   microros_communication # <-- Add this line
   four_wheel_drive_controller
   four_wheel_drive_hardware_interface
@@ -193,11 +148,6 @@ install(DIRECTORY
 install(DIRECTORY
   urdf/
   DESTINATION share/${PROJECT_NAME}/urdf
-)
-
-install(DIRECTORY
-  worlds/
-  DESTINATION share/${PROJECT_NAME}/worlds
 )
 
 install(DIRECTORY
@@ -229,9 +179,6 @@ pluginlib_export_plugin_description_file(hardware_interface four_wheel_drive_har
 ament_export_include_directories(include)
 ament_export_libraries(
   shelfbot_utils 
-  serial_communication 
-  mock_communication 
-  rest_communication
   microros_communication # <-- Add this line
   four_wheel_drive_controller 
   four_wheel_drive_hardware_interface

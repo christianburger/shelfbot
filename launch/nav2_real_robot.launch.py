@@ -11,7 +11,6 @@ def generate_launch_description():
     shelfbot_share_dir = get_package_share_directory('shelfbot')
 
     # --- Launch Arguments ---
-    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     params_file = LaunchConfiguration('params_file', default=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml'))
 
     # --- 1. Launch the Real Robot Drivers ---
@@ -53,7 +52,7 @@ def generate_launch_description():
             'camera_info_url': 'package://shelfbot/config/camera_info.yaml',
             'camera_name': 'camera',
             'frame_id': 'camera_link',
-            'use_sim_time': use_sim_time
+            'use_sim_time': False
         }],
         output='screen'
     )
@@ -65,7 +64,7 @@ def generate_launch_description():
         executable='ekf_node',
         name='ekf_filter_node',
         output='screen',
-        parameters=[ekf_config, {'use_sim_time': use_sim_time}]
+        parameters=[ekf_config, {'use_sim_time': False}]
     )
 
     # --- Static Transforms ---
@@ -95,7 +94,7 @@ def generate_launch_description():
             'subscribe_rgbd': False,
             'subscribe_rgb': True,
             'approx_sync': True,
-            'use_sim_time': use_sim_time,
+            'use_sim_time': False,
             'Reg/Strategy': '1',
             'Vis/MinInliers': '15',
             'RGBD/Enabled': 'false',
@@ -157,7 +156,7 @@ def generate_launch_description():
         executable='lifecycle_manager',
         name='lifecycle_manager_navigation',
         output='screen',
-        parameters=[{'use_sim_time': use_sim_time},
+        parameters=[{'use_sim_time': False},
                     {'autostart': True},
                     {'node_names': ['planner_server',
                                     'controller_server',
@@ -169,11 +168,6 @@ def generate_launch_description():
     delayed_lifecycle_manager = TimerAction(period=2.0, actions=[lifecycle_manager_node])
 
     return LaunchDescription([
-        DeclareLaunchArgument(
-            'use_sim_time',
-            default_value='false',
-            description='Use simulation (Gazebo) clock if true'
-        ),
         DeclareLaunchArgument(
             'params_file',
             default_value=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml'),

@@ -1,50 +1,25 @@
-import os
-from ament_index_python.packages import get_package_share_directory
-from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
-
 def generate_launch_description():
-    # --- Launch Arguments ---
-    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
+    rtabmap_launch_dir = get_package_share_directory('rtabmap_launch')
 
-    # --- Launch RTAB-Map Node Directly (RGB-only) ---
-    rtabmap_node = Node(
-        package='rtabmap_slam',
-        executable='rtabmap',
-        name='rtabmap',
-        parameters=[{
+    rtabmap_launch_include = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(rtabmap_launch_dir, 'launch', 'rtabmap.launch.py')
+        ),
+        launch_arguments={
             'frame_id': 'base_footprint',
-            'subscribe_depth': False,
-            'subscribe_rgb': True,
-            'subscribe_stereo': False,
-            'subscribe_rgbd': False,
-            'approx_sync': True,
-            'use_sim_time': use_sim_time,
-            'qos_image': 1,
-            'qos_camera_info': 1,
-            'qos_odom': 1,
-            # Visual SLAM parameters - all RTAB-Map parameters must be strings
-            'Reg/Strategy': '1',      # Visual registration
-            'Vis/MinInliers': '15',   # Minimum visual inliers
-            'RGBD/Enabled': 'false',  # Disable RGBD mode (string, not bool)
-            'Grid/FromDepth': 'false',  # Don't create grid from depth (string, not bool)
-        }],
-        remappings=[
-            ('rgb/image', '/camera/image_raw'),
-            ('rgb/camera_info', '/camera/camera_info'),
-            ('odom', '/odom')
-        ],
-        arguments=['--ros-args', '--log-level', 'info', '--', '--delete_db_on_start'],
-        output='screen'
+            'subscribe_depth': 'true',
+            'subscribe_rgb': 'true',
+            'rgb_topic': '/camera/image_raw',
+            'depth_topic': '/camera/depth/image_raw',
+            'camera_info_topic': '/camera/camera_info',
+            'odom_topic': '/odom',
+            'qos': '2',
+            'rtabmap_args': '-d',
+            'approx_sync': 'true',
+            'tf_delay': 0.5,
+        }.items()
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument(
-            'use_sim_time',
-            default_value='false',
-            description='Use simulation clock if true'
-        ),
-        rtabmap_node
+        rtabmap_launch_include
     ])

@@ -11,27 +11,14 @@
   <xacro:include filename="$(find shelfbot)/urdf/ultrasonic_sensor.xacro"/>
 
   <!-- Declare the arguments that will be passed in from the launch file -->
-  <xacro:arg name="sim_mode" default="gazebo"/>
-  <xacro:arg name="communication_type" default="rest"/>
   <xacro:arg name="base_url" default="http://shelfbot.local/"/>
-  
-  <!-- Include the correct hardware interface based on sim_mode -->
-  <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
-    <xacro:include filename="$(find shelfbot)/urdf/gazebo.urdf.xacro"/>
-    <xacro:shelfbot_gazebo/>
-  </xacro:if>
-  
-  <xacro:if value="${'$(arg sim_mode)' == 'isaac'}">
-    <xacro:include filename="$(find shelfbot)/urdf/isaac.sim.urdf.xacro"/>
-  </xacro:if>
-  
-  <!-- When using the real robot, include the real.robot.urdf.xacro and pass the communication arguments down to it -->
-  <xacro:if value="${'$(arg sim_mode)' == 'real'}">
-    <xacro:include filename="$(find shelfbot)/urdf/real.robot.urdf.xacro">
-      <xacro:arg name="communication_type" value="$(arg communication_type)"/>
-      <xacro:arg name="base_url" value="$(arg base_url)"/>
-    </xacro:include>
-  </xacro:if>
+
+  <!-- Set properties that will be used by the included real.robot.urdf.xacro -->
+  <xacro:property name="communication_type" value="microros"/>
+  <xacro:property name="base_url" value="$(arg base_url)"/>
+
+  <!-- When using the real robot, include the real.robot.urdf.xacro -->
+  <xacro:include filename="$(find shelfbot)/urdf/real.robot.urdf.xacro"/>
 
   <!-- Robot Physical Structure -->
   <link name="base_footprint"/>

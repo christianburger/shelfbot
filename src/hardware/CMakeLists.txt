@@ -9,8 +9,6 @@ find_package(msgpack REQUIRED)
 
 # Create the hardware library
 add_library(shelfbot_hardware
-  mock_communication.cpp
-  rest_communication.cpp
 )
 
 # Specify include directories

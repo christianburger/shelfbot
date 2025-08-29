@@ -7,8 +7,6 @@
 #include "rclcpp/rclcpp.hpp"
 #include "shelfbot_utils.hpp"
 #include "communication_interface.hpp"
-#include "mock_communication.hpp"
-#include "rest_communication.hpp"
 #include "four_wheel_drive_odometry.hpp" // Include the odometry header
 #include <rclcpp/logging.hpp>
 #include <thread>
