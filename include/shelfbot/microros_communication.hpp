@@ -1,6 +1,6 @@
 #pragma once
 
-#include "communication_interface.hpp"
+#include "shelfbot/communication_interface.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
 #include <mutex>

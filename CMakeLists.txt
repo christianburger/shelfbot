@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.8)
 project(shelfbot)
 
-# Find required packages
+# Find common packages
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(hardware_interface REQUIRED)
@@ -11,176 +11,88 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
-find_package(msgpack REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(CURL REQUIRED)
-find_package(nlohmann_json REQUIRED)
 find_package(camera_info_manager REQUIRED)
-
-# Nav2 and RTAB-Map dependencies
 find_package(nav2_bringup REQUIRED)
-find_package(nav2_controller REQUIRED)
-find_package(nav2_planner REQUIRED)
-find_package(nav2_map_server REQUIRED)
-find_package(nav2_lifecycle_manager REQUIRED)
-find_package(nav2_common REQUIRED)
 find_package(rtabmap_ros REQUIRED)
 
+# Set the include directory for the whole project
 include_directories(include)
 
-
-
-# Build utilities
-add_library(shelfbot_utils SHARED
-  src/shelfbot_utils.cpp
-)
-target_include_directories(shelfbot_utils PUBLIC
-  $<INSTALL_INTERFACE:include>
-  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-)
-target_link_libraries(shelfbot_utils
-  ${rclcpp_LIBRARIES}
-)
-ament_target_dependencies(shelfbot_utils
-  rclcpp
-)
-
-# Communication libraries
-# --- NEW: Add the microros_communication library ---
-add_library(microros_communication SHARED
-  src/microros_communication.cpp
-)
-target_link_libraries(microros_communication
-  shelfbot_utils
-  ${rclcpp_LIBRARIES}
-)
-target_include_directories(microros_communication PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-# --- END NEW ---
-
-# --- Add camera_publisher node ---
-add_executable(camera_publisher src/camera_publisher.cpp)
-ament_target_dependencies(camera_publisher rclcpp sensor_msgs camera_info_manager)
-target_link_libraries(camera_publisher camera_info_manager::camera_info_manager)
-
-install(TARGETS
-  camera_publisher
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-# Navigation components
+# Build components in subdirectories
+add_subdirectory(src/utils)
+add_subdirectory(src/hardware)
 add_subdirectory(src/navigation)
+add_subdirectory(src/control)
 add_subdirectory(src/perception)
+add_subdirectory(src/nodes)
 
-# Controller
-add_library(four_wheel_drive_controller SHARED
-  src/control/four_wheel_drive_controller.cpp
-)
-target_link_libraries(four_wheel_drive_controller
-  shelfbot_utils
-  four_wheel_drive_odometry
-  ${rclcpp_LIBRARIES}
-  ${controller_interface_LIBRARIES}
-  ${nav_msgs_LIBRARIES}
-  ${tf2_LIBRARIES}
-  ${tf2_ros_LIBRARIES}
-  ${tf2_geometry_msgs_LIBRARIES}
-  ${msgpack_LIBRARIES}
-)
-ament_target_dependencies(four_wheel_drive_controller
-  rclcpp
-  controller_interface
-  nav_msgs
-  tf2
-  tf2_ros
-  tf2_geometry_msgs
-  msgpack
-  sensor_msgs
-  rclcpp_lifecycle
-)
-
-# Hardware Interface
+# Controller (Hardware Interface)
 add_library(four_wheel_drive_hardware_interface SHARED
   src/control/four_wheel_drive_hardware_interface.cpp
 )
-# --- NEW: Link the hardware interface against the new library ---
 target_link_libraries(four_wheel_drive_hardware_interface
   shelfbot_utils
-  microros_communication 
-  four_wheel_drive_odometry # <-- Add this line
+  microros_communication
+  four_wheel_drive_odometry
   ${rclcpp_LIBRARIES}
   ${hardware_interface_LIBRARIES}
   ${pluginlib_LIBRARIES}
-  ${nav_msgs_LIBRARIES} 
-  ${msgpack_LIBRARIES}
 )
-# --- END NEW ---
 ament_target_dependencies(four_wheel_drive_hardware_interface
   rclcpp
   hardware_interface
   pluginlib
-  nav_msgs # <-- Add nav_msgs
-  tf2_geometry_msgs # <-- Add tf2_geometry_msgs
-  msgpack
 )
 
 # Installation
-install(TARGETS
-  shelfbot_utils
-  microros_communication # <-- Add this line
-  four_wheel_drive_controller
-  four_wheel_drive_hardware_interface
-  four_wheel_drive_odometry
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin
+install(
+    DIRECTORY include/shelfbot
+    DESTINATION include
 )
 
-install(DIRECTORY
-  include/
-  DESTINATION include
+install(
+    DIRECTORY urdf
+    DESTINATION share/${PROJECT_NAME}
 )
 
-install(DIRECTORY
-  urdf/
-  DESTINATION share/${PROJECT_NAME}/urdf
+install(
+    DIRECTORY config
+    DESTINATION share/${PROJECT_NAME}
 )
 
-install(DIRECTORY
-  config/
-  DESTINATION share/${PROJECT_NAME}/config
-  FILES_MATCHING PATTERN "*.yaml"
+install(
+    DIRECTORY launch
+    DESTINATION share/${PROJECT_NAME}
 )
 
-install(DIRECTORY
-  launch/
-  DESTINATION share/${PROJECT_NAME}/launch
+install(
+    PROGRAMS scripts/mission_starter.py scripts/topic_logger.py
+    DESTINATION lib/${PROJECT_NAME}
 )
 
-# Install python scripts
-install(PROGRAMS
-  scripts/mission_starter.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-install(FILES
-  four_wheel_drive_controller_plugin.xml
-  four_wheel_drive_hardware_interface_plugin.xml
-  DESTINATION share/${PROJECT_NAME}
+install(
+    FILES four_wheel_drive_controller_plugin.xml four_wheel_drive_hardware_interface_plugin.xml
+    DESTINATION share/${PROJECT_NAME}
 )
 
 pluginlib_export_plugin_description_file(controller_interface four_wheel_drive_controller_plugin.xml)
 pluginlib_export_plugin_description_file(hardware_interface four_wheel_drive_hardware_interface_plugin.xml)
 
+install(TARGETS
+    four_wheel_drive_hardware_interface
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+)
+
+
 ament_export_include_directories(include)
 ament_export_libraries(
-  shelfbot_utils 
-  microros_communication # <-- Add this line
-  four_wheel_drive_controller 
+  shelfbot_utils
+  microros_communication
+  four_wheel_drive_controller
   four_wheel_drive_hardware_interface
   four_wheel_drive_odometry
 )
@@ -190,15 +102,6 @@ ament_export_dependencies(
   hardware_interface
   pluginlib
   controller_interface
-  nav_msgs
-  tf2
-  tf2_ros
-  tf2_geometry_msgs
-  msgpack
-  sensor_msgs
-  rclcpp_lifecycle
-  CURL
-  nlohmann_json
 )
 
 ament_package()

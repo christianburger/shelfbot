@@ -5,9 +5,9 @@
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "shelfbot_utils.hpp"
-#include "communication_interface.hpp"
-#include "four_wheel_drive_odometry.hpp" // Include the odometry header
+#include "shelfbot/shelfbot_utils.hpp"
+#include "shelfbot/communication_interface.hpp"
+#include "shelfbot/four_wheel_drive_odometry.hpp" // Include the odometry header
 #include <rclcpp/logging.hpp>
 #include <thread>
 

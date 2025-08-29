@@ -19,7 +19,7 @@
 #include "std_msgs/msg/float64_multi_array.hpp" // ADDED FOR DEBUGGING
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
-#include "shelfbot_utils.hpp"
+#include "shelfbot/shelfbot_utils.hpp"
 
 namespace shelfbot {
 
