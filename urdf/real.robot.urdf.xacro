@@ -1,18 +1,13 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- Declare arguments with default values -->
-  <xacro:arg name="communication_type" default="microros"/>
-  <xacro:arg name="base_url" default="http://shelfbot.local/"/>
-
   <ros2_control name="FourWheelDriveSystem" type="system">
     <hardware>
       <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
-      <!-- Use the arguments to set the parameters -->
       <param name="communication_type">$(arg communication_type)</param>
       <param name="base_url">$(arg base_url)</param>
-      <param name="wheel_separation">0.45</param>
-      <param name="wheel_radius">0.075</param>
+      <param name="wheel_separation">$(arg wheel_separation)</param>
+      <param name="wheel_radius">$(arg wheel_radius)</param>
     </hardware>
 
     <joint name="joint_base_axis_front_left">

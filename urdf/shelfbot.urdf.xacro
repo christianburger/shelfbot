@@ -1,8 +1,84 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="shelfbot">
 
-  <!-- Include all the component parts of the robot -->
-  <xacro:include filename="$(find shelfbot)/urdf/common_properties.xacro"/>
+  <!-- Load all properties from the YAML file -->
+  <xacro:property name="config_file" value="$(find shelfbot)/config/four_wheel_drive_controller.yaml" />
+  <xacro:property name="config" value="${xacro.load_yaml(config_file)}" />
+
+  <!-- Define materials -->
+  <material name="golden_brown">
+    <color rgba="0.87 0.72 0.53 1.0"/>
+  </material>
+  <material name="metallic_dark_lead">
+    <color rgba="0.33 0.33 0.33 1.0"/>
+  </material>
+  <material name="dark_red">
+    <color rgba="0.55 0.0 0.0 1.0"/>
+  </material>
+  <material name="metallic_gray">
+    <color rgba="0.66 0.66 0.66 1.0"/>
+  </material>
+  <material name="red">
+    <color rgba="1.0 0.0 0.0 1.0"/>
+  </material>
+  <material name="blue">
+    <color rgba="0.0 0.0 1.0 1.0"/>
+  </material>
+  <material name="light_grey">
+    <color rgba="0.8 0.8 0.8 1.0"/>
+  </material>
+
+  <!-- Define properties from the loaded YAML -->
+  <xacro:property name="base_width" value="${config['four_wheel_drive_controller']['ros__parameters']['base_width']}"/>
+  <xacro:property name="base_length" value="${config['four_wheel_drive_controller']['ros__parameters']['base_length']}"/>
+  <xacro:property name="base_height" value="${config['four_wheel_drive_controller']['ros__parameters']['base_height']}"/>
+  <xacro:property name="base_mass" value="${config['four_wheel_drive_controller']['ros__parameters']['base_mass']}"/>
+  <xacro:property name="motor_radius" value="${config['four_wheel_drive_controller']['ros__parameters']['motor_radius']}"/>
+  <xacro:property name="motor_length" value="${config['four_wheel_drive_controller']['ros__parameters']['motor_length']}"/>
+  <xacro:property name="motor_mass" value="${config['four_wheel_drive_controller']['ros__parameters']['motor_mass']}"/>
+  <xacro:property name="wheel_radius" value="${config['four_wheel_drive_controller']['ros__parameters']['wheel_radius']}"/>
+  <xacro:property name="wheel_width" value="${config['four_wheel_drive_controller']['ros__parameters']['wheel_width']}"/>
+  <xacro:property name="wheel_mass" value="${config['four_wheel_drive_controller']['ros__parameters']['wheel_mass']}"/>
+  <xacro:property name="camera_width" value="${config['four_wheel_drive_controller']['ros__parameters']['camera_width']}"/>
+  <xacro:property name="camera_length" value="${config['four_wheel_drive_controller']['ros__parameters']['camera_length']}"/>
+  <xacro:property name="camera_height" value="${config['four_wheel_drive_controller']['ros__parameters']['camera_height']}"/>
+  <xacro:property name="camera_lens_radius" value="${config['four_wheel_drive_controller']['ros__parameters']['camera_lens_radius']}"/>
+  <xacro:property name="camera_mount_height" value="${config['four_wheel_drive_controller']['ros__parameters']['camera_mount_height']}"/>
+  <xacro:property name="camera_mass" value="${config['four_wheel_drive_controller']['ros__parameters']['camera_mass']}"/>
+  <xacro:property name="base_axis_radius" value="${config['four_wheel_drive_controller']['ros__parameters']['base_axis_radius']}"/>
+  <xacro:property name="base_axis_length" value="${config['four_wheel_drive_controller']['ros__parameters']['base_axis_length']}"/>
+  <xacro:property name="base_axis_mass" value="${config['four_wheel_drive_controller']['ros__parameters']['base_axis_mass']}"/>
+  <xacro:property name="gear_ratio" value="${config['four_wheel_drive_controller']['ros__parameters']['gear_ratio']}"/>
+  <xacro:property name="box_x_size" value="${config['four_wheel_drive_controller']['ros__parameters']['box_x_size']}"/>
+  <xacro:property name="box_y_size" value="${config['four_wheel_drive_controller']['ros__parameters']['box_y_size']}"/>
+  <xacro:property name="box_z_size" value="${config['four_wheel_drive_controller']['ros__parameters']['box_z_size']}"/>
+  <xacro:property name="box_mass" value="${config['four_wheel_drive_controller']['ros__parameters']['box_mass']}"/>
+  <xacro:property name="box_inertia" value="${config['four_wheel_drive_controller']['ros__parameters']['box_inertia']}"/>
+  <xacro:property name="ultrasonic_pcb_x_size" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_pcb_x_size']}"/>
+  <xacro:property name="ultrasonic_pcb_y_size" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_pcb_y_size']}"/>
+  <xacro:property name="ultrasonic_pcb_z_size" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_pcb_z_size']}"/>
+  <xacro:property name="ultrasonic_collision_z_size" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_collision_z_size']}"/>
+  <xacro:property name="ultrasonic_mass" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_mass']}"/>
+  <xacro:property name="ultrasonic_transducer_radius" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_transducer_radius']}"/>
+  <xacro:property name="ultrasonic_transducer_length" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_transducer_length']}"/>
+  <xacro:property name="ultrasonic_transducer_x_offset" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_transducer_x_offset']}"/>
+  <xacro:property name="ultrasonic_z_offset" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_z_offset']}"/>
+  <xacro:property name="joint_damping" value="${config['four_wheel_drive_controller']['ros__parameters']['joint_damping']}"/>
+  <xacro:property name="joint_friction" value="${config['four_wheel_drive_controller']['ros__parameters']['joint_friction']}"/>
+
+  <!-- Define inertia macros -->
+  <xacro:macro name="cylinder_inertia" params="m r h">
+    <inertia ixx="${m*(3*r*r+h*h)/12}" ixy="0" ixz="0"
+             iyy="${m*(3*r*r+h*h)/12}" iyz="0"
+             izz="${m*r*r/2}"/>
+  </xacro:macro>
+  <xacro:macro name="box_inertia" params="m x y z">
+    <inertia ixx="${m*(y*y+z*z)/12}" ixy="0" ixz="0"
+             iyy="${m*(x*x+z*z)/12}" iyz="0"
+             izz="${m*(x*x+y*y)/12}"/>
+  </xacro:macro>
+
+  <!-- Include the component parts of the robot -->
   <xacro:include filename="$(find shelfbot)/urdf/motor.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/wheel.xacro"/>
   <xacro:include filename="$(find shelfbot)/urdf/camera.xacro"/>
@@ -12,10 +88,9 @@
 
   <!-- Declare the arguments that will be passed in from the launch file -->
   <xacro:arg name="base_url" default="http://shelfbot.local/"/>
-
-  <!-- Set properties that will be used by the included real.robot.urdf.xacro -->
-  <xacro:property name="communication_type" value="microros"/>
-  <xacro:property name="base_url" value="$(arg base_url)"/>
+  <xacro:arg name="communication_type" default="${str(config['controller_manager']['ros__parameters']['hardware_interface']['communication_type'])}"/>
+  <xacro:arg name="wheel_separation" default="${str(config['four_wheel_drive_controller']['ros__parameters']['wheel_separation'])}"/>
+  <xacro:arg name="wheel_radius" default="${str(config['four_wheel_drive_controller']['ros__parameters']['wheel_radius'])}"/>
 
   <!-- When using the real robot, include the real.robot.urdf.xacro -->
   <xacro:include filename="$(find shelfbot)/urdf/real.robot.urdf.xacro"/>
@@ -66,81 +141,81 @@
   <joint name="joint_motor_front_left" type="fixed">
     <parent link="base_link"/>
     <child link="motor_front_left"/>
-    <origin xyz="${-base_width / 2 + motor_length / 2} ${base_length / 2} 0" rpy="${pi/2} 0 ${pi}"/>
+    <origin xyz="${-base_width / 2 + motor_length} ${base_length / 2 - 0.075} 0" rpy="${pi/2} 0 ${pi}"/>
   </joint>
 
   <joint name="joint_motor_front_right" type="fixed">
     <parent link="base_link"/>
     <child link="motor_front_right"/>
-    <origin xyz="${base_width / 2 - motor_length / 2} ${base_length / 2} 0" rpy="${-pi/2} 0 0"/>
+    <origin xyz="${base_width / 2 - motor_length} ${base_length / 2 - 0.075} 0" rpy="${-pi/2} 0 0"/>
   </joint>
 
   <joint name="joint_motor_back_left" type="fixed">
     <parent link="base_link"/>
     <child link="motor_back_left"/>
-    <origin xyz="${-base_width / 2 + motor_length / 2} ${-base_length / 2} 0" rpy="${pi/2} 0 ${pi}"/>
+    <origin xyz="${-base_width / 2 + motor_length} ${-base_length / 2 + 0.075} 0" rpy="${pi/2} 0 ${pi}"/>
   </joint>
 
   <joint name="joint_motor_back_right" type="fixed">
     <parent link="base_link"/>
     <child link="motor_back_right"/>
-    <origin xyz="${base_width / 2 - motor_length / 2} ${-base_length / 2} 0" rpy="${-pi/2} 0 0"/>
+    <origin xyz="${base_width / 2 - motor_length} ${-base_length / 2 + 0.075} 0" rpy="${-pi/2} 0 0"/>
   </joint>
 
   <joint name="joint_base_axis_front_left" type="continuous">
     <parent link="motor_front_left"/>
     <child link="base_axis_front_left"/>
-    <origin xyz="${motor_length/2} 0 0" rpy="${-pi/2} 0 0"/>
+    <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
     <axis xyz="1 0 0"/>
-    <dynamics damping="0.1" friction="0.1"/>
+    <dynamics damping="${joint_damping}" friction="${joint_friction}"/>
   </joint>
 
   <joint name="joint_base_axis_front_right" type="continuous">
     <parent link="motor_front_right"/>
     <child link="base_axis_front_right"/>
-    <origin xyz="${motor_length/2} 0 0" rpy="${pi/2} 0 0"/>
+    <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
     <axis xyz="1 0 0"/>
-    <dynamics damping="0.1" friction="0.1"/>
+    <dynamics damping="${joint_damping}" friction="${joint_friction}"/>
   </joint>
 
   <joint name="joint_base_axis_back_left" type="continuous">
     <parent link="motor_back_left"/>
     <child link="base_axis_back_left"/>
-    <origin xyz="${motor_length/2} 0 0" rpy="${-pi/2} 0 0"/>
+    <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
     <axis xyz="1 0 0"/>
-    <dynamics damping="0.1" friction="0.1"/>
+    <dynamics damping="${joint_damping}" friction="${joint_friction}"/>
   </joint>
 
   <joint name="joint_base_axis_back_right" type="continuous">
     <parent link="motor_back_right"/>
     <child link="base_axis_back_right"/>
-    <origin xyz="${motor_length/2} 0 0" rpy="${pi/2} 0 0"/>
+    <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
     <axis xyz="1 0 0"/>
-    <dynamics damping="0.1" friction="0.1"/>
+    <dynamics damping="${joint_damping}" friction="${joint_friction}"/>
   </joint>
 
   <joint name="joint_wheel_front_left" type="fixed">
     <parent link="base_axis_front_left"/>
     <child link="wheel_front_left"/>
-    <origin xyz="${base_axis_length/2} 0 0" rpy="0 0 0"/>
+    <origin xyz="${base_width / 2 - motor_length} 0 0" rpy="0 0 0"/>
   </joint>
 
   <joint name="joint_wheel_front_right" type="fixed">
     <parent link="base_axis_front_right"/>
     <child link="wheel_front_right"/>
-    <origin xyz="${base_axis_length/2} 0 0" rpy="0 0 0"/>
+    <origin xyz="${base_width / 2 - motor_length} 0 0" rpy="0 0 0"/>
   </joint>
 
   <joint name="joint_wheel_back_left" type="fixed">
     <parent link="base_axis_back_left"/>
     <child link="wheel_back_left"/>
-    <origin xyz="${base_axis_length/2} 0 0" rpy="0 0 0"/>
+    <origin xyz="${base_width / 2 - motor_length} 0 0" rpy="0 0 0"/>
   </joint>
 
   <joint name="joint_wheel_back_right" type="fixed">
     <parent link="base_axis_back_right"/>
     <child link="wheel_back_right"/>
-    <origin xyz="${base_axis_length/2} 0 0" rpy="0 0 0"/>
+    <origin xyz="${base_width / 2 - motor_length} 0 0" rpy="0 0 0"/>
   </joint>
 
   <xacro:camera name="camera_link" width="${camera_width}" length="${camera_length}" height="${camera_height}" radius="${camera_lens_radius}"/>
@@ -162,36 +237,36 @@
   <joint name="joint_us_front_center" type="fixed">
     <parent link="base_link"/>
     <child link="us_front_center"/>
-    <origin xyz="0 ${base_length / 2} 0.01" rpy="0 ${pi/2} ${pi/2}"/>
+    <origin xyz="0 ${base_length / 2} ${ultrasonic_z_offset}" rpy="0 ${pi/2} ${pi/2}"/>
   </joint>
 
   <joint name="joint_us_front_left_corner" type="fixed">
     <parent link="base_link"/>
     <child link="us_front_left_corner"/>
-    <origin xyz="${base_width / 4} ${base_length / 2} 0.01" rpy="0 ${pi/2} ${pi/4}"/>
+    <origin xyz="${base_width / 4} ${base_length / 2} ${ultrasonic_z_offset}" rpy="0 ${pi/2} ${pi/4}"/>
   </joint>
 
   <joint name="joint_us_front_right_corner" type="fixed">
     <parent link="base_link"/>
     <child link="us_front_right_corner"/>
-    <origin xyz="${-base_width / 4} ${base_length / 2} 0.01" rpy="0 ${pi/2} ${3*pi/4}"/>
+    <origin xyz="${-base_width / 4} ${base_length / 2} ${ultrasonic_z_offset}" rpy="0 ${pi/2} ${3*pi/4}"/>
   </joint>
 
   <joint name="joint_us_back_center" type="fixed">
     <parent link="base_link"/>
     <child link="us_back_center"/>
-    <origin xyz="0 ${-base_length / 2} 0.01" rpy="0 ${pi/2} ${-pi/2}"/>
+    <origin xyz="0 ${-base_length / 2} ${ultrasonic_z_offset}" rpy="0 ${pi/2} ${-pi/2}"/>
   </joint>
 
   <joint name="joint_us_back_left_corner" type="fixed">
     <parent link="base_link"/>
     <child link="us_back_left_corner"/>
-    <origin xyz="${base_width / 4} ${-base_length / 2} 0.01" rpy="0 ${pi/2} ${-pi/4}"/>
+    <origin xyz="${base_width / 4} ${-base_length / 2} ${ultrasonic_z_offset}" rpy="0 ${pi/2} ${-pi/4}"/>
   </joint>
 
   <joint name="joint_us_back_right_corner" type="fixed">
     <parent link="base_link"/>
     <child link="us_back_right_corner"/>
-    <origin xyz="${-base_width / 4} ${-base_length / 2} 0.01" rpy="0 ${pi/2} ${-3*pi/4}"/>
+    <origin xyz="${-base_width / 4} ${-base_length / 2} ${ultrasonic_z_offset}" rpy="0 ${pi/2} ${-3*pi/4}"/>
   </joint>
 </robot>

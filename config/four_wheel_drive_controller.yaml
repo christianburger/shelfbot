@@ -11,8 +11,6 @@ controller_manager:
     hardware_interface:
       type: shelfbot/FourWheelDriveHardwareInterface
       communication_type: "microros"
-      wheel_separation: 0.45
-      wheel_radius: 0.075
 
 four_wheel_drive_controller:
   ros__parameters:
@@ -28,7 +26,7 @@ four_wheel_drive_controller:
     front_right_joint_names: ["joint_base_axis_front_right"]
     back_right_joint_names: ["joint_base_axis_back_right"]
 
-    wheel_separation: 0.45
+    wheel_separation: 0.50
     wheel_radius: 0.075
 
     # Command velocity timeout
@@ -55,7 +53,29 @@ four_wheel_drive_controller:
     camera_mass: 0.5
 
     base_axis_radius: 0.02
-    base_axis_length: 0.25  
+    base_axis_length: 0.175  
     base_axis_mass: 2.0
 
     gear_ratio: 1
+
+    # Box parameters
+    box_x_size: 0.05
+    box_y_size: 0.05
+    box_z_size: 0.1
+    box_mass: 0.1
+    box_inertia: 0.000083
+
+    # Ultrasonic sensor parameters
+    ultrasonic_pcb_x_size: 0.045
+    ultrasonic_pcb_y_size: 0.020
+    ultrasonic_pcb_z_size: 0.002
+    ultrasonic_collision_z_size: 0.015
+    ultrasonic_mass: 0.01
+    ultrasonic_transducer_radius: 0.008
+    ultrasonic_transducer_length: 0.015
+    ultrasonic_transducer_x_offset: 0.0125
+    ultrasonic_z_offset: 0.01
+
+    # Joint dynamics
+    joint_damping: 0.1
+    joint_friction: 0.1

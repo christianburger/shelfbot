@@ -7,27 +7,27 @@
       <visual>
         <!-- The main blue PCB -->
         <geometry>
-          <box size="0.045 0.020 0.002"/>
+          <box size="${ultrasonic_pcb_x_size} ${ultrasonic_pcb_y_size} ${ultrasonic_pcb_z_size}"/>
         </geometry>
         <material name="blue"/>
       </visual>
       <collision>
         <geometry>
-          <box size="0.045 0.020 0.015"/> <!-- Collision box covers the whole volume -->
+          <box size="${ultrasonic_pcb_x_size} ${ultrasonic_pcb_y_size} ${ultrasonic_collision_z_size}"/> <!-- Collision box covers the whole volume -->
         </geometry>
       </collision>
       <inertial>
-        <mass value="0.01"/>
-        <xacro:box_inertia m="0.01" x="0.045" y="0.020" z="0.015"/>
+        <mass value="${ultrasonic_mass}"/>
+        <xacro:box_inertia m="${ultrasonic_mass}" x="${ultrasonic_pcb_x_size}" y="${ultrasonic_pcb_y_size}" z="${ultrasonic_collision_z_size}"/>
       </inertial>
     </link>
 
     <!-- Visual representation of the two silver transducers -->
     <link name="${name}_transducer_1">
       <visual>
-        <origin xyz="0 0 0.0075" rpy="0 0 0"/>
+        <origin xyz="0 0 ${ultrasonic_transducer_length/2}" rpy="0 0 0"/>
         <geometry>
-          <cylinder radius="0.008" length="0.015"/>
+          <cylinder radius="${ultrasonic_transducer_radius}" length="${ultrasonic_transducer_length}"/>
         </geometry>
         <material name="light_grey"/>
       </visual>
@@ -35,9 +35,9 @@
 
     <link name="${name}_transducer_2">
       <visual>
-        <origin xyz="0 0 0.0075" rpy="0 0 0"/>
+        <origin xyz="0 0 ${ultrasonic_transducer_length/2}" rpy="0 0 0"/>
         <geometry>
-          <cylinder radius="0.008" length="0.015"/>
+          <cylinder radius="${ultrasonic_transducer_radius}" length="${ultrasonic_transducer_length}"/>
         </geometry>
         <material name="light_grey"/>
       </visual>
@@ -47,13 +47,13 @@
     <joint name="joint_${name}_transducer_1" type="fixed">
       <parent link="${name}"/>
       <child link="${name}_transducer_1"/>
-      <origin xyz="0.0125 0 0" rpy="0 0 0"/> <!-- Position one transducer -->
+      <origin xyz="${ultrasonic_transducer_x_offset} 0 0" rpy="0 0 0"/> <!-- Position one transducer -->
     </joint>
 
     <joint name="joint_${name}_transducer_2" type="fixed">
       <parent link="${name}"/>
       <child link="${name}_transducer_2"/>
-      <origin xyz="-0.0125 0 0" rpy="0 0 0"/> <!-- Position the other transducer -->
+      <origin xyz="-${ultrasonic_transducer_x_offset} 0 0" rpy="0 0 0"/> <!-- Position the other transducer -->
     </joint>
 
   </xacro:macro>

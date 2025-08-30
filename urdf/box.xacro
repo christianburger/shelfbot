@@ -4,17 +4,17 @@
     <link name="${name}">
       <visual>
         <geometry>
-          <box size="0.05 0.05 0.1"/>
+          <box size="${box_x_size} ${box_y_size} ${box_z_size}"/>
         </geometry>
       </visual>
       <collision>
         <geometry>
-          <box size="0.05 0.05 0.1"/>
+          <box size="${box_x_size} ${box_y_size} ${box_z_size}"/>
         </geometry>
       </collision>
       <inertial>
-        <mass value="0.1"/>
-        <inertia ixx="0.000083" ixy="0.0" ixz="0.0" iyy="0.000083" iyz="0.0" izz="0.000083"/>
+        <mass value="${box_mass}"/>
+        <inertia ixx="${box_inertia}" ixy="0.0" ixz="0.0" iyy="${box_inertia}" iyz="0.0" izz="${box_inertia}"/>
       </inertial>
     </link>
 

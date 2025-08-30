@@ -51,6 +51,25 @@
 
   <xacro:property name="gear_ratio" value="${config['four_wheel_drive_controller']['ros__parameters']['gear_ratio']}"/>
 
+  <xacro:property name="box_x_size" value="${config['four_wheel_drive_controller']['ros__parameters']['box_x_size']}"/>
+  <xacro:property name="box_y_size" value="${config['four_wheel_drive_controller']['ros__parameters']['box_y_size']}"/>
+  <xacro:property name="box_z_size" value="${config['four_wheel_drive_controller']['ros__parameters']['box_z_size']}"/>
+  <xacro:property name="box_mass" value="${config['four_wheel_drive_controller']['ros__parameters']['box_mass']}"/>
+  <xacro:property name="box_inertia" value="${config['four_wheel_drive_controller']['ros__parameters']['box_inertia']}"/>
+
+  <xacro:property name="ultrasonic_pcb_x_size" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_pcb_x_size']}"/>
+  <xacro:property name="ultrasonic_pcb_y_size" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_pcb_y_size']}"/>
+  <xacro:property name="ultrasonic_pcb_z_size" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_pcb_z_size']}"/>
+  <xacro:property name="ultrasonic_collision_z_size" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_collision_z_size']}"/>
+  <xacro:property name="ultrasonic_mass" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_mass']}"/>
+  <xacro:property name="ultrasonic_transducer_radius" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_transducer_radius']}"/>
+  <xacro:property name="ultrasonic_transducer_length" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_transducer_length']}"/>
+  <xacro:property name="ultrasonic_transducer_x_offset" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_transducer_x_offset']}"/>
+  <xacro:property name="ultrasonic_z_offset" value="${config['four_wheel_drive_controller']['ros__parameters']['ultrasonic_z_offset']}"/>
+
+  <xacro:property name="joint_damping" value="${config['four_wheel_drive_controller']['ros__parameters']['joint_damping']}"/>
+  <xacro:property name="joint_friction" value="${config['four_wheel_drive_controller']['ros__parameters']['joint_friction']}"/>
+
   <xacro:macro name="cylinder_inertia" params="m r h">
     <inertia ixx="${m*(3*r*r+h*h)/12}" ixy="0" ixz="0"
              iyy="${m*(3*r*r+h*h)/12}" iyz="0"
