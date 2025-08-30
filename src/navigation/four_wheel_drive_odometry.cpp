@@ -154,7 +154,7 @@ void FourWheelDriveOdometry::broadcast_tf() {
     odom_tf.transform.translation.x = x_;
     odom_tf.transform.translation.y = y_;
     odom_tf.transform.translation.z = 0.0;
-    double final_theta = theta_;
+    double final_theta = theta_ - 1.57079632679;
     odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(final_theta / 2), std::cos(final_theta / 2)));
 
     tf_broadcaster_->sendTransform(odom_tf);

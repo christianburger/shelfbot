@@ -58,14 +58,14 @@ def generate_launch_description():
     )
 
     # --- 4. Launch Robot Localization (EKF) ---
-    ekf_config = os.path.join(shelfbot_share_dir, 'config', 'ekf.yaml')
-    ekf_node = Node(
-        package='robot_localization',
-        executable='ekf_node',
-        name='ekf_filter_node',
-        output='screen',
-        parameters=[ekf_config, {'use_sim_time': False}]
-    )
+    # ekf_config = os.path.join(shelfbot_share_dir, 'config', 'ekf.yaml')
+    # ekf_node = Node(
+    #     package='robot_localization',
+    #     executable='ekf_node',
+    #     name='ekf_filter_node',
+    #     output='screen',
+    #     parameters=[ekf_config, {'use_sim_time': False}]
+    # )
 
     # --- 5. Launch RTAB-Map Node ---
     rtabmap_node = Node(
@@ -162,7 +162,7 @@ def generate_launch_description():
         real_robot_launch,
         republish_node,
         camera_info_node,
-        ekf_node,
+        # ekf_node,
         rtabmap_node,
         delayed_lifecycle_manager,
     ] + nav2_nodes)
