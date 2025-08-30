@@ -67,22 +67,6 @@ def generate_launch_description():
         parameters=[ekf_config, {'use_sim_time': False}]
     )
 
-    # --- Static Transforms ---
-    static_tf_base_footprint_to_base_link = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_tf_base_footprint_to_base_link',
-        arguments=['0', '0', '0.085', '-1.57079632679', '0', '0', 'base_footprint', 'base_link'],
-        output='screen'
-    )
-    static_tf_base_link_to_camera_link = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_tf_base_link_to_camera_link',
-        arguments=['0', '0', '0.02', '0', '0', '-1.57079632679', 'base_link', 'camera_link'],
-        output='screen'
-    )
-
     # --- 5. Launch RTAB-Map Node ---
     rtabmap_node = Node(
         package='rtabmap_slam',
@@ -179,8 +163,6 @@ def generate_launch_description():
         republish_node,
         camera_info_node,
         ekf_node,
-        static_tf_base_footprint_to_base_link,
-        static_tf_base_link_to_camera_link,
         rtabmap_node,
         delayed_lifecycle_manager,
     ] + nav2_nodes)

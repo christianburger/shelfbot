@@ -74,7 +74,7 @@ geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const {
     pose.position.x = x_;
     pose.position.y = y_;
     pose.position.z = 0.0;
-    double final_theta = theta_ + M_PI;
+    double final_theta = theta_;
     pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(final_theta / 2), std::cos(final_theta / 2)));
     
     log_info("FourWheelDriveOdometry", "CalculatePose",
@@ -154,7 +154,7 @@ void FourWheelDriveOdometry::broadcast_tf() {
     odom_tf.transform.translation.x = x_;
     odom_tf.transform.translation.y = y_;
     odom_tf.transform.translation.z = 0.0;
-    double final_theta = theta_ + M_PI;
+    double final_theta = theta_;
     odom_tf.transform.rotation = tf2::toMsg(tf2::Quaternion(0, 0, std::sin(final_theta / 2), std::cos(final_theta / 2)));
 
     tf_broadcaster_->sendTransform(odom_tf);

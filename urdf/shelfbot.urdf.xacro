@@ -120,7 +120,7 @@
   <joint name="joint_base_footprint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
-    <origin xyz="0 0 ${base_height / 2 + wheel_radius}" rpy="0 0 -1.57079632679"/>
+    <origin xyz="0 0 ${base_height / 2 + wheel_radius}" rpy="0 0 0"/>
   </joint>
 
   <xacro:motor name="motor_front_left" length="${motor_length}" radius="${motor_radius}"/>
