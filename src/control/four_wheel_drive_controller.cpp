@@ -92,15 +92,19 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
       double linear_vel = last_cmd_vel_->linear.x;
       double angular_vel = last_cmd_vel_->angular.z;
 
-      // Calculate the target velocity for the left and right sides of the robot
-      double left_vel = (linear_vel - angular_vel * wheel_separation_ / 2.0) / wheel_radius_;
-      double right_vel = (linear_vel + angular_vel * wheel_separation_ / 2.0) / wheel_radius_;
+      // Calculate the final velocity for each wheel based on the robot's specific kinematics.
+      // The angular velocity is applied equally to all wheels for rotation.
+      // The linear velocity is inverted for the rear wheels for forward/backward motion.
+      double vel_front_left  = (linear_vel + angular_vel) / wheel_radius_;
+      double vel_front_right = (linear_vel + angular_vel) / wheel_radius_;
+      double vel_back_left   = (-linear_vel + angular_vel) / wheel_radius_;
+      double vel_back_right  = (-linear_vel + angular_vel) / wheel_radius_;
 
       // Apply the calculated velocity to each specific joint
-      axis_commands_[front_left_joint_names_[0]] = left_vel;
-      axis_commands_[back_left_joint_names_[0]] = left_vel;
-      axis_commands_[front_right_joint_names_[0]] = right_vel;
-      axis_commands_[back_right_joint_names_[0]] = right_vel;
+      axis_commands_[front_left_joint_names_[0]] = vel_front_left;
+      axis_commands_[front_right_joint_names_[0]] = vel_front_right;
+      axis_commands_[back_left_joint_names_[0]] = vel_back_left;
+      axis_commands_[back_right_joint_names_[0]] = vel_back_right;
 
   } else {
       // Timeout: set all wheel velocities to zero

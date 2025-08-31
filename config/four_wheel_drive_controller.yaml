@@ -7,6 +7,12 @@ controller_manager:
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
+      ros__parameters:
+        joints:
+          - joint_base_axis_front_left
+          - joint_base_axis_front_right
+          - joint_base_axis_back_left
+          - joint_base_axis_back_right
 
     hardware_interface:
       type: shelfbot/FourWheelDriveHardwareInterface
@@ -17,9 +23,9 @@ four_wheel_drive_controller:
     # Kinematic parameters used by the controller
     joint_names:
       - joint_base_axis_front_left
+      - joint_base_axis_front_right
       - joint_base_axis_back_left
       - joint_base_axis_back_right
-      - joint_base_axis_front_right
     
     front_left_joint_names: ["joint_base_axis_front_left"]
     back_left_joint_names: ["joint_base_axis_back_left"]

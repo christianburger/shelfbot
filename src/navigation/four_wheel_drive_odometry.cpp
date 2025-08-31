@@ -22,27 +22,27 @@ void FourWheelDriveOdometry::update(const std::vector<double>& wheel_positions, 
         return;
     }
 
-    // --- Standard Skid-Steer Odometry Calculation ---
+    // --- Corrected Skid-Steer Odometry Calculation ---
 
-    // Average the positions of the wheels on each side.
+    // Average the positions of the front and back wheels.
     // Note: The specific indices depend on the joint order from the URDF.
-    // Assuming [0, 2] are left wheels and [1, 3] are right wheels.
-    double left_pos = (wheel_positions[0] + wheel_positions[2]) / 2.0;
-    double right_pos = (wheel_positions[1] + wheel_positions[3]) / 2.0;
+    // Assuming [0, 1] are front wheels and [2, 3] are back wheels.
+    double front_pos = (wheel_positions[0] + wheel_positions[1]) / 2.0;
+    double back_pos = (wheel_positions[2] + wheel_positions[3]) / 2.0;
 
-    // Calculate the change in position for each side since the last update
-    double prev_left_pos = (prev_wheel_positions_[0] + prev_wheel_positions_[2]) / 2.0;
-    double prev_right_pos = (prev_wheel_positions_[1] + prev_wheel_positions_[3]) / 2.0;
-    double left_diff = left_pos - prev_left_pos;
-    double right_diff = right_pos - prev_right_pos;
+    // Calculate the change in position for each set of wheels since the last update
+    double prev_front_pos = (prev_wheel_positions_[0] + prev_wheel_positions_[1]) / 2.0;
+    double prev_back_pos = (prev_wheel_positions_[2] + prev_wheel_positions_[3]) / 2.0;
+    double front_diff = front_pos - prev_front_pos;
+    double back_diff = back_pos - prev_back_pos;
 
     // Convert the change in wheel angle (radians) to linear distance (meters)
-    double left_linear = left_diff * wheel_radius_;
-    double right_linear = right_diff * wheel_radius_;
+    double front_linear = front_diff * wheel_radius_;
+    double back_linear = back_diff * wheel_radius_;
 
-    // Calculate the robot's forward distance and rotation using standard differential drive kinematics
-    const double forward_distance = (left_linear + right_linear) / 2.0;
-    const double rotation = (right_linear - left_linear) / wheel_separation_;
+    // Calculate the robot's forward distance and rotation using the inverse of the controller's kinematics
+    const double forward_distance = (front_linear - back_linear) / 2.0;
+    const double rotation = (front_linear + back_linear) / 2.0;
 
     // Integrate the motion to update the robot's pose
     theta_ += rotation;
@@ -62,11 +62,14 @@ void FourWheelDriveOdometry::update(const std::vector<double>& wheel_positions, 
     prev_wheel_positions_ = wheel_positions;
 
     // Logging for debug
-    std::stringstream ss;
-    ss << "Received: [" << wheel_positions[0] << ", " << wheel_positions[1] << ", " << wheel_positions[2] << ", " << wheel_positions[3] << "] | "
-       << "Calculated: [L:" << left_pos << " R:" << right_pos << " | dL:" << left_diff << " dR:" << right_diff << "] | "
-       << "Published: [X:" << x_ << " Y:" << y_ << " T:" << theta_ << "]";
-    log_info("FourWheelDriveOdometry", "Update", ss.str());
+    log_info("FourWheelDriveOdometry", "Update", "[odometry_calculation] --- Odometry Update ---");
+    log_info("FourWheelDriveOdometry", "Update", "\tRaw Wheel Positions:  [" + std::to_string(wheel_positions[0]) + ", " + std::to_string(wheel_positions[1]) + ", " + std::to_string(wheel_positions[2]) + ", " + std::to_string(wheel_positions[3]) + "]");
+    log_info("FourWheelDriveOdometry", "Update", "\tPrev Wheel Positions: [" + std::to_string(prev_wheel_positions_[0]) + ", " + std::to_string(prev_wheel_positions_[1]) + ", " + std::to_string(prev_wheel_positions_[2]) + ", " + std::to_string(prev_wheel_positions_[3]) + "]");
+    log_info("FourWheelDriveOdometry", "Update", "\tAvg Positions: front=" + std::to_string(front_pos) + ", back=" + std::to_string(back_pos));
+    log_info("FourWheelDriveOdometry", "Update", "\tPosition Diffs: front=" + std::to_string(front_diff) + ", back=" + std::to_string(back_diff));
+    log_info("FourWheelDriveOdometry", "Update", "\tLinear Diffs: front=" + std::to_string(front_linear) + ", back=" + std::to_string(back_linear));
+    log_info("FourWheelDriveOdometry", "Update", "\tCalculated Deltas: forward_distance=" + std::to_string(forward_distance) + ", rotation=" + std::to_string(rotation));
+    log_info("FourWheelDriveOdometry", "Update", "\tFinal Pose: x=" + std::to_string(x_) + ", y=" + std::to_string(y_) + ", theta=" + std::to_string(theta_));
 
     odom_pub_->publish(std::move(odom_msg));
     broadcast_tf();
@@ -96,39 +99,25 @@ geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist( const std::ve
         dt = 1e-9;
     }
 
-    // --- Standard Skid-Steer Twist Calculation ---
-    double prev_left_pos = (prev_wheel_positions_[0] + prev_wheel_positions_[2]) / 2.0;
-    double prev_right_pos = (prev_wheel_positions_[1] + prev_wheel_positions_[3]) / 2.0;
+    // --- Corrected Skid-Steer Twist Calculation ---
+    double prev_front_pos = (prev_wheel_positions_[0] + prev_wheel_positions_[1]) / 2.0;
+    double prev_back_pos = (prev_wheel_positions_[2] + prev_wheel_positions_[3]) / 2.0;
 
-    double left_pos = (wheel_positions[0] + wheel_positions[2]) / 2.0;
-    double right_pos = (wheel_positions[1] + wheel_positions[3]) / 2.0;
+    double front_pos = (wheel_positions[0] + wheel_positions[1]) / 2.0;
+    double back_pos = (wheel_positions[2] + wheel_positions[3]) / 2.0;
 
-    double left_wheel_vel = (left_pos - prev_left_pos) / dt;
-    double right_wheel_vel = (right_pos - prev_right_pos) / dt;
+    double front_wheel_vel = (front_pos - prev_front_pos) / dt;
+    double back_wheel_vel = (back_pos - prev_back_pos) / dt;
 
     geometry_msgs::msg::Twist twist;
-    twist.linear.x = calculate_linear_velocity(left_wheel_vel, right_wheel_vel);
+    twist.linear.x = (front_wheel_vel - back_wheel_vel) * wheel_radius_ / 2.0;
     twist.linear.y = 0.0;
     twist.linear.z = 0.0;
     twist.angular.x = 0.0;
     twist.angular.y = 0.0;
-    twist.angular.z = calculate_angular_velocity(left_wheel_vel, right_wheel_vel);
+    twist.angular.z = (front_wheel_vel + back_wheel_vel) * wheel_radius_ / 2.0;
 
     return twist;
-}
-
-double FourWheelDriveOdometry::calculate_linear_velocity( double left_wheel_vel, double right_wheel_vel) {
-    double left_linear = left_wheel_vel * wheel_radius_;
-    double right_linear = right_wheel_vel * wheel_radius_;
-    prev_linear_vel_ = (left_linear + right_linear) / 2.0;
-    return prev_linear_vel_;
-}
-
-double FourWheelDriveOdometry::calculate_angular_velocity( double left_wheel_vel, double right_wheel_vel) {
-    double left_linear = left_wheel_vel * wheel_radius_;
-    double right_linear = right_wheel_vel * wheel_radius_;
-    prev_angular_vel_ = (right_linear - left_linear) / wheel_separation_;
-    return prev_angular_vel_;
 }
 
 std::array<double, 36> FourWheelDriveOdometry::calculate_pose_covariance() {
