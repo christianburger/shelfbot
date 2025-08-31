@@ -22,26 +22,29 @@ void FourWheelDriveOdometry::update(const std::vector<double>& wheel_positions, 
         return;
     }
 
-    // Average positions for left and right sides
-    double left_pos = (wheel_positions[0] - wheel_positions[2]) / 2.0;   // front_left - back_left
-    double right_pos = (wheel_positions[1] - wheel_positions[3]) / 2.0; // front_right - back_right
+    // --- Standard Skid-Steer Odometry Calculation ---
 
-    // Calculate movement deltas
-    double left_diff = left_pos - ((prev_wheel_positions_[0] - prev_wheel_positions_[2]) / 2.0);
-    double right_diff = right_pos - ((prev_wheel_positions_[1] - prev_wheel_positions_[3]) / 2.0);
+    // Average the positions of the wheels on each side.
+    // Note: The specific indices depend on the joint order from the URDF.
+    // Assuming [0, 2] are left wheels and [1, 3] are right wheels.
+    double left_pos = (wheel_positions[0] + wheel_positions[2]) / 2.0;
+    double right_pos = (wheel_positions[1] + wheel_positions[3]) / 2.0;
 
-    // Account for wheel orientations and drive mechanics:
-    // For forward motion: left wheels rotate one way, right wheels rotate opposite way
-    // For rotation: all wheels rotate in same direction
-    
-    // Convert wheel rotations to linear contributions at wheel contact point
-    double left_linear = left_diff * wheel_radius_;   // left wheel linear motion
-    double right_linear = right_diff * wheel_radius_; // right wheel linear motion
-    
-    // Standard differential drive kinematics to match the controller
+    // Calculate the change in position for each side since the last update
+    double prev_left_pos = (prev_wheel_positions_[0] + prev_wheel_positions_[2]) / 2.0;
+    double prev_right_pos = (prev_wheel_positions_[1] + prev_wheel_positions_[3]) / 2.0;
+    double left_diff = left_pos - prev_left_pos;
+    double right_diff = right_pos - prev_right_pos;
+
+    // Convert the change in wheel angle (radians) to linear distance (meters)
+    double left_linear = left_diff * wheel_radius_;
+    double right_linear = right_diff * wheel_radius_;
+
+    // Calculate the robot's forward distance and rotation using standard differential drive kinematics
     const double forward_distance = (left_linear + right_linear) / 2.0;
     const double rotation = (right_linear - left_linear) / wheel_separation_;
-    
+
+    // Integrate the motion to update the robot's pose
     theta_ += rotation;
     x_ += forward_distance * cos(theta_);
     y_ += forward_distance * sin(theta_);
@@ -93,8 +96,15 @@ geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist( const std::ve
         dt = 1e-9;
     }
 
-    double left_wheel_vel = ((wheel_positions[0] - prev_wheel_positions_[0]) - (wheel_positions[2] - prev_wheel_positions_[2])) / (2.0 * dt);
-    double right_wheel_vel = ((wheel_positions[1] - prev_wheel_positions_[1]) - (wheel_positions[3] - prev_wheel_positions_[3])) / (2.0 * dt);
+    // --- Standard Skid-Steer Twist Calculation ---
+    double prev_left_pos = (prev_wheel_positions_[0] + prev_wheel_positions_[2]) / 2.0;
+    double prev_right_pos = (prev_wheel_positions_[1] + prev_wheel_positions_[3]) / 2.0;
+
+    double left_pos = (wheel_positions[0] + wheel_positions[2]) / 2.0;
+    double right_pos = (wheel_positions[1] + wheel_positions[3]) / 2.0;
+
+    double left_wheel_vel = (left_pos - prev_left_pos) / dt;
+    double right_wheel_vel = (right_pos - prev_right_pos) / dt;
 
     geometry_msgs::msg::Twist twist;
     twist.linear.x = calculate_linear_velocity(left_wheel_vel, right_wheel_vel);

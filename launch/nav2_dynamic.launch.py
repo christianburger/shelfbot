@@ -35,7 +35,7 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_tf_base_footprint_to_base_link',
-        arguments=['0', '0', '0.085', '-1.57079632679', '0', '0', 'base_footprint', 'base_link'],
+        arguments=['0', '0', '0.085', '0', '0', '0', 'base_footprint', 'base_link'],
         output='screen'
     )
     static_tf_base_link_to_camera_link = Node(

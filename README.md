@@ -10,7 +10,7 @@ The project is a comprehensive robotic system designed to control a four-wheeled
 - **Visual SLAM**: Employs RTAB-Map for real-time Simultaneous Localization and Mapping (SLAM) using the robot's camera, allowing it to navigate in previously unseen environments.
 - **Sensor Fusion**: Uses `robot_localization` (EKF) to fuse data from wheel odometry, providing a more accurate and stable estimate of the robot's position.
 - **Real-World Operation**: The robot can be operated with real hardware.
-- **ROS 2 Control**: Integrated with `ros2_control` for a standardized hardware abstraction layer.
+- **ROS 2 Control**: Integrated with `ros2_control` for a standardized hardware abstraction layer, featuring a skid-steer drive controller.
 
 ## System Architecture
 
@@ -57,7 +57,7 @@ ros2 launch shelfbot rviz_launch.py
 5.  The **Planner Server** creates a global plan within the `odom` frame.
 6.  The **Controller Server** follows the plan, publishing velocity commands to `/cmd_vel`.
 7.  The `/controller_manager` (`ros2_control`) receives these commands, sends them to the hardware interface, and reads wheel encoder data.
-8.  The hardware interface calculates raw odometry and publishes it to `/odom`.
+8.  The hardware interface reads wheel encoder positions from the hardware and passes them to the odometry calculator. The odometry calculator then computes the robot's pose and twist and publishes it to `/odom`.
 9.  The `/robot_state_publisher` uses `/joint_states` to publish the robot's internal transforms (e.g., `base_link` -> `wheel_link`).
 10. The `/robot_localization` node fuses the wheel odometry and publishes the final `odom` -> `base_footprint` transform.
 
