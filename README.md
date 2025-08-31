@@ -10,7 +10,7 @@ The project is a comprehensive robotic system designed to control a four-wheeled
 - **Visual SLAM**: Employs RTAB-Map for real-time Simultaneous Localization and Mapping (SLAM) using the robot's camera, allowing it to navigate in previously unseen environments.
 - **Sensor Fusion**: Uses `robot_localization` (EKF) to fuse data from wheel odometry, providing a more accurate and stable estimate of the robot's position.
 - **Real-World Operation**: The robot can be operated with real hardware.
-- **ROS 2 Control**: Integrated with `ros2_control` for a standardized hardware abstraction layer, featuring a skid-steer drive controller.
+- **ROS 2 Control**: Integrated with `ros2_control` for a standardized hardware abstraction layer, featuring a four-wheel skid-steer drive controller.
 
 ## System Architecture
 
