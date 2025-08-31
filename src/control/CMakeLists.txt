@@ -27,6 +27,10 @@ ament_target_dependencies(four_wheel_drive_controller
   tf2_geometry_msgs
 )
 
+target_link_libraries(four_wheel_drive_controller
+  shelfbot_utils
+)
+
 install(TARGETS four_wheel_drive_controller
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

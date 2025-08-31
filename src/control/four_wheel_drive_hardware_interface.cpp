@@ -71,7 +71,10 @@ std::vector<hardware_interface::StateInterface> FourWheelDriveHardwareInterface:
     for (size_t i = 0; i < info_.joints.size(); i++) {
         state_interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_positions_[i]);
         state_interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &hw_velocities_[i]);
-        log_info("FourWheelDriveHardwareInterface", "export_state_interfaces", "Exported state interfaces for joint: " + info_.joints[i].name);
+        
+        std::stringstream ss;
+        ss << "[hw_positions] Exporting state interface for " << info_.joints[i].name << " with initial value: " << hw_positions_[i];
+        log_info("FourWheelDriveHardwareInterface", "export_state_interfaces", ss.str());
     }
     log_info("FourWheelDriveHardwareInterface", "export_state_interfaces", "--- State interfaces exported successfully ---");
     return state_interfaces;
@@ -120,17 +123,17 @@ hardware_interface::return_type FourWheelDriveHardwareInterface::read(const rclc
         return hardware_interface::return_type::OK; // Keep controller running
     }
 
-    if (odometry_) {
-        odometry_->update(hw_positions_, period);
-    }
-
     std::stringstream ss;
-    ss << "Read from hardware: Positions = [";
+    ss << "[hw_positions] FourWheelDriveHardwareInterface::read: Values after readStateFromHardware: [";
     for (size_t i = 0; i < hw_positions_.size(); ++i) {
         ss << hw_positions_[i] << (i < hw_positions_.size() - 1 ? ", " : "");
     }
     ss << "]";
-    RCLCPP_INFO(node_->get_logger(), ss.str().c_str());
+    log_info("FourWheelDriveHardwareInterface", "read", ss.str());
+
+    if (odometry_) {
+        odometry_->update(hw_positions_, period);
+    }
 
     return hardware_interface::return_type::OK;
 }
@@ -147,7 +150,7 @@ hardware_interface::return_type FourWheelDriveHardwareInterface::write(const rcl
         ss << hw_velocity_commands_[i] << (i < hw_velocity_commands_.size() - 1 ? ", " : "");
     }
     ss << "]";
-    RCLCPP_INFO(node_->get_logger(), ss.str().c_str());
+    log_info("FourWheelDriveHardwareInterface", "write", ss.str());
 
     if (!comm_->writeSpeedsToHardware(hw_velocity_commands_)) {
         log_error("FourWheelDriveHardwareInterface", "write", "Failed to write speeds to hardware.");

@@ -87,6 +87,14 @@ controller_interface::return_type FourWheelDriveController::update(const rclcpp:
     axis_positions_[joint_names_[i]] = state_interfaces_[i].get_value();
   }
 
+  std::stringstream ss;
+  ss << "[hw_positions] FourWheelDriveController::update: Read from state interfaces: Positions = [";
+  for (const auto& joint : joint_names_) {
+    ss << axis_positions_[joint] << ", ";
+  }
+  ss << "]";
+  log_info("FourWheelDriveController", "update", ss.str());
+
   if (last_cmd_vel_ && (time - last_cmd_vel_time_) < cmd_vel_timeout_) {
       // Get the base commands
       double linear_vel = last_cmd_vel_->linear.x;
@@ -131,6 +139,14 @@ void FourWheelDriveController::publish_joint_states() {
     joint_state_msg.name.push_back(joint);
     joint_state_msg.position.push_back(axis_positions_[joint]);
   }
+
+  std::stringstream ss;
+  ss << "[hw_positions] FourWheelDriveController::publish_joint_states: Publishing positions: [";
+  for (size_t i = 0; i < joint_state_msg.position.size(); ++i) {
+      ss << joint_state_msg.position[i] << (i < joint_state_msg.position.size() - 1 ? ", " : "");
+  }
+  ss << "]";
+  log_info("FourWheelDriveController", "publish_joint_states", ss.str());
 
   joint_state_publisher_->publish(joint_state_msg);
 }

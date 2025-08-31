@@ -1,5 +1,6 @@
 #include "shelfbot/microros_communication.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "shelfbot/shelfbot_utils.hpp"
 
 namespace shelfbot {
 
@@ -27,17 +28,17 @@ bool MicroRosCommunication::open(const std::string& /*connection_string*/) {
         executor_.add_node(node_);
         executor_thread_ = std::thread([this]() { this->executor_.spin(); });
 
-        RCLCPP_INFO(node_->get_logger(), "Successfully opened and started spinning micro-ROS communication.");
+        log_info("MicroRosCommunication", "open", "Successfully opened and started spinning micro-ROS communication.");
         return true;
     } catch (const std::exception& e) {
-        fprintf(stderr, "Failed to open micro-ROS communication: %s\n", e.what());
+        log_error("MicroRosCommunication", "open", std::string("Failed to open micro-ROS communication: ") + e.what());
         return false;
     }
 }
 
 void MicroRosCommunication::close() {
     if (node_) {
-        RCLCPP_INFO(node_->get_logger(), "Closing micro-ROS communication.");
+        log_info("MicroRosCommunication", "close", "Closing micro-ROS communication.");
         executor_.cancel();
         if (executor_thread_.joinable()) {
             executor_thread_.join();
@@ -51,7 +52,7 @@ void MicroRosCommunication::close() {
 
 bool MicroRosCommunication::writeCommandsToHardware(const std::vector<double>& hw_commands) {
     if (!rclcpp::ok() || !command_publisher_) {
-        RCLCPP_ERROR(node_->get_logger(), "Cannot write commands, micro-ROS communication is not active.");
+        log_error("MicroRosCommunication", "writeCommandsToHardware", "Cannot write commands, micro-ROS communication is not active.");
         return false;
     }
 
@@ -63,9 +64,7 @@ bool MicroRosCommunication::writeCommandsToHardware(const std::vector<double>& h
 
 bool MicroRosCommunication::writeSpeedsToHardware(const std::vector<double>& hw_speeds) {
     if (!rclcpp::ok() || !speed_publisher_) {
-        if (node_) {
-            RCLCPP_ERROR(node_->get_logger(), "Cannot write speeds, micro-ROS communication is not active.");
-        }
+        log_error("MicroRosCommunication", "writeSpeedsToHardware", "Cannot write speeds, micro-ROS communication is not active.");
         return false;
     }
 
@@ -77,52 +76,61 @@ bool MicroRosCommunication::writeSpeedsToHardware(const std::vector<double>& hw_
 
 bool MicroRosCommunication::readStateFromHardware(std::vector<double>& hw_positions) {
     if (!rclcpp::ok()) {
-        if (node_) {
-            RCLCPP_ERROR(node_->get_logger(), "Cannot read state, micro-ROS communication is not active.");
-        }
+        log_error("MicroRosCommunication", "readStateFromHardware", "Cannot read state, micro-ROS communication is not active.");
         return false;
     }
 
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (!state_received_) {
-        if (node_) {
-            RCLCPP_WARN(node_->get_logger(), "No motor position data received from firmware yet.");
-        }
+        log_warn("MicroRosCommunication", "readStateFromHardware", "No motor position data received from firmware yet.");
         return false; // Return false if no data has ever been received
     }
 
-    // Ensure the destination vector has the same size to avoid out-of-bounds access
-    if (hw_positions.size() != latest_hw_positions_.size()) {
-        hw_positions.resize(latest_hw_positions_.size());
+    // Safely copy the data, respecting the size of the hardware interface's vector.
+    if (latest_hw_positions_.size() < hw_positions.size()) {
+        log_warn(
+            "MicroRosCommunication", "readStateFromHardware",
+            "Received data size (" + std::to_string(latest_hw_positions_.size()) +
+            ") is smaller than expected hardware interface size (" + std::to_string(hw_positions.size()) + "). Some positions will not be updated."
+        );
     }
 
-    hw_positions = latest_hw_positions_;
+    size_t size_to_copy = std::min(hw_positions.size(), latest_hw_positions_.size());
+    for (size_t i = 0; i < size_to_copy; ++i) {
+        hw_positions[i] = latest_hw_positions_[i];
+    }
     
     // Log the read positions for debugging
     std::stringstream ss;
-    ss << "Reading positions: [";
+    ss << "[hw_positions] Reading positions: [";
     for (size_t i = 0; i < hw_positions.size(); ++i) {
         ss << hw_positions[i] << (i < hw_positions.size() - 1 ? ", " : "");
     }
     ss << "]";
-    RCLCPP_INFO(node_->get_logger(), ss.str().c_str());
+    log_info("MicroRosCommunication", "readStateFromHardware", ss.str());
 
     return true;
 }
 
 void MicroRosCommunication::position_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    latest_hw_positions_.assign(msg->data.begin(), msg->data.end());
+    
+    // The internal vector is resized to match the incoming message.
+    latest_hw_positions_.resize(msg->data.size());
+    for (size_t i = 0; i < msg->data.size(); ++i) {
+        latest_hw_positions_[i] = static_cast<double>(msg->data[i]);
+    }
+    
     state_received_ = true;
 
     // Log the received positions for debugging
     std::stringstream ss;
-    ss << "Received new motor positions: [";
+    ss << "[hw_positions] Received new motor positions: [";
     for (size_t i = 0; i < latest_hw_positions_.size(); ++i) {
         ss << latest_hw_positions_[i] << (i < latest_hw_positions_.size() - 1 ? ", " : "");
     }
     ss << "]";
-    RCLCPP_INFO(node_->get_logger(), ss.str().c_str());
+    log_info("MicroRosCommunication", "position_callback", ss.str());
 }
 
 }
