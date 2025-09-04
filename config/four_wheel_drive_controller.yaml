@@ -57,7 +57,7 @@ four_wheel_drive_controller:
     camera_width: 0.02
     camera_length: 0.02
     camera_height: 0.01
-    camera_lens_radius: 0.05
+    camera_lens_radius: 0.005
     camera_mount_height: 0.5
     camera_mass: 0.5
 

@@ -1,0 +1,159 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  
+  <!-- ESP32-CAM specific materials -->
+  <material name="esp32_pcb_green">
+    <color rgba="0.0 0.4 0.0 1.0"/>
+  </material>
+  <material name="camera_black">
+    <color rgba="0.1 0.1 0.1 1.0"/>
+  </material>
+  <material name="camera_lens_dark">
+    <color rgba="0.05 0.05 0.05 1.0"/>
+  </material>
+  <material name="connector_silver">
+    <color rgba="0.8 0.8 0.8 1.0"/>
+  </material>
+
+  <!-- ESP32-CAM macro with realistic representation -->
+  <xacro:macro name="esp32_cam" params="name width length height">
+    
+    <!-- Main ESP32-CAM PCB -->
+    <link name="${name}">
+      <visual>
+        <origin xyz="0 0 ${height/2}"/>
+        <geometry>
+          <box size="${width} ${length} ${height}"/>
+        </geometry>
+        <material name="esp32_pcb_green"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${height/2}"/>
+        <geometry>
+          <box size="${width} ${length} ${height}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${camera_mass}"/>
+        <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+        <xacro:box_inertia m="${camera_mass}" x="${width}" y="${length}" z="${height}"/>
+      </inertial>
+    </link>
+
+    <!-- OV2640 Camera Module Housing -->
+    <link name="${name}_module">
+      <visual>
+        <origin xyz="0 0 0.003"/> <!-- 3mm above PCB -->
+        <geometry>
+          <box size="0.008 0.008 0.006"/> <!-- 8x8x6mm camera module -->
+        </geometry>
+        <material name="camera_black"/>
+      </visual>
+    </link>
+
+    <!-- OV2640 Lens (using the radius parameter) -->
+    <link name="${name}_lens">
+      <visual>
+        <origin xyz="0 0 0.002"/> <!-- 2mm lens protrusion -->
+        <geometry>
+          <cylinder radius="${camera_lens_radius}" length="0.004"/>
+        </geometry>
+        <material name="camera_lens_dark"/>
+      </visual>
+    </link>
+
+    <!-- Antenna connector (ESP32-CAM specific) -->
+    <link name="${name}_antenna">
+      <visual>
+        <origin xyz="0 0 0.001"/>
+        <geometry>
+          <cylinder radius="0.002" length="0.002"/>
+        </geometry>
+        <material name="connector_silver"/>
+      </visual>
+    </link>
+
+    <!-- CRITICAL: Camera optical frame following ROS conventions -->
+    <link name="${name}_optical_frame"/>
+
+    <!-- Joint: Camera module to PCB -->
+    <joint name="joint_${name}_module" type="fixed">
+      <parent link="${name}"/>
+      <child link="${name}_module"/>
+      <origin xyz="0 0 ${height}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Joint: Lens to camera module -->
+    <joint name="joint_${name}_lens" type="fixed">
+      <parent link="${name}_module"/>
+      <child link="${name}_lens"/>
+      <origin xyz="0 0 0.003" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Joint: Antenna connector -->
+    <joint name="joint_${name}_antenna" type="fixed">
+      <parent link="${name}"/>
+      <child link="${name}_antenna"/>
+      <origin xyz="${width/2 - 0.003} 0 ${height}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- CRITICAL: Optical frame with correct ROS camera coordinate system -->
+    <!-- ROS camera convention: X-right, Y-down, Z-forward -->
+    <joint name="joint_${name}_optical" type="fixed">
+      <parent link="${name}"/>
+      <child link="${name}_optical_frame"/>
+      <!-- Position at lens center, rotate to ROS camera coordinates -->
+      <origin xyz="0 0 ${height + 0.009}" rpy="-1.5708 0 -1.5708"/>
+    </joint>
+
+  </xacro:macro>
+
+  <!-- Gazebo plugin for ESP32-CAM simulation -->
+  <xacro:macro name="esp32_cam_gazebo" params="camera_name">
+    <gazebo reference="${camera_name}">
+      <sensor type="camera" name="${camera_name}_sensor">
+        <update_rate>15.0</update_rate> <!-- ESP32-CAM typical frame rate -->
+        <camera name="${camera_name}">
+          <!-- FOV calculated from your calibration: 2*atan(320/500) = 1.287 rad -->
+          <horizontal_fov>1.287</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.05</near> <!-- ESP32-CAM minimum focus distance -->
+            <far>10.0</far>   <!-- Reasonable range for indoor robot -->
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.015</stddev> <!-- Realistic noise for ESP32-CAM -->
+          </noise>
+        </camera>
+        <plugin name="${camera_name}_controller" filename="libgazebo_ros_camera.so">
+          <alwaysOn>true</alwaysOn>
+          <updateRate>0.0</updateRate>
+          <cameraName>${camera_name}</cameraName>
+          <imageTopicName>image_raw</imageTopicName>
+          <cameraInfoTopicName>camera_info</cameraInfoTopicName>
+          <frameName>${camera_name}_optical_frame</frameName>
+          
+          <!-- Use your actual calibration parameters -->
+          <cx>320.0</cx>
+          <cy>240.0</cy>
+          <fx>500.0</fx>
+          <fy>500.0</fy>
+          
+          <!-- Your distortion coefficients (all zeros - good calibration!) -->
+          <distortionK1>0.0</distortionK1>
+          <distortionK2>0.0</distortionK2>
+          <distortionK3>0.0</distortionK3>
+          <distortionT1>0.0</distortionT1>
+          <distortionT2>0.0</distortionT2>
+        </plugin>
+      </sensor>
+    </gazebo>
+  </xacro:macro>
+
+</robot>
