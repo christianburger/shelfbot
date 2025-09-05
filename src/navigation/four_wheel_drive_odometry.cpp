@@ -139,7 +139,7 @@ nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const {
     nav_msgs::msg::Odometry odom;
     odom.header.stamp = clock_->now();
     odom.header.frame_id = "odom";
-    odom.child_frame_id = "base_link";
+    odom.child_frame_id = "base_footprint"; // Corrected to match TF broadcast
     odom.pose.pose = calculate_pose();
     return odom;
 }

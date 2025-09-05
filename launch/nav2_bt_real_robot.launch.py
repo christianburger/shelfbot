@@ -52,26 +52,36 @@ def generate_launch_description():
         output='screen'
     )
 
-    # --- 4. Launch RTAB-Map for Visual Odometry and Mapping ---
+    # --- 4. Launch Robot Localization (EKF) ---
+    # This node was commented out in the original, so it remains commented.
+    # ekf_config = os.path.join(shelfbot_share_dir, 'config', 'ekf.yaml')
+    # ekf_node = Node(
+    #     package='robot_localization',
+    #     executable='ekf_node',
+    #     name='ekf_filter_node',
+    #     output='screen',
+    #     parameters=[ekf_config, {'use_sim_time': False}]
+    # )
+
+    # --- 5. Launch RTAB-Map Node ---
     rtabmap_node = Node(
         package='rtabmap_slam',
         executable='rtabmap',
         name='rtabmap',
         parameters=[{
             'frame_id': 'base_footprint',
+            'subscribe_depth': False,
+            'subscribe_rgbd': False,
             'subscribe_rgb': True,
-            'subscribe_odom': True,
             'approx_sync': True,
             'use_sim_time': False,
-            'Reg/Strategy': '1', # 1=Vis, 2=ICP, 3=both
+            'Reg/Strategy': '1',
             'Vis/MinInliers': '15',
-            'Vis/MaxRate': 2,
+            'RGBD/Enabled': 'false',
+            'Grid/FromDepth': 'false',
+            'tf_delay': 0.8,  # Adjusted based on average delay of 0.3541s from log analysis
             'odom_queue_size': 2000,
-            'tf_delay': 0.8,
-            'qos_image': 1, # Use default QoS for images
-            'qos_camera_info': 1,
-            'qos_odom': 1,
-            'Vis/Force3DoF': 'true',
+            'Vis/MaxRate': 2,
         }],
         remappings=[
             ('rgb/image', '/camera/image_raw'),
@@ -82,37 +92,10 @@ def generate_launch_description():
         output='screen'
     )
 
-    # --- 5. AprilTag Detection Node ---
-    apriltag_node = Node(
-        package='apriltag_ros',
-        executable='apriltag_node',
-        name='apriltag_detector',
-        remappings=[
-            ('image_rect', '/camera/image_raw'),
-            ('camera_info', '/camera/camera_info'),
-            ('detections', 'tag_detections')
-        ],
-        parameters=[{
-            'family': 'tag36h11', # Example AprilTag family
-        }],
-    )
-
-    # --- 6. Custom Behavior Tree Node ---
-    # This node will subscribe to the tag detections and publish commands
-    # You will need to create this Python or C++ node yourself
-    bt_node = Node(
-        package='shelfbot', # Example package name
-        executable='robot_bt_controller', # The name of your BT executable
-        name='bt_controller',
-        output='screen',
-    )
-
     return LaunchDescription([
         ros2_control_node,
         real_robot_launch,
         republish_node,
         camera_info_node,
         rtabmap_node,
-        apriltag_node,
-        bt_node,
     ])
