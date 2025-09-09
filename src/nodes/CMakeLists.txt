@@ -8,6 +8,8 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(tf2 REQUIRED)
 
 # Camera Publisher Node
 add_executable(camera_publisher camera_publisher.cpp)
@@ -20,14 +22,16 @@ ament_target_dependencies(camera_publisher
 # AprilTag Detector Node
 add_executable(apriltag_detector_node apriltag_detector.cpp)
 ament_target_dependencies(apriltag_detector_node
-        rclcpp
-        image_transport
-        cv_bridge
-        tf2_ros
-        tf2_geometry_msgs
-        visualization_msgs
-        sensor_msgs
-        geometry_msgs
+    rclcpp
+    image_transport
+    cv_bridge
+    tf2
+    tf2_ros
+    tf2_geometry_msgs
+    visualization_msgs
+    sensor_msgs
+    geometry_msgs
+    std_msgs  # Add this
 )
 
 # Link apriltag library and set include directories
