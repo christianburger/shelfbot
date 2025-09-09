@@ -36,8 +36,8 @@ def generate_launch_description():
         output="both",
         remappings=[
             ("~/robot_description", "/robot_description"),
-            ("/four_wheel_drive_controller/tf_odometry", "/tf"),
         ],
+
         arguments=['--ros-args', '--log-level', 'info'],
     )
 

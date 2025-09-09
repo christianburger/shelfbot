@@ -67,33 +67,51 @@ def generate_launch_description():
     #     parameters=[ekf_config, {'use_sim_time': False}]
     # )
 
-    # --- 5. Launch RTAB-Map Node ---
+    # --- 5. Launch RTAB-Map Node (mono-RGB only, publish SLAM pose + sparse map) ---
     rtabmap_node = Node(
         package='rtabmap_slam',
         executable='rtabmap',
         name='rtabmap',
         parameters=[{
-            'frame_id': 'base_footprint',
-            'subscribe_depth': False,
-            'subscribe_rgbd': False,
-            'subscribe_rgb': True,
-            'approx_sync': True,
-            'use_sim_time': False,
-            'Reg/Strategy': '1',
-            'Vis/MinInliers': '15',
-            'RGBD/Enabled': 'false',
-            'Grid/FromDepth': 'false',
-            'tf_delay': 0.1,
-            'odom_queue_size': 100,
+            # frames
+            'frame_id':               'base_footprint',
+            'map_frame_id':           'map',
+            'use_sim_time':           False,
+
+            # only RGB camera
+            'subscribe_rgb':          True,
+            'subscribe_depth':        False,
+            'subscribe_rgbd':         False,
+            'RGBD/Enabled':           'false',
+
+            # odometry→TF sync
+            'tf_delay':               0.0,
+            'odom_sensor_sync':       True,
+            'tf_tolerance':           0.8,
+
+            # force RTAB-Map to publish its optimized trajectory as Odometry
+            # and to emit the sparse landmark cloud
+            'Rtabmap/PublishLastSignature':   'true',
+            'Rtabmap/PublishMapData':         'true',
+
+            # approximate sync buffers
+            'approx_sync':            True,
+            'topic_queue_size':       50,
+            'sync_queue_size':        50,
         }],
         remappings=[
-            ('rgb/image', '/camera/image_raw'),
-            ('rgb/camera_info', '/camera/camera_info'),
-            ('odom', '/odom')
+            ('rgb/image',        '/camera/image_raw'),
+            ('rgb/camera_info',  '/camera/camera_info'),
+            ('odom',             '/odom'),
         ],
-        arguments=['--ros-args', '--log-level', 'info', '--', '--delete_db_on_start'],
+        arguments=[
+            '--ros-args', '--log-level', 'info',
+            '--', '--delete_db_on_start'
+        ],
         output='screen'
     )
+
+
 
     # --- 6. Launch Nav2 Nodes ---
     nav2_nodes = [
