@@ -8,7 +8,7 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "std_msgs/msg/header.hpp"
-#include <memory>  // For std::make_shared
+#include <memory>
 
 // The core apriltag C library headers
 extern "C" {
@@ -25,7 +25,8 @@ public:
 
 private:
     // Member Functions
-    void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg, const sensor_msgs::msg::CameraInfo::ConstSharedPtr& info_msg);
+    void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg);
+    void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr& info_msg);
     void publishTransforms(const geometry_msgs::msg::PoseArray& pose_array, const std_msgs::msg::Header& header, const std::vector<int>& ids);
     void publishMarkers(const geometry_msgs::msg::PoseArray& pose_array, const std_msgs::msg::Header& header, const std::vector<int>& ids, double tag_size);
 
@@ -35,7 +36,14 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-    image_transport::CameraSubscriber camera_sub_;
+    
+    // Separate subscribers
+    image_transport::Subscriber image_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
+    
+    // Store latest camera info
+    sensor_msgs::msg::CameraInfo::ConstSharedPtr latest_camera_info_;
+    bool camera_info_received_ = false;
 
     // Parameters
     double tag_size_;
@@ -58,22 +66,26 @@ AprilTagDetectorNode::AprilTagDetectorNode() : Node("apriltag_detector_node") {
 
     RCLCPP_INFO(this->get_logger(), "AprilTag detector initialized with tag36h11 family");
 
-    // Publishers (use SensorDataQoS for sensor-derived topics)
+    // Publishers
     pose_array_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("tag_poses", rclcpp::SensorDataQoS());
     marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("tag_markers", rclcpp::SensorDataQoS());
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
     RCLCPP_INFO(this->get_logger(), "Publishers created: /tag_poses, /tag_markers");
 
-    // Camera subscriber: base topic /camera/image_raw, transport="raw", QoS=sensor_data
-    // Remap camera_info:=/camera/camera_info when launching to fix info topic mismatch
-    camera_sub_ = image_transport::create_camera_subscription(
-        this, "image_raw",  // Base topic for images
-        std::bind(&AprilTagDetectorNode::imageCallback, this, std::placeholders::_1, std::placeholders::_2),
-        "raw",  // Transport (raw for /camera/image_raw)
-        rmw_qos_profile_sensor_data);  // Shared QoS for image and camera_info subscriptions
+    // Create separate subscribers
+    image_sub_ = image_transport::create_subscription(
+        this, "image_raw",
+        std::bind(&AprilTagDetectorNode::imageCallback, this, std::placeholders::_1),
+        "raw",
+        rmw_qos_profile_sensor_data);
 
-    RCLCPP_INFO(this->get_logger(), "Camera subscriber created on base topic: image_raw (remap camera_info:=/camera/camera_info if needed)");
+    camera_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
+        "camera_info", 
+        rclcpp::SensorDataQoS(),
+        std::bind(&AprilTagDetectorNode::cameraInfoCallback, this, std::placeholders::_1));
+
+    RCLCPP_INFO(this->get_logger(), "Separate subscribers created for image_raw and camera_info");
 }
 
 AprilTagDetectorNode::~AprilTagDetectorNode() {
@@ -82,14 +94,30 @@ AprilTagDetectorNode::~AprilTagDetectorNode() {
     tag36h11_destroy(tf_);
 }
 
-void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg, const sensor_msgs::msg::CameraInfo::ConstSharedPtr& info_msg) {
-    RCLCPP_DEBUG(this->get_logger(), "Processing image (size: %dx%d, encoding: %s)", image_msg->width, image_msg->height, image_msg->encoding.c_str());
+void AprilTagDetectorNode::cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr& info_msg) {
+    latest_camera_info_ = info_msg;
+    if (!camera_info_received_) {
+        camera_info_received_ = true;
+        RCLCPP_INFO(this->get_logger(), "Camera info received - ready to process images");
+    }
+}
+
+void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg) {
+    // Check if we have camera info
+    if (!camera_info_received_ || !latest_camera_info_) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "No camera info available yet - skipping image");
+        return;
+    }
+
+    RCLCPP_DEBUG(this->get_logger(), "Processing image (size: %dx%d, encoding: %s)", 
+                 image_msg->width, image_msg->height, image_msg->encoding.c_str());
 
     cv_bridge::CvImagePtr cv_ptr;
     try {
         // Handle common encodings: prefer MONO8 for tags, but convert from bgr8/rgb8 if needed
         std::string target_encoding = sensor_msgs::image_encodings::MONO8;
-        if (image_msg->encoding == sensor_msgs::image_encodings::BGR8 || image_msg->encoding == sensor_msgs::image_encodings::RGB8) {
+        if (image_msg->encoding == sensor_msgs::image_encodings::BGR8 || 
+            image_msg->encoding == sensor_msgs::image_encodings::RGB8) {
             target_encoding = sensor_msgs::image_encodings::MONO8;  // Convert color to gray
         }
         cv_ptr = cv_bridge::toCvCopy(image_msg, target_encoding);
@@ -119,20 +147,22 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
         apriltag_detection_t* det;
         zarray_get(detections, i, &det);
 
-        RCLCPP_DEBUG(this->get_logger(), "Tag detection: ID=%d, margin=%.2f, center=(%.1f,%.1f)", det->id, det->decision_margin, det->c[0], det->c[1]);
+        RCLCPP_DEBUG(this->get_logger(), "Tag detection: ID=%d, margin=%.2f, center=(%.1f,%.1f)", 
+                     det->id, det->decision_margin, det->c[0], det->c[1]);
 
         apriltag_detection_info_t info;
         info.det = det;
         info.tagsize = tag_size_;
-        info.fx = info_msg->k[0];
-        info.fy = info_msg->k[4];
-        info.cx = info_msg->k[2];
-        info.cy = info_msg->k[5];
+        info.fx = latest_camera_info_->k[0];
+        info.fy = latest_camera_info_->k[4];
+        info.cx = latest_camera_info_->k[2];
+        info.cy = latest_camera_info_->k[5];
 
         apriltag_pose_t pose;
         double err = estimate_tag_pose(&info, &pose);
 
-        RCLCPP_DEBUG(this->get_logger(), "Pose error for tag %d: %.2f (threshold: %.1f)", det->id, err, pose_error_threshold_);
+        RCLCPP_DEBUG(this->get_logger(), "Pose error for tag %d: %.2f (threshold: %.1f)", 
+                     det->id, err, pose_error_threshold_);
 
         if (err < pose_error_threshold_) {
             geometry_msgs::msg::Pose p;
@@ -150,9 +180,11 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
             pose_array_msg.poses.push_back(p);
             ids.push_back(det->id);
 
-            RCLCPP_INFO(this->get_logger(), "Valid pose for tag %d: pos=(%.3f, %.3f, %.3f)", det->id, p.position.x, p.position.y, p.position.z);
+            RCLCPP_INFO(this->get_logger(), "Valid pose for tag %d: pos=(%.3f, %.3f, %.3f)", 
+                        det->id, p.position.x, p.position.y, p.position.z);
         } else {
-            RCLCPP_WARN(this->get_logger(), "Pose error too high for tag %d: %.2f > %.1f", det->id, err, pose_error_threshold_);
+            RCLCPP_WARN(this->get_logger(), "Pose error too high for tag %d: %.2f > %.1f", 
+                        det->id, err, pose_error_threshold_);
         }
 
         // Clean up pose matrices
