@@ -35,6 +35,7 @@ private:
     // Member Functions
     void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg);
     void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr& info_msg);
+    bool validatePoseInputs(double tagsize, double fx, double fy, double cx, double cy, int tag_id);
     bool validatePose(const apriltag_pose_t& pose, double error, int tag_id);
     void publishTransforms(const geometry_msgs::msg::PoseArray& pose_array, const std_msgs::msg::Header& header, const std::vector<int>& ids);
     void publishMarkers(const geometry_msgs::msg::PoseArray& pose_array, const std_msgs::msg::Header& header, const std::vector<int>& ids, double tag_size);
@@ -115,6 +116,38 @@ void AprilTagDetectorNode::cameraInfoCallback(const sensor_msgs::msg::CameraInfo
     }
 }
 
+bool AprilTagDetectorNode::validatePoseInputs(double tagsize, double fx, double fy, double cx, double cy, int tag_id) {
+    // Log the inputs
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(4)
+        << "Tag " << tag_id
+        << " - Pose input: tagsize=" << tagsize
+        << ", fx=" << fx << ", fy=" << fy
+        << ", cx=" << cx << ", cy=" << cy;
+    shelfbot::log_info(this->get_name(), "PoseEstimation", oss.str());
+
+    // Check tag size
+    if (tagsize <= 0.0) {
+        shelfbot::log_warn(this->get_name(), "PoseEstimation", "Invalid tag size; skipping pose estimation");
+        return false;
+    }
+
+    // Check focal lengths
+    if (fx <= 0.0 || fy <= 0.0) {
+        shelfbot::log_warn(this->get_name(), "PoseEstimation", "Invalid camera intrinsics (fx/fy <= 0); skipping pose estimation");
+        return false;
+    }
+
+    // Check principal point (cx, cy) — not strictly fatal, but warn if zero
+    if (cx <= 0.0 || cy <= 0.0) {
+        shelfbot::log_warn(this->get_name(), "PoseEstimation", "Principal point (cx/cy) is zero or negative; results may be inaccurate");
+        // Still allow pose estimation if focal lengths are valid
+    }
+
+    return true;
+}
+
+
 bool AprilTagDetectorNode::validatePose(const apriltag_pose_t& pose, double error, int tag_id) {
     // Log pose estimation output
     std::ostringstream oss_err;
@@ -192,6 +225,7 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
     pose_array_msg.header = image_msg->header;
     std::vector<int> ids;
     
+
     for (int i = 0; i < num_dets; ++i) {
         apriltag_detection_t* det;
         zarray_get(detections, i, &det);
@@ -220,6 +254,11 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
         info.fy = latest_camera_info_->k[4];
         info.cx = latest_camera_info_->k[2];
         info.cy = latest_camera_info_->k[5];
+
+        // Validate pose estimation inputs before calling AprilTag library
+        if (!validatePoseInputs(info.tagsize, info.fx, info.fy, info.cx, info.cy, det->id)) {
+            continue; // Skip this detection if inputs are invalid
+        }
 
         // Log pose estimation inputs
         std::ostringstream oss_input;
