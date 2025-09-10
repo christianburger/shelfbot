@@ -35,6 +35,7 @@ private:
     // Member Functions
     void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg);
     void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr& info_msg);
+    bool validatePose(const apriltag_pose_t& pose, double error, int tag_id);
     void publishTransforms(const geometry_msgs::msg::PoseArray& pose_array, const std_msgs::msg::Header& header, const std::vector<int>& ids);
     void publishMarkers(const geometry_msgs::msg::PoseArray& pose_array, const std_msgs::msg::Header& header, const std::vector<int>& ids, double tag_size);
 
@@ -111,6 +112,36 @@ void AprilTagDetectorNode::cameraInfoCallback(const sensor_msgs::msg::CameraInfo
         std::ostringstream oss;
         oss << std::fixed << std::setprecision(2) << "Camera info received - width: " << info_msg->width << ", height: " << info_msg->height << ", fx: " << info_msg->k[0] << ", fy: " << info_msg->k[4] << ", cx: " << info_msg->k[2] << ", cy: " << info_msg->k[5];
         shelfbot::log_info(this->get_name(), "CameraInfoCallback", oss.str());
+    }
+}
+
+bool AprilTagDetectorNode::validatePose(const apriltag_pose_t& pose, double error, int tag_id) {
+    // Log pose estimation output
+    std::ostringstream oss_err;
+    oss_err << std::fixed << std::setprecision(2) << "Tag " << tag_id << " - Pose error: " << error << " (threshold: " << pose_error_threshold_ << ")";
+    shelfbot::log_info(this->get_name(), "PoseEstimation", oss_err.str());
+    
+    if (pose.R && pose.t) {
+        std::ostringstream oss_r;
+        oss_r << std::fixed << std::setprecision(4) << "Tag " << tag_id << " - Rotation: [" << pose.R->data[0] << ", " << pose.R->data[1] << ", " << pose.R->data[2] << "; " << pose.R->data[3] << ", " << pose.R->data[4] << ", " << pose.R->data[5] << "; " << pose.R->data[6] << ", " << pose.R->data[7] << ", " << pose.R->data[8] << "]";
+        shelfbot::log_info(this->get_name(), "PoseEstimation", oss_r.str());
+        std::ostringstream oss_t;
+        oss_t << std::fixed << std::setprecision(4) << "Tag " << tag_id << " - Translation: [" << pose.t->data[0] << ", " << pose.t->data[1] << ", " << pose.t->data[2] << "]";
+        shelfbot::log_info(this->get_name(), "PoseEstimation", oss_t.str());
+    } else {
+        std::ostringstream oss_invalid;
+        oss_invalid << "Tag " << tag_id << " - Pose matrices invalid (R: " << (void*)pose.R << ", t: " << (void*)pose.t << ")";
+        shelfbot::log_warn(this->get_name(), "PoseEstimation", oss_invalid.str());
+        return false;
+    }
+
+    if (error < pose_error_threshold_) {
+        return true;
+    } else {
+        std::ostringstream oss_reject;
+        oss_reject << std::fixed << std::setprecision(2) << "Tag " << tag_id << " - Pose rejected: error " << error << " > threshold " << pose_error_threshold_;
+        shelfbot::log_warn(this->get_name(), "PoseEstimation", oss_reject.str());
+        return false;
     }
 }
 
@@ -198,25 +229,8 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
         apriltag_pose_t pose;
         double err = estimate_tag_pose(&info, &pose);
 
-        // Log pose estimation output
-        std::ostringstream oss_err;
-        oss_err << std::fixed << std::setprecision(2) << "Tag " << det->id << " - Pose error: " << err << " (threshold: " << pose_error_threshold_ << ")";
-        shelfbot::log_info(this->get_name(), "PoseEstimation", oss_err.str());
-        
-        if (pose.R && pose.t) {
-            std::ostringstream oss_r;
-            oss_r << std::fixed << std::setprecision(4) << "Tag " << det->id << " - Rotation: [" << pose.R->data[0] << ", " << pose.R->data[1] << ", " << pose.R->data[2] << "; " << pose.R->data[3] << ", " << pose.R->data[4] << ", " << pose.R->data[5] << "; " << pose.R->data[6] << ", " << pose.R->data[7] << ", " << pose.R->data[8] << "]";
-            shelfbot::log_info(this->get_name(), "PoseEstimation", oss_r.str());
-            std::ostringstream oss_t;
-            oss_t << std::fixed << std::setprecision(4) << "Tag " << det->id << " - Translation: [" << pose.t->data[0] << ", " << pose.t->data[1] << ", " << pose.t->data[2] << "]";
-            shelfbot::log_info(this->get_name(), "PoseEstimation", oss_t.str());
-        } else {
-            std::ostringstream oss_invalid;
-            oss_invalid << "Tag " << det->id << " - Pose matrices invalid (R: " << (void*)pose.R << ", t: " << (void*)pose.t << ")";
-            shelfbot::log_warn(this->get_name(), "PoseEstimation", oss_invalid.str());
-        }
-
-        if (err < pose_error_threshold_) {
+        // Validate the pose using the dedicated method
+        if (validatePose(pose, err, det->id)) {
             geometry_msgs::msg::Pose p;
             p.position.x = pose.t->data[0];
             p.position.y = pose.t->data[1];
@@ -235,10 +249,6 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
             std::ostringstream oss_valid;
             oss_valid << std::fixed << std::setprecision(3) << "Tag " << det->id << " - Valid pose: pos=(" << p.position.x << ", " << p.position.y << ", " << p.position.z << "), quat=(" << p.orientation.x << ", " << p.orientation.y << ", " << p.orientation.z << ", " << p.orientation.w << ")";
             shelfbot::log_info(this->get_name(), "PoseEstimation", oss_valid.str());
-        } else {
-            std::ostringstream oss_reject;
-            oss_reject << std::fixed << std::setprecision(2) << "Tag " << det->id << " - Pose rejected: error " << err << " > threshold " << pose_error_threshold_;
-            shelfbot::log_warn(this->get_name(), "PoseEstimation", oss_reject.str());
         }
 
         // Clean up pose matrices
