@@ -40,6 +40,10 @@ target_include_directories(apriltag_detector_node PRIVATE
         /opt/ros/humble/include/apriltag
 )
 
+target_link_libraries(apriltag_detector_node
+    shelfbot_utils
+)
+
 install(TARGETS
         camera_publisher
         apriltag_detector_node

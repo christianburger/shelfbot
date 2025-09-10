@@ -9,13 +9,21 @@
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "std_msgs/msg/header.hpp"
 #include <memory>
+#include <sstream>
+#include <iomanip>
+
+#include "shelfbot/shelfbot_utils.hpp"
 
 // The core apriltag C library headers
 extern "C" {
 #include "apriltag.h"
 #include "tag36h11.h"
 #include "apriltag_pose.h"
+#include "common/matd.h" // For logging homography matrix
 }
+
+
+namespace shelfbot {
 
 class AprilTagDetectorNode : public rclcpp::Node {
 
@@ -57,21 +65,23 @@ AprilTagDetectorNode::AprilTagDetectorNode() : Node("apriltag_detector_node") {
     tag_size_ = this->get_parameter("tag_size").as_double();
     pose_error_threshold_ = this->get_parameter("pose_error_threshold").as_double();
 
-    RCLCPP_INFO(this->get_logger(), "Parameters - tag_size: %.3f, pose_error_threshold: %.1f", tag_size_, pose_error_threshold_);
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(3) << "Parameters - tag_size: " << tag_size_ << ", pose_error_threshold: " << pose_error_threshold_;
+    shelfbot::log_info(this->get_name(), "Constructor", oss.str());
 
     // Initialize Apriltag detector
     tf_ = tag36h11_create();
     td_ = apriltag_detector_create();
     apriltag_detector_add_family(td_, tf_);
 
-    RCLCPP_INFO(this->get_logger(), "AprilTag detector initialized with tag36h11 family");
+    shelfbot::log_info(this->get_name(), "Constructor", "AprilTag detector initialized with tag36h11 family");
 
     // Publishers
     pose_array_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("tag_poses", rclcpp::SensorDataQoS());
     marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("tag_markers", rclcpp::SensorDataQoS());
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
-    RCLCPP_INFO(this->get_logger(), "Publishers created: /tag_poses, /tag_markers");
+    shelfbot::log_info(this->get_name(), "Constructor", "Publishers created: /tag_poses, /tag_markers");
 
     // Create separate subscribers
     image_sub_ = image_transport::create_subscription(
@@ -85,11 +95,11 @@ AprilTagDetectorNode::AprilTagDetectorNode() : Node("apriltag_detector_node") {
         rclcpp::SensorDataQoS(),
         std::bind(&AprilTagDetectorNode::cameraInfoCallback, this, std::placeholders::_1));
 
-    RCLCPP_INFO(this->get_logger(), "Separate subscribers created for image_raw and camera_info");
+    shelfbot::log_info(this->get_name(), "Constructor", "Separate subscribers created for image_raw and camera_info");
 }
 
 AprilTagDetectorNode::~AprilTagDetectorNode() {
-    RCLCPP_INFO(this->get_logger(), "AprilTag Detector Shutting Down");
+    shelfbot::log_info(this->get_name(), "Destructor", "AprilTag Detector Shutting Down");
     apriltag_detector_destroy(td_);
     tag36h11_destroy(tf_);
 }
@@ -98,19 +108,22 @@ void AprilTagDetectorNode::cameraInfoCallback(const sensor_msgs::msg::CameraInfo
     latest_camera_info_ = info_msg;
     if (!camera_info_received_) {
         camera_info_received_ = true;
-        RCLCPP_INFO(this->get_logger(), "Camera info received - ready to process images");
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(2) << "Camera info received - width: " << info_msg->width << ", height: " << info_msg->height << ", fx: " << info_msg->k[0] << ", fy: " << info_msg->k[4] << ", cx: " << info_msg->k[2] << ", cy: " << info_msg->k[5];
+        shelfbot::log_info(this->get_name(), "CameraInfoCallback", oss.str());
     }
 }
 
 void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg) {
     // Check if we have camera info
     if (!camera_info_received_ || !latest_camera_info_) {
-        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "No camera info available yet - skipping image");
+        shelfbot::log_warn(this->get_name(), "ImageCallback", "No camera info available yet - skipping image");
         return;
     }
 
-    RCLCPP_DEBUG(this->get_logger(), "Processing image (size: %dx%d, encoding: %s)", 
-                 image_msg->width, image_msg->height, image_msg->encoding.c_str());
+    std::ostringstream oss_image;
+    oss_image << "Processing image - size: " << image_msg->width << "x" << image_msg->height << ", encoding: " << image_msg->encoding << ", timestamp: " << image_msg->header.stamp.sec << "." << std::setfill('0') << std::setw(9) << image_msg->header.stamp.nanosec;
+    shelfbot::log_info(this->get_name(), "ImageCallback", oss_image.str());
 
     cv_bridge::CvImagePtr cv_ptr;
     try {
@@ -121,8 +134,13 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
             target_encoding = sensor_msgs::image_encodings::MONO8;  // Convert color to gray
         }
         cv_ptr = cv_bridge::toCvCopy(image_msg, target_encoding);
+        std::ostringstream oss_convert;
+        oss_convert << "Image converted to " << target_encoding << ", size: " << cv_ptr->image.cols << "x" << cv_ptr->image.rows;
+        shelfbot::log_info(this->get_name(), "ImageCallback", oss_convert.str());
     } catch (cv_bridge::Exception& e) {
-        RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
+        std::ostringstream oss_err;
+        oss_err << "cv_bridge exception: " << e.what();
+        shelfbot::log_error(this->get_name(), "ImageCallback", oss_err.str());
         return;
     }
 
@@ -135,9 +153,9 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
 
     zarray_t* detections = apriltag_detector_detect(td_, &im);
     int num_dets = zarray_size(detections);
-    if (num_dets > 0) {
-        RCLCPP_INFO(this->get_logger(), "Found %d AprilTag(s)", num_dets);
-    }
+    std::ostringstream oss_dets;
+    oss_dets << "Detected " << num_dets << " AprilTag(s)";
+    shelfbot::log_info(this->get_name(), "ImageCallback", oss_dets.str());
 
     geometry_msgs::msg::PoseArray pose_array_msg;
     pose_array_msg.header = image_msg->header;
@@ -146,9 +164,23 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
     for (int i = 0; i < num_dets; ++i) {
         apriltag_detection_t* det;
         zarray_get(detections, i, &det);
-
-        RCLCPP_DEBUG(this->get_logger(), "Tag detection: ID=%d, margin=%.2f, center=(%.1f,%.1f)", 
-                     det->id, det->decision_margin, det->c[0], det->c[1]);
+        
+        // Log detection details
+        std::ostringstream oss_det;
+        oss_det << std::fixed << std::setprecision(2) << "Tag " << i << " - ID: " << det->id << ", margin: " << det->decision_margin << ", center: (" << det->c[0] << ", " << det->c[1] << ")";
+        shelfbot::log_info(this->get_name(), "Detection", oss_det.str());
+        
+        // Log homography matrix
+        if (det->H) {
+            std::ostringstream oss_h;
+            oss_h << std::fixed << std::setprecision(4) << "Tag " << det->id << " - Homography: [" << det->H->data[0] << ", " << det->H->data[1] << ", " << det->H->data[2] << "; " << det->H->data[3] << ", " << det->H->data[4] << ", " << det->H->data[5] << "; " << det->H->data[6] << ", " << det->H->data[7] << ", " << det->H->data[8] << "]";
+            shelfbot::log_info(this->get_name(), "Detection", oss_h.str());
+        } else {
+            std::ostringstream oss_null;
+            oss_null << "Tag " << det->id << " - Homography matrix is NULL";
+            shelfbot::log_warn(this->get_name(), "Detection", oss_null.str());
+            continue; // Skip if homography is invalid
+        }
 
         apriltag_detection_info_t info;
         info.det = det;
@@ -158,11 +190,31 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
         info.cx = latest_camera_info_->k[2];
         info.cy = latest_camera_info_->k[5];
 
+        // Log pose estimation inputs
+        std::ostringstream oss_input;
+        oss_input << std::fixed << std::setprecision(3) << "Tag " << det->id << " - Pose input: tagsize: " << info.tagsize << ", fx: " << info.fx << ", fy: " << info.fy << ", cx: " << info.cx << ", cy: " << info.cy;
+        shelfbot::log_info(this->get_name(), "PoseEstimation", oss_input.str());
+
         apriltag_pose_t pose;
         double err = estimate_tag_pose(&info, &pose);
 
-        RCLCPP_DEBUG(this->get_logger(), "Pose error for tag %d: %.2f (threshold: %.1f)", 
-                     det->id, err, pose_error_threshold_);
+        // Log pose estimation output
+        std::ostringstream oss_err;
+        oss_err << std::fixed << std::setprecision(2) << "Tag " << det->id << " - Pose error: " << err << " (threshold: " << pose_error_threshold_ << ")";
+        shelfbot::log_info(this->get_name(), "PoseEstimation", oss_err.str());
+        
+        if (pose.R && pose.t) {
+            std::ostringstream oss_r;
+            oss_r << std::fixed << std::setprecision(4) << "Tag " << det->id << " - Rotation: [" << pose.R->data[0] << ", " << pose.R->data[1] << ", " << pose.R->data[2] << "; " << pose.R->data[3] << ", " << pose.R->data[4] << ", " << pose.R->data[5] << "; " << pose.R->data[6] << ", " << pose.R->data[7] << ", " << pose.R->data[8] << "]";
+            shelfbot::log_info(this->get_name(), "PoseEstimation", oss_r.str());
+            std::ostringstream oss_t;
+            oss_t << std::fixed << std::setprecision(4) << "Tag " << det->id << " - Translation: [" << pose.t->data[0] << ", " << pose.t->data[1] << ", " << pose.t->data[2] << "]";
+            shelfbot::log_info(this->get_name(), "PoseEstimation", oss_t.str());
+        } else {
+            std::ostringstream oss_invalid;
+            oss_invalid << "Tag " << det->id << " - Pose matrices invalid (R: " << (void*)pose.R << ", t: " << (void*)pose.t << ")";
+            shelfbot::log_warn(this->get_name(), "PoseEstimation", oss_invalid.str());
+        }
 
         if (err < pose_error_threshold_) {
             geometry_msgs::msg::Pose p;
@@ -180,23 +232,29 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
             pose_array_msg.poses.push_back(p);
             ids.push_back(det->id);
 
-            RCLCPP_INFO(this->get_logger(), "Valid pose for tag %d: pos=(%.3f, %.3f, %.3f)", 
-                        det->id, p.position.x, p.position.y, p.position.z);
+            std::ostringstream oss_valid;
+            oss_valid << std::fixed << std::setprecision(3) << "Tag " << det->id << " - Valid pose: pos=(" << p.position.x << ", " << p.position.y << ", " << p.position.z << "), quat=(" << p.orientation.x << ", " << p.orientation.y << ", " << p.orientation.z << ", " << p.orientation.w << ")";
+            shelfbot::log_info(this->get_name(), "PoseEstimation", oss_valid.str());
         } else {
-            RCLCPP_WARN(this->get_logger(), "Pose error too high for tag %d: %.2f > %.1f", 
-                        det->id, err, pose_error_threshold_);
+            std::ostringstream oss_reject;
+            oss_reject << std::fixed << std::setprecision(2) << "Tag " << det->id << " - Pose rejected: error " << err << " > threshold " << pose_error_threshold_;
+            shelfbot::log_warn(this->get_name(), "PoseEstimation", oss_reject.str());
         }
 
         // Clean up pose matrices
-        matd_destroy(pose.R);
-        matd_destroy(pose.t);
+        if (pose.R) matd_destroy(pose.R);
+        if (pose.t) matd_destroy(pose.t);
     }
 
     if (!pose_array_msg.poses.empty()) {
         pose_array_pub_->publish(pose_array_msg);
         publishTransforms(pose_array_msg, image_msg->header, ids);
         publishMarkers(pose_array_msg, image_msg->header, ids, tag_size_);
-        RCLCPP_INFO(this->get_logger(), "Published %zu valid tag poses", pose_array_msg.poses.size());
+        std::ostringstream oss_pub;
+        oss_pub << "Published " << pose_array_msg.poses.size() << " valid tag poses";
+        shelfbot::log_info(this->get_name(), "Publishing", oss_pub.str());
+    } else {
+        shelfbot::log_info(this->get_name(), "Publishing", "No valid poses to publish");
     }
 
     apriltag_detections_destroy(detections);
@@ -212,6 +270,9 @@ void AprilTagDetectorNode::publishTransforms(const geometry_msgs::msg::PoseArray
         transformStamped.transform.translation.z = pose_array.poses[i].position.z;
         transformStamped.transform.rotation = pose_array.poses[i].orientation;
         tf_broadcaster_->sendTransform(transformStamped);
+        std::ostringstream oss_tf;
+        oss_tf << std::fixed << std::setprecision(3) << "Published transform for tag_" << ids[i] << ": pos=(" << transformStamped.transform.translation.x << ", " << transformStamped.transform.translation.y << ", " << transformStamped.transform.translation.z << ")";
+        shelfbot::log_info(this->get_name(), "PublishTransforms", oss_tf.str());
     }
 }
 
@@ -234,11 +295,16 @@ void AprilTagDetectorNode::publishMarkers(const geometry_msgs::msg::PoseArray& p
         marker.color.b = 0.0;
         marker.lifetime = rclcpp::Duration::from_seconds(0.0);  // Persistent
         marker_array.markers.push_back(marker);
+        std::ostringstream oss_marker;
+        oss_marker << std::fixed << std::setprecision(3) << "Published marker for tag_" << ids[i] << ": scale=(" << marker.scale.x << ", " << marker.scale.y << ", " << marker.scale.z << ")";
+        shelfbot::log_info(this->get_name(), "PublishMarkers", oss_marker.str());
     }
     marker_pub_->publish(marker_array);
 }
+} //shelfbot namespace
 
 int main(int argc, char* argv[]) {
+  using shelfbot::AprilTagDetectorNode;
     rclcpp::init(argc, argv);
     auto node = std::make_shared<AprilTagDetectorNode>();
     rclcpp::spin(node);
