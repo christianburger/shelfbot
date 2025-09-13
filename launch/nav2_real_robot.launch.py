@@ -73,31 +73,23 @@ def generate_launch_description():
         executable='rtabmap',
         name='rtabmap',
         parameters=[{
-            # frames
-            'frame_id':               'base_footprint',
-            'map_frame_id':           'map',
-            'use_sim_time':           False,
-
-            # only RGB camera
-            'subscribe_rgb':          True,
-            'subscribe_depth':        False,
-            'subscribe_rgbd':         False,
-            'RGBD/Enabled':           'false',
-
-            # odometry→TF sync
-            'tf_delay':               0.0,
-            'odom_sensor_sync':       True,
-            'tf_tolerance':           0.8,
-
-            # force RTAB-Map to publish its optimized trajectory as Odometry
-            # and to emit the sparse landmark cloud
-            'Rtabmap/PublishLastSignature':   'true',
-            'Rtabmap/PublishMapData':         'true',
-
-            # approximate sync buffers
-            'approx_sync':            True,
-            'topic_queue_size':       50,
-            'sync_queue_size':        50,
+          'frame_id': 'base_footprint',
+          'map_frame_id': 'odom',            # VO-only: no map frame
+          'publish_tf': False,               # don't publish map->odom
+          'use_sim_time': False,
+          'subscribe_rgb': True,
+          'subscribe_depth': False,
+          'subscribe_rgbd': False,
+          'RGBD/Enabled': 'false',
+          'RGBD/LoopClosureDetection': 'false',  # disable loop closures
+          'tf_delay': 0.0,
+          'odom_sensor_sync': True,
+          'tf_tolerance': 0.8,
+          'Rtabmap/PublishLastSignature': 'true',
+          'Rtabmap/PublishMapData': 'true',
+          'approx_sync': True,
+          'topic_queue_size': 500,
+          'sync_queue_size': 500,
         }],
         remappings=[
             ('rgb/image',        '/camera/image_raw'),
@@ -110,8 +102,6 @@ def generate_launch_description():
         ],
         output='screen'
     )
-
-
 
     # --- 6. Launch Nav2 Nodes ---
     nav2_nodes = [

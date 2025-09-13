@@ -14,38 +14,44 @@ find_package(tf2 REQUIRED)
 # Camera Publisher Node
 add_executable(camera_publisher camera_publisher.cpp)
 ament_target_dependencies(camera_publisher
-        rclcpp
-        sensor_msgs
-        camera_info_manager
+  rclcpp
+  sensor_msgs
+  camera_info_manager
 )
 
 # AprilTag Detector Node
-add_executable(apriltag_detector_node apriltag_detector.cpp)
+add_executable(apriltag_detector_node
+  apriltag_detector.cpp
+  apriltag_manager.cpp   # <-- added so manager implementation is compiled
+)
 ament_target_dependencies(apriltag_detector_node
-    rclcpp
-    image_transport
-    cv_bridge
-    tf2
-    tf2_ros
-    tf2_geometry_msgs
-    visualization_msgs
-    sensor_msgs
-    geometry_msgs
-    std_msgs  # Add this
+  rclcpp
+  image_transport
+  cv_bridge
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+  visualization_msgs
+  sensor_msgs
+  geometry_msgs
+  std_msgs
 )
 
 # Link apriltag library and set include directories
-target_link_libraries(apriltag_detector_node apriltag::apriltag)
+target_link_libraries(apriltag_detector_node
+  apriltag::apriltag
+)
 target_include_directories(apriltag_detector_node PRIVATE
-        /opt/ros/humble/include/apriltag
+  ${CMAKE_CURRENT_SOURCE_DIR}         # <-- so "shelfbot/apriltag_manager.hpp" is found
+  /opt/ros/humble/include/apriltag
 )
 
 target_link_libraries(apriltag_detector_node
-    shelfbot_utils
+  shelfbot_utils
 )
 
 install(TARGETS
-        camera_publisher
-        apriltag_detector_node
-        DESTINATION lib/${PROJECT_NAME}
+  camera_publisher
+  apriltag_detector_node
+  DESTINATION lib/${PROJECT_NAME}
 )
