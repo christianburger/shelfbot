@@ -37,6 +37,9 @@ private:
     rclcpp::Node *node_;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_pub_;
+    geometry_msgs::msg::PoseArray pose_array_msg_;
+
     std::unordered_map<int, TagInfo> tags_;
 };
 

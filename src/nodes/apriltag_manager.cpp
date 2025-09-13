@@ -7,14 +7,24 @@
 namespace shelfbot {
 
 AprilTagManager::AprilTagManager(rclcpp::Node *node) : node_(node) {
-    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(node_);
-    marker_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(
-        "apriltag_markers", 10);
+  tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(node_);
+  marker_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>("apriltag_markers", 10);
+  pose_array_pub_ = node_->create_publisher<geometry_msgs::msg::PoseArray>("tag_poses", rclcpp::SensorDataQoS());
+  shelfbot::log_info(node_->get_name(), "Constructor", "Centralized publishers created: tag_poses, apriltag_markers, TF transforms");
 }
 
 void AprilTagManager::updateTags(const geometry_msgs::msg::PoseArray &pose_array, const std_msgs::msg::Header &header, const std::vector<int> &ids, double tag_size) {
-    publishTransforms(pose_array, header, ids);
-    publishMarkers(pose_array, header, ids, tag_size);
+  // Publish PoseArray first, then transforms and markers
+  pose_array_msg_ = pose_array;
+  pose_array_msg_.header = header;
+  pose_array_pub_->publish(pose_array_msg_);
+
+  std::ostringstream oss_pose;
+  oss_pose << std::fixed << std::setprecision(3) << "Published PoseArray with " << pose_array.poses.size() << " tags";
+  shelfbot::log_info(node_->get_name(), "UpdateTags", oss_pose.str());
+
+  publishTransforms(pose_array, header, ids);
+  publishMarkers(pose_array, header, ids, tag_size);
 }
 
 void AprilTagManager::publishTransforms(const geometry_msgs::msg::PoseArray &pose_array, const std_msgs::msg::Header &header, const std::vector<int> &ids) {

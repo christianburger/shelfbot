@@ -37,7 +37,6 @@ private:
     // Member Variables
     apriltag_family_t* tf_;
     apriltag_detector_t* td_;
-    rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_pub_;
     std::unique_ptr<AprilTagManager> tag_manager_;
 
     // Separate subscribers
@@ -70,11 +69,8 @@ AprilTagDetectorNode::AprilTagDetectorNode() : Node("apriltag_detector_node") {
     tag_manager_ = std::make_unique<AprilTagManager>(this);
 
     shelfbot::log_info(this->get_name(), "Constructor", "AprilTag detector initialized with tag36h11 family");
-
-    // Publishers
-    pose_array_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("tag_poses", rclcpp::SensorDataQoS());
-
-    shelfbot::log_info(this->get_name(), "Constructor", "Publishers created: /tag_poses");
+    shelfbot::log_info(this->get_name(), "Constructor", "AprilTagManager initialized for centralized publishing");
+    shelfbot::log_info(this->get_name(), "Constructor", "Separate subscribers created for image_raw and camera_info");
 
     // Create separate subscribers
     image_sub_ = image_transport::create_subscription( this, "image_raw", std::bind(&AprilTagDetectorNode::imageCallback, this, std::placeholders::_1), "raw", rmw_qos_profile_sensor_data);
@@ -233,7 +229,6 @@ void AprilTagDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSha
     }
 
     if (!pose_array_msg.poses.empty()) {
-      pose_array_pub_->publish(pose_array_msg);
       tag_manager_->updateTags(pose_array_msg, image_msg->header, ids, tag_size_);
     }
 
