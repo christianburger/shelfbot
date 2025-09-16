@@ -1,10 +1,10 @@
-image_width: 640
-image_height: 480
-camera_name: camera
+image_width: 800
+image_height: 600
+camera_name: esp32_cam  # Changed from 'camera' to match expected name
 camera_matrix:
   rows: 3
   cols: 3
-  data: [500.0, 0.0, 320.0, 0.0, 500.0, 240.0, 0.0, 0.0, 1.0]
+  data: [800.0, 0.0, 400.0, 0.0, 800.0, 300.0, 0.0, 0.0, 1.0]
 distortion_model: plumb_bob
 distortion_coefficients:
   rows: 1
@@ -17,4 +17,4 @@ rectification_matrix:
 projection_matrix:
   rows: 3
   cols: 4
-  data: [500.0, 0.0, 320.0, 0.0, 0.0, 500.0, 240.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+  data: [800.0, 0.0, 400.0, 0.0, 0.0, 800.0, 300.0, 0.0, 0.0, 0.0, 1.0, 0.0]
