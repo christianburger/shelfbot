@@ -26,37 +26,6 @@ def generate_launch_description():
         )
     )
 
-    # --- 2. Decompress the Image Stream ---
-    republish_node = Node(
-        package='image_transport',
-        executable='republish',
-        name='republish',
-        arguments=['compressed', 'raw'],
-        remappings=[
-            ('in/compressed', '/camera/image_raw/compressed'),
-            ('out', '/camera/image_raw')
-        ],
-        output='screen',
-        parameters=[{
-            'qos_overrides./in/compressed.subscriber.reliability': 'best_effort',
-            'qos_overrides./out.publisher.reliability': 'best_effort',
-        }]
-    )
-
-    # --- 3. Publish Correct Camera Info ---
-    camera_info_node = Node(
-        package='shelfbot',
-        executable='camera_publisher',
-        name='camera_info_publisher',
-        parameters=[{
-            'camera_info_url': 'package://shelfbot/config/camera_info.yaml',
-            'camera_name': 'camera',
-            'frame_id': 'camera_link',
-            'use_sim_time': False
-        }],
-        output='screen'
-    )
-
     # --- 4. Launch Robot Localization (EKF) ---
     # ekf_config = os.path.join(shelfbot_share_dir, 'config', 'ekf.yaml')
     # ekf_node = Node(
@@ -168,8 +137,6 @@ def generate_launch_description():
 
         ros2_control_node,
         real_robot_launch,
-        republish_node,
-        camera_info_node,
         # ekf_node,
         rtabmap_node,
         delayed_lifecycle_manager,

@@ -14,6 +14,7 @@ find_package(tf2 REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(OpenCV REQUIRED)
+set(OpenGL_GL_PREFERENCE "GLVND")
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -66,12 +67,14 @@ ament_target_dependencies(camera_publisher
   rclcpp
   sensor_msgs
   camera_info_manager
+  cv_bridge
+  message_filters
 )
 
 # AprilTag Detector Node
 add_executable(apriltag_detector_node
   apriltag_detector.cpp
-  apriltag_manager.cpp   # <-- added so manager implementation is compiled
+  apriltag_manager.cpp
 )
 ament_target_dependencies(apriltag_detector_node
   rclcpp

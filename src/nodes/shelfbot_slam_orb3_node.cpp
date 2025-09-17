@@ -26,12 +26,10 @@
 
 class ShelfbotORB3Node : public rclcpp::Node {
 public:
-  ShelfbotORB3Node(const rclcpp::NodeOptions & opts = rclcpp::NodeOptions())
-  : Node("shelfbot_slam_orb3_node", opts), slam_initialized_(false), last_pose_valid_(false)
-  {
+  ShelfbotORB3Node(const rclcpp::NodeOptions & opts = rclcpp::NodeOptions()) : Node("shelfbot_slam_orb3_node", opts), slam_initialized_(false), last_pose_valid_(false) {
     // Declare parameters with sensible defaults
-    declare_parameter<std::string>("voc_file", "/path/to/ORBvoc.txt");
-    declare_parameter<std::string>("settings_file", "/path/to/config.yaml");
+    declare_parameter<std::string>("voc_file", "/home/chris/ORB_SLAM3/Vocabulary/ORBvoc.txt");
+    declare_parameter<std::string>("settings_file", "/home/chris/shelfbot_workspace/src/shelfbot/config/orb_slam3_monocular.yaml");
     declare_parameter<std::string>("camera_topic", "/camera/image_raw");
     declare_parameter<std::string>("camera_info_topic", "/camera/camera_info");
     declare_parameter<std::string>("camera_frame", "camera_link");
@@ -56,7 +54,7 @@ public:
 
     // Validate required parameters
     if (voc_file_.empty() || settings_file_.empty()) {
-      RCLCPP_ERROR(get_logger(), "voc_file and settings_file parameters are required!");
+      RCLCPP_ERROR(get_logger(), "shelfbot_slam_orb3: voc_file and settings_file parameters are required!");
       rclcpp::shutdown();
       return;
     }
@@ -69,16 +67,28 @@ public:
         false  // no Pangolin viewer window for production
       );
       slam_initialized_ = true;
-      RCLCPP_INFO(get_logger(), "ORB-SLAM3 system initialized successfully");
+      RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: ORB-SLAM3 system initialized successfully");
     } catch (const std::exception& e) {
-      RCLCPP_ERROR(get_logger(), "Failed to initialize ORB-SLAM3: %s", e.what());
+      RCLCPP_ERROR(get_logger(), "shelfbot_slam_orb3: Failed to initialize ORB-SLAM3: %s", e.what());
       rclcpp::shutdown();
       return;
     }
 
     // Set up synchronized subscribers for image and camera info
-    image_sub_.subscribe(this, camera_topic_, rmw_qos_profile_sensor_data);
-    camera_info_sub_.subscribe(this, camera_info_topic_, rmw_qos_profile_sensor_data);
+    // In shelfbot_slam_orb3_node.cpp, replace the subscription lines
+    image_sub_.subscribe(this, camera_topic_, rmw_qos_profile_t{
+      .history = RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+      .depth = 10,
+      .reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+    .durability = RMW_QOS_POLICY_DURABILITY_VOLATILE
+    });
+
+    camera_info_sub_.subscribe(this, camera_info_topic_, rmw_qos_profile_t{
+      .history = RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+      .depth = 10,
+      .reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+      .durability = RMW_QOS_POLICY_DURABILITY_VOLATILE
+    });
     
     // Synchronize image and camera_info messages
     sync_ = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(SyncPolicy(10), image_sub_, camera_info_sub_);
@@ -100,16 +110,16 @@ public:
     last_tracking_time_ = now();
     
     RCLCPP_INFO(get_logger(),
-      "ShelfBot SLAM initialized. Image: [%s], CameraInfo: [%s]",
+      "shelfbot_slam_orb3: ShelfBot SLAM initialized. Image: [%s], CameraInfo: [%s]",
       camera_topic_.c_str(), camera_info_topic_.c_str());
     RCLCPP_INFO(get_logger(), 
-      "Publishing TF: %s, Publishing Odom: %s", 
+      "shelfbot_slam_orb3: Publishing TF: %s, Publishing Odom: %s", 
       publish_tf_ ? "Yes" : "No", publish_odom_ ? "Yes" : "No");
   }
 
   ~ShelfbotORB3Node() {
     if (slam_system_) {
-      RCLCPP_INFO(get_logger(), "Shutting down ORB-SLAM3...");
+      RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: Shutting down ORB-SLAM3...");
       slam_system_->Shutdown();
     }
   }
@@ -117,12 +127,11 @@ public:
 private:
   using SyncPolicy = message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, sensor_msgs::msg::CameraInfo>;
 
-  void syncCallback(
-    const sensor_msgs::msg::Image::ConstSharedPtr& image_msg,
-    const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info_msg) {
+  void syncCallback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg, const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info_msg) {
+    RCLCPP_DEBUG(get_logger(), "shelfbot_slam_orb3: Received image: %d.%09d, info: %d.%09d", image_msg->header.stamp.sec, image_msg->header.stamp.nanosec, camera_info_msg->header.stamp.sec, camera_info_msg->header.stamp.nanosec);
     
     if (!slam_initialized_) {
-      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000, "SLAM not initialized yet");
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000, "shelfbot_slam_orb3: SLAM not initialized yet");
       return;
     }
 
@@ -131,13 +140,13 @@ private:
     try {
       cv_ptr = cv_bridge::toCvShare(image_msg, sensor_msgs::image_encodings::MONO8);
     } catch (const cv_bridge::Exception& e) {
-      RCLCPP_ERROR(get_logger(), "cv_bridge exception: %s", e.what());
+      RCLCPP_ERROR(get_logger(), "shelfbot_slam_orb3: cv_bridge exception: %s", e.what());
       return;
     }
 
     const cv::Mat& gray_image = cv_ptr->image;
     if (gray_image.empty()) {
-      RCLCPP_WARN(get_logger(), "Received empty grayscale image");
+      RCLCPP_WARN(get_logger(), "shelfbot_slam_orb3: Received empty grayscale image");
       return;
     }
 
@@ -174,7 +183,7 @@ private:
       const double time_since_last_track = (current_time - last_tracking_time_).seconds();
       if (time_since_last_track > tracking_lost_timeout_) {
         if (last_pose_valid_) {
-          RCLCPP_WARN(get_logger(), "SLAM tracking lost for %.1f seconds (state: %d)", 
+          RCLCPP_WARN(get_logger(), "shelfbot_slam_orb3: SLAM tracking lost for %.1f seconds (state: %d)", 
                       time_since_last_track, tracking_state);
           last_pose_valid_ = false;
         }
@@ -218,7 +227,7 @@ private:
     static int pose_count = 0;
     if (++pose_count % 30 == 1) {  // Every ~1 second at 30fps
       RCLCPP_INFO(get_logger(), 
-        "SLAM pose: [%.3f, %.3f, %.3f] [%.3f, %.3f, %.3f, %.3f]",
+        "shelfbot_slam_orb3: SLAM pose: [%.3f, %.3f, %.3f] [%.3f, %.3f, %.3f, %.3f]",
         tf_translation.x(), tf_translation.y(), tf_translation.z(),
         tf_quaternion.x(), tf_quaternion.y(), tf_quaternion.z(), tf_quaternion.w());
     }
@@ -318,7 +327,7 @@ int main(int argc, char ** argv) {
     auto node = std::make_shared<ShelfbotORB3Node>();
     rclcpp::spin(node);
   } catch (const std::exception& e) {
-    RCLCPP_ERROR(rclcpp::get_logger("main"), "Exception in main: %s", e.what());
+    RCLCPP_ERROR(rclcpp::get_logger("shelfbot_slam_orb3: main"), "Exception in main: %s", e.what());
   }
   
   rclcpp::shutdown();

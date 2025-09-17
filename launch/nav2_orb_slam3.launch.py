@@ -15,7 +15,7 @@ def generate_launch_description():
     )
 
     # Define ORB-SLAM3 paths
-    orbslam3_root = '/home/chris/shelfbot_workspace/src/ORB_SLAM3'
+    orbslam3_root = '/home/chris/ORB_SLAM3'
     voc_file_path = os.path.join(orbslam3_root, 'Vocabulary', 'ORBvoc.txt')
     
     # Check if vocabulary file exists
@@ -36,69 +36,60 @@ def generate_launch_description():
         )
     )
 
-    # 2. Decompress image stream (compressed -> raw)
-    republish_node = Node(
-        package='image_transport',
-        executable='republish',
-        name='republish',
-        arguments=['compressed', 'raw'],
-        remappings=[
-            ('in/compressed', '/camera/image_raw/compressed'),
-            ('out', '/camera/image_raw')
-        ],
+    # 2. Synchronized Camera Publisher
+    camera_publisher_node = Node(
+        package='shelfbot',
+        executable='camera_publisher',
+        name='camera_publisher',
         output='screen',
         parameters=[{
-            'qos_overrides./in/compressed.subscriber.reliability': 'best_effort',
-            'qos_overrides./out.publisher.reliability': 'best_effort',
+            'camera_info_url': os.path.join(shelfbot_share_dir, 'config', 'camera_info.yaml'),
+            'camera_name': 'esp32_cam',
+            'frame_id': 'camera_link',
+            'image_width': 800,
+            'image_height': 600,
+            'focal_length': 800.0,
+            'sync_slop': 0.1
         }]
     )
 
-    # 3. Camera info publisher
-    camera_info_node = Node(
-        package='shelfbot',
-        executable='camera_publisher',
-        name='camera_info_publisher',
-        parameters=[{
-            'camera_info_url': 'package://shelfbot/config/camera_info.yaml',
-            'camera_name': 'camera',
-            'frame_id': 'camera_link',
-            'use_sim_time': False
-        }],
-        output='screen'
-    )
-
-    # 4. Static TF base_footprint -> camera_link
+    # 3. Static TF Publisher
     static_tf_node = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
-        name='static_tf_base_to_cam',
-        arguments=['0', '0', '0', '0', '0', '0', 'base_footprint', 'camera_link'],
-        output='screen'
+        name='static_base_to_camera',
+        arguments=['0.0', '0.0', '0.1', '0.0', '0.0', '0.0', 'base_link', 'camera_link'],
+        output='screen',
+        parameters=[{'use_sim_time': False}]
     )
 
-    # 5. Shelfbot integrated ORB-SLAM3 node
+    # 4. ORB-SLAM3 Node
     shelfbot_orb3_node = Node(
         package='shelfbot',
         executable='shelfbot_slam_orb3_node',
-        name='shelfbot_slam_orb3',
+        name='shelfbot_slam_orb3_node',
         output='screen',
-        remappings=[
-            ('camera/image_raw', '/camera/image_raw'),
-            ('camera/camera_info', '/camera/camera_info')
-        ],
+        env={
+            'LD_LIBRARY_PATH': f'/home/chris/ORB_SLAM3/lib:{os.environ.get("LD_LIBRARY_PATH", "")}',
+            'ROS_LOG_DIR': '/home/chris/ros2_logs'  # Added for logging
+        },
         parameters=[{
-            'use_sim_time': False,
             'voc_file': voc_file_path,
             'settings_file': os.path.join(shelfbot_share_dir, 'config', 'orb_slam3_monocular.yaml'),
+            'camera_topic': '/camera/image_raw',
+            'camera_info_topic': '/camera/camera_info',
             'camera_frame': 'camera_link',
             'map_frame': 'map',
-            'base_frame': 'base_footprint',
-            'publish_pose_topic': True,
-            'pose_topic': '/slam_orb3/pose'
+            'odom_frame': 'odom',
+            'base_link_frame': 'base_link',
+            'publish_tf': True,
+            'publish_odom': True,
+            'tracking_lost_timeout': 5.0,
+            'log_level': 'debug'
         }]
     )
 
-    # 6. Nav2 nodes + lifecycle
+    # 5. Nav2 nodes
     nav2_nodes = [
         Node(package='nav2_controller', executable='controller_server', name='controller_server', output='screen', parameters=[params_file]),
         Node(package='nav2_planner', executable='planner_server', name='planner_server', output='screen', parameters=[params_file]),
@@ -108,6 +99,7 @@ def generate_launch_description():
         Node(package='nav2_waypoint_follower', executable='waypoint_follower', name='waypoint_follower', output='screen', parameters=[params_file]),
     ]
 
+    # 6. Nav2 Lifecycle Manager
     lifecycle_manager_node = Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
@@ -134,10 +126,8 @@ def generate_launch_description():
         ),
         ros2_control_node,
         real_robot_launch,
-        republish_node,
-        camera_info_node,
+        camera_publisher_node,
         static_tf_node,
         shelfbot_orb3_node,
         delayed_lifecycle_manager,
     ] + nav2_nodes)
-
