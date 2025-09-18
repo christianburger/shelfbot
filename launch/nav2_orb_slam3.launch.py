@@ -53,12 +53,33 @@ def generate_launch_description():
         }]
     )
 
+    # 2.5. Map Server with Empty Map (add this)
+    map_server_node = Node(
+      package='nav2_map_server',
+      executable='map_server',
+      name='map_server',
+      output='screen',
+      parameters=[{
+        'use_sim_time': False,
+        'yaml_filename': os.path.join(shelfbot_share_dir, 'config', 'empty_map.yaml')
+      }]
+    )
+
     # 3. Static TF Publisher
     static_tf_node = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_base_to_camera',
         arguments=['0.0', '0.0', '0.1', '0.0', '0.0', '0.0', 'base_link', 'camera_link'],
+        output='screen',
+        parameters=[{'use_sim_time': False}]
+    )
+
+    static_map_to_odom_node = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_map_to_odom',
+        arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
         output='screen',
         parameters=[{'use_sim_time': False}]
     )
@@ -127,7 +148,9 @@ def generate_launch_description():
         ros2_control_node,
         real_robot_launch,
         camera_publisher_node,
+        map_server_node,
         static_tf_node,
+        static_map_to_odom_node,
         shelfbot_orb3_node,
         delayed_lifecycle_manager,
     ] + nav2_nodes)

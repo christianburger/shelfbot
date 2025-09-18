@@ -26,7 +26,8 @@
 
 class ShelfbotORB3Node : public rclcpp::Node {
 public:
-  ShelfbotORB3Node(const rclcpp::NodeOptions & opts = rclcpp::NodeOptions()) : Node("shelfbot_slam_orb3_node", opts), slam_initialized_(false), last_pose_valid_(false) {
+  ShelfbotORB3Node(const rclcpp::NodeOptions & opts = rclcpp::NodeOptions()) : Node("shelfbot_slam_orb3_node", opts), slam_initialized_(false), last_pose_valid_(false),
+    image_count_(0), camera_info_count_(0) {  // TROUBLESHOOT: Counters for receipt rates
     // Declare parameters with sensible defaults
     declare_parameter<std::string>("voc_file", "/home/chris/ORB_SLAM3/Vocabulary/ORBvoc.txt");
     declare_parameter<std::string>("settings_file", "/home/chris/shelfbot_workspace/src/shelfbot/config/orb_slam3_monocular.yaml");
@@ -74,13 +75,17 @@ public:
       return;
     }
 
+    // TROUBLESHOOT: Individual rclcpp subscriptions to check raw message receipt (bypass sync)
+    image_sub_raw_ = this->create_subscription<sensor_msgs::msg::Image>( camera_topic_, rclcpp::QoS(rclcpp::KeepLast(10)).reliable(), std::bind(&ShelfbotORB3Node::imageCallbackRaw, this, std::placeholders::_1));
+    camera_info_sub_raw_ = this->create_subscription<sensor_msgs::msg::CameraInfo>( camera_info_topic_, rclcpp::QoS(rclcpp::KeepLast(10)).reliable(), std::bind(&ShelfbotORB3Node::cameraInfoCallbackRaw, this, std::placeholders::_1));
+
     // Set up synchronized subscribers for image and camera info
     // In shelfbot_slam_orb3_node.cpp, replace the subscription lines
     image_sub_.subscribe(this, camera_topic_, rmw_qos_profile_t{
       .history = RMW_QOS_POLICY_HISTORY_KEEP_LAST,
       .depth = 10,
       .reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE,
-    .durability = RMW_QOS_POLICY_DURABILITY_VOLATILE
+      .durability = RMW_QOS_POLICY_DURABILITY_VOLATILE
     });
 
     camera_info_sub_.subscribe(this, camera_info_topic_, rmw_qos_profile_t{
@@ -91,8 +96,12 @@ public:
     });
     
     // Synchronize image and camera_info messages
-    sync_ = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(SyncPolicy(10), image_sub_, camera_info_sub_);
+    sync_ = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(SyncPolicy(20), image_sub_, camera_info_sub_);
+    sync_->setMaxIntervalDuration(rclcpp::Duration::from_seconds(0.1));  // TROUBLESHOOT: Larger queue, explicit slop
     sync_->registerCallback(std::bind(&ShelfbotORB3Node::syncCallback, this, std::placeholders::_1, std::placeholders::_2));
+
+    // TROUBLESHOOT: Log after sync registration
+    RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: Sync registered with queue=20, slop=0.1s");
 
     // Publishers for nav2 compatibility
     if (publish_tf_) {
@@ -109,12 +118,8 @@ public:
     // Status tracking
     last_tracking_time_ = now();
     
-    RCLCPP_INFO(get_logger(),
-      "shelfbot_slam_orb3: ShelfBot SLAM initialized. Image: [%s], CameraInfo: [%s]",
-      camera_topic_.c_str(), camera_info_topic_.c_str());
-    RCLCPP_INFO(get_logger(), 
-      "shelfbot_slam_orb3: Publishing TF: %s, Publishing Odom: %s", 
-      publish_tf_ ? "Yes" : "No", publish_odom_ ? "Yes" : "No");
+    RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: ShelfBot SLAM initialized. Image: [%s], CameraInfo: [%s]", camera_topic_.c_str(), camera_info_topic_.c_str());
+    RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: Publishing TF: %s, Publishing Odom: %s", publish_tf_ ? "Yes" : "No", publish_odom_ ? "Yes" : "No");
   }
 
   ~ShelfbotORB3Node() {
@@ -127,72 +132,92 @@ public:
 private:
   using SyncPolicy = message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, sensor_msgs::msg::CameraInfo>;
 
+  // TROUBLESHOOT: Individual callback for raw image messages
+  void imageCallbackRaw(const sensor_msgs::msg::Image::ConstSharedPtr& msg) {
+    ++image_count_;
+    static auto last_log = now();
+    RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: Raw image received: %d total, stamp: %d.%09d", image_count_, msg->header.stamp.sec, msg->header.stamp.nanosec);
+    if ((now() - last_log).seconds() > 5.0) {  // Log rate every 5s
+      RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: Raw image received: %d total, rate ~%.1f Hz, stamp: %d.%09d", image_count_, image_count_ / 5.0, msg->header.stamp.sec, msg->header.stamp.nanosec);
+      image_count_ = 0;
+      last_log = now();
+    }
+  }
+
+  // TROUBLESHOOT: Individual callback for raw camera_info messages
+  void cameraInfoCallbackRaw(const sensor_msgs::msg::CameraInfo::ConstSharedPtr& msg) {
+    ++camera_info_count_;
+    static auto last_log = now();
+    RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: Raw camera_info received: %d total, stamp: %d.%09d", camera_info_count_, msg->header.stamp.sec, msg->header.stamp.nanosec);
+    if ((now() - last_log).seconds() > 5.0) {  // Log rate every 5s
+      RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: Raw camera_info received: %d total, rate ~%.1f Hz, stamp: %d.%09d", camera_info_count_, camera_info_count_ / 5.0, msg->header.stamp.sec, msg->header.stamp.nanosec);
+      camera_info_count_ = 0;
+      last_log = now();
+    }
+  }
+
   void syncCallback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg, const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info_msg) {
-    RCLCPP_DEBUG(get_logger(), "shelfbot_slam_orb3: Received image: %d.%09d, info: %d.%09d", image_msg->header.stamp.sec, image_msg->header.stamp.nanosec, camera_info_msg->header.stamp.sec, camera_info_msg->header.stamp.nanosec);
-    
+    RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: SYNC CALLBACK TRIGGERED! Image stamp: %d.%09d, Info stamp: %d.%09d, Delta: %.6f s",
+                image_msg->header.stamp.sec, image_msg->header.stamp.nanosec, camera_info_msg->header.stamp.sec, camera_info_msg->header.stamp.nanosec,
+                fabs(rclcpp::Time(image_msg->header.stamp).seconds() - rclcpp::Time(camera_info_msg->header.stamp).seconds()));
+
     if (!slam_initialized_) {
-      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000, "shelfbot_slam_orb3: SLAM not initialized yet");
-      return;
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000, "shelfbot_slam_orb3: SLAM not initialized yet");
+        return;
     }
 
-    // Convert image to grayscale (mono8) using cv_bridge for automatic handling of encodings
     cv_bridge::CvImageConstPtr cv_ptr;
     try {
-      cv_ptr = cv_bridge::toCvShare(image_msg, sensor_msgs::image_encodings::MONO8);
+        cv_ptr = cv_bridge::toCvShare(image_msg, sensor_msgs::image_encodings::MONO8);
     } catch (const cv_bridge::Exception& e) {
-      RCLCPP_ERROR(get_logger(), "shelfbot_slam_orb3: cv_bridge exception: %s", e.what());
-      return;
+        RCLCPP_ERROR(get_logger(), "shelfbot_slam_orb3: cv_bridge exception: %s", e.what());
+        return;
     }
 
     const cv::Mat& gray_image = cv_ptr->image;
     if (gray_image.empty()) {
-      RCLCPP_WARN(get_logger(), "shelfbot_slam_orb3: Received empty grayscale image");
-      return;
+        RCLCPP_WARN(get_logger(), "shelfbot_slam_orb3: Received empty grayscale image");
+        return;
     }
 
-    // Use message timestamp for SLAM (seconds since epoch)
     const double timestamp = rclcpp::Time(image_msg->header.stamp).seconds();
-    
-    // Run SLAM tracking (returns camera-to-world pose as Sophus::SE3f)
     const Sophus::SE3f pose_se3 = slam_system_->TrackMonocular(gray_image, timestamp);
-    
-    // Check tracking status using ORB-SLAM3's internal state
     const int tracking_state = slam_system_->GetTrackingState();
     const bool tracking_successful = (tracking_state == static_cast<int>(ORB_SLAM3::Tracking::OK));
-    
+
+    // TROUBLESHOOT: Log ORB features using standalone ORB extractor
+    auto orb_extractor = cv::ORB::create(1200, 1.2f, 8, 20, 0, 2, cv::ORB::HARRIS_SCORE, 20);
+    std::vector<cv::KeyPoint> keypoints;
+    cv::Mat descriptors;
+    orb_extractor->detectAndCompute(gray_image, cv::Mat(), keypoints, descriptors);
+    RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: TrackMonocular called, state: %d, successful: %s, features: %zu",
+                tracking_state, tracking_successful ? "Yes" : "No", keypoints.size());
+
     const auto current_time = this->now();
-    
     if (tracking_successful) {
-      last_tracking_time_ = current_time;
-      last_pose_valid_ = true;
-      
-      // Convert Sophus::SE3f to cv::Mat (4x4, CV_32F) for legacy processing
-      cv::Mat Tcw = cv::Mat::eye(4, 4, CV_32F);
-      const Eigen::Matrix4f eigen_Tcw = pose_se3.matrix();
-      for (int r = 0; r < 4; ++r) {
-        for (int c = 0; c < 4; ++c) {
-          Tcw.at<float>(r, c) = eigen_Tcw(r, c);
+        last_tracking_time_ = current_time;
+        last_pose_valid_ = true;
+        cv::Mat Tcw = cv::Mat::eye(4, 4, CV_32F);
+        const Eigen::Matrix4f eigen_Tcw = pose_se3.matrix();
+        for (int r = 0; r < 4; ++r) {
+            for (int c = 0; c < 4; ++c) {
+                Tcw.at<float>(r, c) = eigen_Tcw(r, c);
+            }
         }
-      }
-      
-      // Process successful tracking
-      processSuccessfulTracking(Tcw, image_msg->header.stamp, camera_info_msg);
-      
+        processSuccessfulTracking(Tcw, image_msg->header.stamp, camera_info_msg);
     } else {
-      // Handle tracking loss with timeout-based warning
-      const double time_since_last_track = (current_time - last_tracking_time_).seconds();
-      if (time_since_last_track > tracking_lost_timeout_) {
-        if (last_pose_valid_) {
-          RCLCPP_WARN(get_logger(), "shelfbot_slam_orb3: SLAM tracking lost for %.1f seconds (state: %d)", 
-                      time_since_last_track, tracking_state);
-          last_pose_valid_ = false;
+        const double time_since_last_track = (current_time - last_tracking_time_).seconds();
+        if (time_since_last_track > tracking_lost_timeout_) {
+            if (last_pose_valid_) {
+                RCLCPP_WARN(get_logger(), "shelfbot_slam_orb3: SLAM tracking lost for %.1f seconds (state: %d)", 
+                            time_since_last_track, tracking_state);
+                last_pose_valid_ = false;
+            }
         }
-      }
     }
   }
 
-  void processSuccessfulTracking(const cv::Mat& Tcw, const builtin_interfaces::msg::Time& stamp,
-                                const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info) {
+  void processSuccessfulTracking(const cv::Mat& Tcw, const builtin_interfaces::msg::Time& stamp, const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info) {
     // Convert camera pose to world pose (Twc = Tcw^-1)
     cv::Mat Rcw = Tcw.rowRange(0,3).colRange(0,3);
     cv::Mat tcw = Tcw.rowRange(0,3).col(3);
@@ -213,9 +238,25 @@ private:
       twc.at<float>(0), twc.at<float>(1), twc.at<float>(2)
     );
 
-    // Publish TF transform (map -> camera_link)
+    // TROUBLESHOOT: Add map -> odom TF (identity for now; fuse with /shelfbot_odometry_node later)
     if (publish_tf_) {
+      // Existing map -> camera_link
       publishTransform(tf_translation, tf_quaternion, stamp);
+      
+      // New: map -> odom (identity to bridge TF chain for Nav2)
+      geometry_msgs::msg::TransformStamped odom_transform;
+      odom_transform.header.stamp = stamp;
+      odom_transform.header.frame_id = map_frame_;
+      odom_transform.child_frame_id = odom_frame_;
+      odom_transform.transform.translation.x = 0.0;
+      odom_transform.transform.translation.y = 0.0;
+      odom_transform.transform.translation.z = 0.0;
+      odom_transform.transform.rotation.x = 0.0;
+      odom_transform.transform.rotation.y = 0.0;
+      odom_transform.transform.rotation.z = 0.0;
+      odom_transform.transform.rotation.w = 1.0;
+      tf_broadcaster_->sendTransform(odom_transform);
+      RCLCPP_DEBUG(get_logger(), "shelfbot_slam_orb3: Published map -> odom TF");
     }
 
     // Publish odometry for nav2
@@ -233,8 +274,8 @@ private:
     }
   }
 
-  void publishTransform(const tf2::Vector3& translation, const tf2::Quaternion& rotation,
-                       const builtin_interfaces::msg::Time& stamp) {
+  void publishTransform(const tf2::Vector3& translation, const tf2::Quaternion& rotation, const builtin_interfaces::msg::Time& stamp) {
+
     geometry_msgs::msg::TransformStamped transform_msg;
     transform_msg.header.stamp = stamp;
     transform_msg.header.frame_id = map_frame_;
@@ -249,10 +290,11 @@ private:
     transform_msg.transform.rotation.w = rotation.w();
 
     tf_broadcaster_->sendTransform(transform_msg);
+    RCLCPP_DEBUG(get_logger(), "shelfbot_slam_orb3: Published map -> camera_link TF");  // TROUBLESHOOT: Confirm TF publish
   }
 
-  void publishOdometry(const tf2::Vector3& translation, const tf2::Quaternion& rotation,
-                      const builtin_interfaces::msg::Time& stamp) {
+  void publishOdometry(const tf2::Vector3& translation, const tf2::Quaternion& rotation, const builtin_interfaces::msg::Time& stamp) {
+
     nav_msgs::msg::Odometry odom_msg;
     odom_msg.header.stamp = stamp;
     odom_msg.header.frame_id = map_frame_;
@@ -293,6 +335,7 @@ private:
     odom_msg.twist.covariance[35] = 0.1; // angular z
 
     odom_publisher_->publish(odom_msg);
+    RCLCPP_DEBUG(get_logger(), "shelfbot_slam_orb3: Published /slam_odom");  // TROUBLESHOOT: Confirm odom publish
   }
 
   // Parameters
@@ -311,6 +354,10 @@ private:
   message_filters::Subscriber<sensor_msgs::msg::CameraInfo> camera_info_sub_;
   std::shared_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
   
+  // TROUBLESHOOT: Raw subscriptions
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_raw_;
+  rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_raw_;
+  
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr pose_publisher_;
@@ -318,6 +365,9 @@ private:
   // State tracking
   bool last_pose_valid_;
   rclcpp::Time last_tracking_time_;
+
+  // TROUBLESHOOT: Counters
+  int image_count_, camera_info_count_;
 };
 
 int main(int argc, char ** argv) {
