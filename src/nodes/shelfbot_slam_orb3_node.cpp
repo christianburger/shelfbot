@@ -199,8 +199,15 @@ private:
     std::vector<cv::KeyPoint> keypoints;
     cv::Mat descriptors;
     orb_extractor->detectAndCompute(gray_image, cv::Mat(), keypoints, descriptors);
-    RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: TrackMonocular called, state: %d, successful: %s, features: %zu",
-                tracking_state, tracking_successful ? "Yes" : "No", keypoints.size());
+    RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: TrackMonocular called, state: %d, successful: %s, features: %zu", tracking_state, tracking_successful ? "Yes" : "No", keypoints.size());
+
+    // === FEATURE LOGGING ADDED ===
+    RCLCPP_INFO(get_logger(), "shelfbot_slam_orb3: Descriptor matrix size: %d x %d (rows x cols)", descriptors.rows, descriptors.cols);
+    for (size_t i = 0; i < std::min<size_t>(keypoints.size(), 10); ++i) {
+      const auto & kp = keypoints[i];
+      RCLCPP_INFO(get_logger(), "  KP[%zu]: pt=(%.2f, %.2f), size=%.2f, angle=%.2f, response=%.4f", i, kp.pt.x, kp.pt.y, kp.size, kp.angle, kp.response);
+    }
+    // === END FEATURE LOGGING ===
 
     const auto current_time = this->now();
     if (tracking_successful) {
