@@ -36,8 +36,8 @@ def generate_launch_description():
         output="both",
         remappings=[
             ("~/robot_description", "/robot_description"),
+            ("/four_wheel_drive_controller/cmd_vel", "/cmd_vel"),  # ADDED: Map Nav2's cmd_vel to controller
         ],
-
         arguments=['--ros-args', '--log-level', 'info'],
     )
 
