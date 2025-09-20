@@ -23,13 +23,7 @@ def generate_launch_description():
         print(f"ERROR: ORB-SLAM3 vocabulary file not found at: {voc_file_path}")
         print("Please update the orbslam3_root variable in the launch file")
 
-    # 1. Real robot drivers
-    ros2_control_node = Node(
-        package='controller_manager',
-        executable='ros2_control_node',
-        parameters=[os.path.join(shelfbot_share_dir, 'config', 'four_wheel_drive_controller.yaml')],
-        output='screen',
-    )
+    # 1. Real robot drivers - REMOVED DUPLICATE ros2_control_node
     real_robot_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(shelfbot_share_dir, 'launch', 'real_robot_microros.launch.py')
@@ -147,7 +141,6 @@ def generate_launch_description():
             default_value=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml'),
             description='Full path to the ROS 2 parameters file to use for all launched nodes'
         ),
-        ros2_control_node,
         real_robot_launch,
         camera_publisher_node,
         static_tf_node,
