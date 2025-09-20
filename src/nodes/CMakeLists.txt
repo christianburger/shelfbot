@@ -138,6 +138,7 @@ ament_target_dependencies(shelfbot_slam_orb3_node
   geometry_msgs
   tf2
   tf2_ros
+  tf2_geometry_msgs  # Add this line
   cv_bridge
   message_filters
 )

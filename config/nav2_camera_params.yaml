@@ -1,3 +1,5 @@
+# Shelfbot Nav2 Parameters for Camera-Only Dynamic Navigation
+
 controller_server:
   ros__parameters:
     use_sim_time: False
@@ -19,7 +21,7 @@ controller_server:
       max_angular_vel: 1.0
       max_linear_vel: 0.5
       min_linear_vel: 0.0
-
+        
 planner_server:
   ros__parameters:
     use_sim_time: False
@@ -44,13 +46,13 @@ behavior_server:
       plugin: "nav2_behaviors/DriveOnHeading"
     wait:
       plugin: "nav2_behaviors/Wait"
-    global_frame: odom
+    global_frame: "odom"
     robot_base_frame: "base_footprint"
 
 bt_navigator:
   ros__parameters:
     use_sim_time: False
-    global_frame: map  # Changed to map for static map
+    global_frame: odom
     plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_follow_path_action_bt_node
@@ -76,7 +78,7 @@ bt_navigator:
       - nav2_clear_costmap_service_bt_node
       - nav2_round_robin_node_bt_node
     bt_xml_filename: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml"
-
+    
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -86,10 +88,8 @@ local_costmap:
       publish_frequency: 2.0
       width: 10
       height: 10
-      resolution: 0.05
-      robot_radius: 0.3
+      robot_radius: 0.3 # Approximate radius of the robot
       transform_tolerance: 0.5
-      track_unknown_space: true  # Added: Plan in unknown space
       plugins: ["voxel_layer", "inflation_layer"]
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
@@ -99,7 +99,16 @@ local_costmap:
         z_resolution: 0.05
         z_voxels: 16
         max_obstacle_height: 2.0
-        observation_sources: ""  # Disable rtabmap until ORB-SLAM3 point cloud
+        mark_unknown_space: False
+        observation_sources: "pointcloud"
+        pointcloud:
+          sensor_frame: camera_link # Or whatever your camera's frame is
+          data_type: "PointCloud2"
+          topic: "/rtabmap/obstacles" # The topic RTAB-Map publishes obstacles on
+          marking: true
+          clearing: true
+          min_obstacle_height: 0.05
+          max_obstacle_height: 1.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
@@ -108,21 +117,34 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
-      global_frame: map  # Changed to map for static map
+      global_frame: map
       robot_base_frame: "base_footprint"
       update_frequency: 1.0
       publish_frequency: 1.0
-      resolution: 0.05
-      rolling_window: false  # Static map, not rolling
+      transform_tolerance: 0.5
+      # Use static map, not rolling
+      rolling_window: false
       width: 10
       height: 10
-      track_unknown_space: true  # Added: Plan in unknown space
-      plugins: ["static_layer", "inflation_layer"]  # Removed obstacle_layer
+      resolution: 0.05
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
-        enabled: true  # Enable for empty_map.yaml
+        enabled: true
         map_subscribe_transient_local: True
-        map_topic: "/map"  # Subscribe to map_server's map
+        map_subscribe_topic: "/map"  # Subscribe to map_server's map
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: "pointcloud"
+        pointcloud:
+          sensor_frame: camera_link
+          data_type: "PointCloud2"
+          topic: "/rtabmap/obstacles"
+          marking: true
+          clearing: true
+          min_obstacle_height: 0.05
+          max_obstacle_height: 1.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
@@ -131,7 +153,9 @@ global_costmap:
 map_server:
   ros__parameters:
     use_sim_time: False
-    yaml_filename: "config/empty_map.yaml"  # Load empty map
+    # We are not using a static map, so we use the default empty map.
+    # Nav2 still requires this server to be running.
+    yaml_filename: ""
 
 lifecycle_manager:
   ros__parameters:
@@ -145,3 +169,4 @@ lifecycle_manager:
       - bt_navigator
       - waypoint_follower
       - map_server
+      

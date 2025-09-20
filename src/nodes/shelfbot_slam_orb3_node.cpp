@@ -13,6 +13,9 @@
 #include "tf2/LinearMath/Matrix3x3.h"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_ros/transform_broadcaster.h"
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/transform_listener.h"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "message_filters/subscriber.h"
 #include "message_filters/time_synchronizer.h"
 #include "message_filters/sync_policies/approximate_time.h"
@@ -26,8 +29,10 @@
 
 class ShelfbotORB3Node : public rclcpp::Node {
 public:
-  ShelfbotORB3Node(const rclcpp::NodeOptions & opts = rclcpp::NodeOptions()) : Node("shelfbot_slam_orb3_node", opts), slam_initialized_(false), last_pose_valid_(false),
-    image_count_(0), camera_info_count_(0) {  // TROUBLESHOOT: Counters for receipt rates
+  ShelfbotORB3Node(const rclcpp::NodeOptions & opts = rclcpp::NodeOptions()) : Node("shelfbot_slam_orb3_node", opts), slam_initialized_(false), last_pose_valid_(false), image_count_(0), camera_info_count_(0) {  // TROUBLESHOOT: Counters for receipt rates
+    // Add this to your constructor
+    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     // Declare parameters with sensible defaults
     declare_parameter<std::string>("voc_file", "/home/chris/ORB_SLAM3/Vocabulary/ORBvoc.txt");
     declare_parameter<std::string>("settings_file", "/home/chris/shelfbot_workspace/src/shelfbot/config/orb_slam3_monocular.yaml");
@@ -132,6 +137,10 @@ public:
 private:
   using SyncPolicy = message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, sensor_msgs::msg::CameraInfo>;
 
+  // Add these to your class private members
+  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
   // TROUBLESHOOT: Individual callback for raw image messages
   void imageCallbackRaw(const sensor_msgs::msg::Image::ConstSharedPtr& msg) {
     ++image_count_;
@@ -217,125 +226,126 @@ private:
     }
   }
 
+  /**
+  * @brief Processes the pose output from a successful ORB-SLAM3 tracking update.
+  *
+  * This function takes the raw pose matrix from ORB-SLAM3, converts it into
+  * a standard tf2::Transform object, and then passes it to the dedicated
+  * TF publishing function. It no longer contains any direct publishing logic.
+  *
+  * @param Tcw The 4x4 pose matrix (Cv::Mat) from ORB-SLAM3.
+  * @param stamp The timestamp for the pose.
+  * @param camera_info (unused) The associated camera info message.
+  */
   void processSuccessfulTracking(const cv::Mat& Tcw, const builtin_interfaces::msg::Time& stamp, const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info) {
-    // Convert camera pose to world pose (Twc = Tcw^-1)
-    cv::Mat Rcw = Tcw.rowRange(0,3).colRange(0,3);
-    cv::Mat tcw = Tcw.rowRange(0,3).col(3);
+    // This argument is unused in the new logic but kept for function signature consistency.
+    (void)camera_info;
+
+    // 1. Convert camera pose in world (Tcw) to world pose in camera (Twc = Tcw^-1)
+    // This calculation remains the same.
+    cv::Mat Rcw = Tcw.rowRange(0, 3).colRange(0, 3);
+    cv::Mat tcw = Tcw.rowRange(0, 3).col(3);
     cv::Mat Rwc = Rcw.t();
     cv::Mat twc = -Rwc * tcw;
 
-    // Convert to tf2 types
+    // 2. Convert the OpenCV matrix components into tf2 data types.
     tf2::Matrix3x3 tf_rotation(
-      Rwc.at<float>(0,0), Rwc.at<float>(0,1), Rwc.at<float>(0,2),
-      Rwc.at<float>(1,0), Rwc.at<float>(1,1), Rwc.at<float>(1,2),
-      Rwc.at<float>(2,0), Rwc.at<float>(2,1), Rwc.at<float>(2,2)
+        Rwc.at<float>(0, 0), Rwc.at<float>(0, 1), Rwc.at<float>(0, 2),
+        Rwc.at<float>(1, 0), Rwc.at<float>(1, 1), Rwc.at<float>(1, 2),
+        Rwc.at<float>(2, 0), Rwc.at<float>(2, 1), Rwc.at<float>(2, 2)
     );
     
     tf2::Quaternion tf_quaternion;
     tf_rotation.getRotation(tf_quaternion);
+    tf_quaternion.normalize(); // Ensure the quaternion is valid.
 
     tf2::Vector3 tf_translation(
-      twc.at<float>(0), twc.at<float>(1), twc.at<float>(2)
+        twc.at<float>(0), twc.at<float>(1), twc.at<float>(2)
     );
 
-    // TROUBLESHOOT: Add map -> odom TF (identity for now; fuse with /shelfbot_odometry_node later)
+    // 3. Combine the components into a single tf2::Transform object.
+    // This is the clean representation of the camera's pose in the map frame.
+    tf2::Transform camera_pose_in_map(tf_quaternion, tf_translation);
+
+    // 4. Delegate the complex TF publishing logic to the new, specialized function.
+    // This replaces all previous calls to publishTransform, publishOdometry, and the
+    // incorrect identity map->odom publisher.
     if (publish_tf_) {
-      // Existing map -> camera_link
-      publishTransform(tf_translation, tf_quaternion, stamp);
-      
-      // New: map -> odom (identity to bridge TF chain for Nav2)
-      geometry_msgs::msg::TransformStamped odom_transform;
-      odom_transform.header.stamp = stamp;
-      odom_transform.header.frame_id = map_frame_;
-      odom_transform.child_frame_id = odom_frame_;
-      odom_transform.transform.translation.x = 0.0;
-      odom_transform.transform.translation.y = 0.0;
-      odom_transform.transform.translation.z = 0.0;
-      odom_transform.transform.rotation.x = 0.0;
-      odom_transform.transform.rotation.y = 0.0;
-      odom_transform.transform.rotation.z = 0.0;
-      odom_transform.transform.rotation.w = 1.0;
-      tf_broadcaster_->sendTransform(odom_transform);
-      RCLCPP_DEBUG(get_logger(), "shelfbot_slam_orb3: Published map -> odom TF");
+        publishMapToOdomTransform(camera_pose_in_map, stamp);
     }
 
-    // Publish odometry for nav2
-    if (publish_odom_) {
-      publishOdometry(tf_translation, tf_quaternion, stamp);
-    }
-
-    // Log pose occasionally
+    // 5. Keep the logging for debugging purposes.
     static int pose_count = 0;
-    if (++pose_count % 30 == 1) {  // Every ~1 second at 30fps
-      RCLCPP_INFO(get_logger(), 
-        "shelfbot_slam_orb3: SLAM pose: [%.3f, %.3f, %.3f] [%.3f, %.3f, %.3f, %.3f]",
-        tf_translation.x(), tf_translation.y(), tf_translation.z(),
-        tf_quaternion.x(), tf_quaternion.y(), tf_quaternion.z(), tf_quaternion.w());
+    if (++pose_count % 30 == 1) { // Log every ~1 second at 30fps
+        RCLCPP_INFO(get_logger(),
+            "SLAM pose (camera in map): [%.3f, %.3f, %.3f] [%.3f, %.3f, %.3f, %.3f]",
+            tf_translation.x(), tf_translation.y(), tf_translation.z(),
+            tf_quaternion.x(), tf_quaternion.y(), tf_quaternion.z(), tf_quaternion.w());
     }
   }
 
-  void publishTransform(const tf2::Vector3& translation, const tf2::Quaternion& rotation, const builtin_interfaces::msg::Time& stamp) {
-
-    geometry_msgs::msg::TransformStamped transform_msg;
-    transform_msg.header.stamp = stamp;
-    transform_msg.header.frame_id = map_frame_;
-    transform_msg.child_frame_id = camera_frame_;
+  /**
+  * @brief Calculates and publishes the transform from the map frame to the odom frame.
+  *
+  * This is the primary role of a SLAM system in the ROS 2 navigation stack. It corrects
+  * the drift of the odometry frame (`odom` -> `base_link`) by providing its pose
+  * within the globally consistent `map` frame.
+  *
+  * The calculation is: T_map_odom = (T_map_camera * T_camera_base) * (T_odom_base)^-1
+  * which simplifies to: T_map_odom = T_map_base * (T_odom_base)^-1
+  *
+  * @param camera_pose_in_map The pose of the camera in the map frame, from ORB-SLAM3.
+  * @param stamp The timestamp for the transform.
+  */
+  void publishMapToOdomTransform(const tf2::Transform& camera_pose_in_map, const builtin_interfaces::msg::Time& stamp) {
+    geometry_msgs::msg::TransformStamped odom_to_base_footprint_tf;
+    geometry_msgs::msg::TransformStamped base_footprint_to_base_link_tf;
+    geometry_msgs::msg::TransformStamped base_to_camera_link_tf;
     
-    transform_msg.transform.translation.x = translation.x();
-    transform_msg.transform.translation.y = translation.y();
-    transform_msg.transform.translation.z = translation.z();
-    transform_msg.transform.rotation.x = rotation.x();
-    transform_msg.transform.rotation.y = rotation.y();
-    transform_msg.transform.rotation.z = rotation.z();
-    transform_msg.transform.rotation.w = rotation.w();
+    try {
+        RCLCPP_DEBUG(get_logger(), "Attempting to lookup transforms: odom->base_footprint->base_link->camera_link");
+        
+        // Look up the transform chain: odom->base_footprint->base_link->camera_link
+        odom_to_base_footprint_tf = tf_buffer_->lookupTransform(
+            odom_frame_, "base_footprint", tf2::TimePointZero);
+            
+        base_footprint_to_base_link_tf = tf_buffer_->lookupTransform(
+            "base_footprint", base_link_frame_, tf2::TimePointZero);
 
-    tf_broadcaster_->sendTransform(transform_msg);
-    RCLCPP_DEBUG(get_logger(), "shelfbot_slam_orb3: Published map -> camera_link TF");  // TROUBLESHOOT: Confirm TF publish
-  }
+        base_to_camera_link_tf = tf_buffer_->lookupTransform(
+            base_link_frame_, camera_frame_, tf2::TimePointZero);
 
-  void publishOdometry(const tf2::Vector3& translation, const tf2::Quaternion& rotation, const builtin_interfaces::msg::Time& stamp) {
+    } catch (const tf2::TransformException & ex) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *get_clock(), 5000, "Could not get required transforms: %s", ex.what());
+        return;
+    }
 
-    nav_msgs::msg::Odometry odom_msg;
-    odom_msg.header.stamp = stamp;
-    odom_msg.header.frame_id = map_frame_;
-    odom_msg.child_frame_id = camera_frame_;
-
-    // Position
-    odom_msg.pose.pose.position.x = translation.x();
-    odom_msg.pose.pose.position.y = translation.y();
-    odom_msg.pose.pose.position.z = translation.z();
+    // Convert geometry_msgs::Transform to tf2::Transform and chain them
+    tf2::Transform odom_to_base_footprint, base_footprint_to_base_link;
+    tf2::fromMsg(odom_to_base_footprint_tf.transform, odom_to_base_footprint);
+    tf2::fromMsg(base_footprint_to_base_link_tf.transform, base_footprint_to_base_link);
     
-    // Orientation
-    odom_msg.pose.pose.orientation.x = rotation.x();
-    odom_msg.pose.pose.orientation.y = rotation.y();
-    odom_msg.pose.pose.orientation.z = rotation.z();
-    odom_msg.pose.pose.orientation.w = rotation.w();
+    // Combine to get odom->base_link
+    tf2::Transform odom_to_base_link = odom_to_base_footprint * base_footprint_to_base_link;
 
-    // Covariance (conservative estimates for SLAM uncertainty)
-    std::fill(odom_msg.pose.covariance.begin(), odom_msg.pose.covariance.end(), 0.0);
-    odom_msg.pose.covariance[0] = 0.1;   // x
-    odom_msg.pose.covariance[7] = 0.1;   // y
-    odom_msg.pose.covariance[14] = 0.1;  // z
-    odom_msg.pose.covariance[21] = 0.05; // roll
-    odom_msg.pose.covariance[28] = 0.05; // pitch
-    odom_msg.pose.covariance[35] = 0.05; // yaw
+    tf2::Transform base_to_camera_link;
+    tf2::fromMsg(base_to_camera_link_tf.transform, base_to_camera_link);
 
-    // Velocity (ORB-SLAM3 doesn't directly provide velocity, set to zero)
-    odom_msg.twist.twist.linear.x = 0.0;
-    odom_msg.twist.twist.linear.y = 0.0;
-    odom_msg.twist.twist.linear.z = 0.0;
-    odom_msg.twist.twist.angular.x = 0.0;
-    odom_msg.twist.twist.angular.y = 0.0;
-    odom_msg.twist.twist.angular.z = 0.0;
+    // Calculate the robot's base pose in the map frame
+    tf2::Transform map_to_base_link = camera_pose_in_map * base_to_camera_link.inverse();
 
-    // Conservative velocity covariance
-    std::fill(odom_msg.twist.covariance.begin(), odom_msg.twist.covariance.end(), 0.0);
-    odom_msg.twist.covariance[0] = 0.1;  // vx
-    odom_msg.twist.covariance[7] = 0.1;  // vy
-    odom_msg.twist.covariance[35] = 0.1; // angular z
+    // The map->odom transform is the difference between the SLAM pose and the odom pose
+    tf2::Transform map_to_odom_tf = map_to_base_link * odom_to_base_link.inverse();
 
-    odom_publisher_->publish(odom_msg);
-    RCLCPP_DEBUG(get_logger(), "shelfbot_slam_orb3: Published /slam_odom");  // TROUBLESHOOT: Confirm odom publish
+    // Publish the final transform
+    geometry_msgs::msg::TransformStamped t;
+    t.header.stamp = stamp;
+    t.header.frame_id = map_frame_;
+    t.child_frame_id = odom_frame_;
+    t.transform = tf2::toMsg(map_to_odom_tf);
+
+    tf_broadcaster_->sendTransform(t);
+    RCLCPP_DEBUG(get_logger(), "Published map -> odom TF");
   }
 
   // Parameters

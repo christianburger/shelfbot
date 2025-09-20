@@ -17,7 +17,7 @@ def generate_launch_description():
     # Define ORB-SLAM3 paths
     orbslam3_root = '/home/chris/ORB_SLAM3'
     voc_file_path = os.path.join(orbslam3_root, 'Vocabulary', 'ORBvoc.txt')
-    
+
     # Check if vocabulary file exists
     if not os.path.exists(voc_file_path):
         print(f"ERROR: ORB-SLAM3 vocabulary file not found at: {voc_file_path}")
@@ -53,16 +53,25 @@ def generate_launch_description():
         }]
     )
 
-    # 2.5. Map Server with Empty Map (add this)
+    # 2.5. Map Server with Empty Map - MODIFIED TO NOT PUBLISH map->odom
+    map_yaml_path = os.path.join(shelfbot_share_dir, 'config', 'empty_map.yaml')
+    map_pgm_path = os.path.join(shelfbot_share_dir, 'config', 'empty_map.pgm')
+    print(f"Checking map YAML path: {map_yaml_path}, exists: {os.path.exists(map_yaml_path)}")
+    print(f"Checking map PGM path: {map_pgm_path}, exists: {os.path.exists(map_pgm_path)}")
     map_server_node = Node(
-      package='nav2_map_server',
-      executable='map_server',
-      name='map_server',
-      output='screen',
-      parameters=[{
-        'use_sim_time': False,
-        'yaml_filename': os.path.join(shelfbot_share_dir, 'config', 'empty_map.yaml')
-      }]
+        package='nav2_map_server',
+        executable='map_server',
+        name='map_server',
+        output='screen',
+        parameters=[{
+            'use_sim_time': False,
+            'yaml_filename': map_yaml_path,
+            'topic_name': '/map',
+            'frame_id': 'map',
+            # CRITICAL: Don't let map_server publish transforms - let ORB-SLAM3 handle map->odom
+            'publish_tf': False  # This prevents map_server from publishing map->odom
+        }],
+        arguments=['--ros-args', '--log-level', 'info']
     )
 
     # 3. Static TF Publisher
@@ -70,21 +79,12 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_base_to_camera',
-        arguments=['0.0', '0.0', '0.1', '0.0', '0.0', '0.0', 'base_link', 'camera_link'],
+        arguments=['0.0', '0.0', '0.02', '-1.5708', '0.0', '0.0', 'base_link', 'camera_link'],  # Fixed transform
         output='screen',
         parameters=[{'use_sim_time': False}]
     )
 
-    static_map_to_odom_node = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_map_to_odom',
-        arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
-        output='screen',
-        parameters=[{'use_sim_time': False}]
-    )
-
-    # 4. ORB-SLAM3 Node
+    # 4. ORB-SLAM3 Node - This will be the AUTHORITATIVE source for map->odom
     shelfbot_orb3_node = Node(
         package='shelfbot',
         executable='shelfbot_slam_orb3_node',
@@ -92,7 +92,7 @@ def generate_launch_description():
         output='screen',
         env={
             'LD_LIBRARY_PATH': f'/home/chris/ORB_SLAM3/lib:{os.environ.get("LD_LIBRARY_PATH", "")}',
-            'ROS_LOG_DIR': '/home/chris/ros2_logs'  # Added for logging
+            'ROS_LOG_DIR': '/home/chris/ros2_logs'
         },
         parameters=[{
             'voc_file': voc_file_path,
@@ -103,14 +103,13 @@ def generate_launch_description():
             'map_frame': 'map',
             'odom_frame': 'odom',
             'base_link_frame': 'base_link',
-            'publish_tf': True,
-            'publish_odom': True,
-            'tracking_lost_timeout': 5.0,
-            'log_level': 'debug'
+            'publish_tf': True,  # This will publish map->odom
+            'publish_odom': False,  # Don't duplicate odometry
+            'tracking_lost_timeout': 5.0
         }]
     )
 
-    # 5. Nav2 nodes
+    # 5. Nav2 nodes - MODIFIED to work with visual SLAM
     nav2_nodes = [
         Node(package='nav2_controller', executable='controller_server', name='controller_server', output='screen', parameters=[params_file]),
         Node(package='nav2_planner', executable='planner_server', name='planner_server', output='screen', parameters=[params_file]),
@@ -120,24 +119,27 @@ def generate_launch_description():
         Node(package='nav2_waypoint_follower', executable='waypoint_follower', name='waypoint_follower', output='screen', parameters=[params_file]),
     ]
 
-    # 6. Nav2 Lifecycle Manager
+    # 6. Nav2 Lifecycle Manager - MODIFIED node list
     lifecycle_manager_node = Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
         name='lifecycle_manager_navigation',
         output='screen',
-        parameters=[{'use_sim_time': False},
-                    {'autostart': True},
-                    {'node_names': [
-                        'planner_server',
-                        'controller_server',
-                        'smoother_server',
-                        'behavior_server',
-                        'bt_navigator',
-                        'waypoint_follower'
-                    ]}]
+        parameters=[{ 
+            'use_sim_time': False,
+            'autostart': True,
+            'node_names': [
+                'map_server',  # Provides the map topic
+                'planner_server',
+                'controller_server', 
+                'smoother_server',
+                'behavior_server',
+                'bt_navigator',
+                'waypoint_follower'
+            ]
+        }]
     )
-    delayed_lifecycle_manager = TimerAction(period=2.0, actions=[lifecycle_manager_node])
+    delayed_lifecycle_manager = TimerAction(period=3.0, actions=[lifecycle_manager_node])  # Longer delay
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -148,9 +150,8 @@ def generate_launch_description():
         ros2_control_node,
         real_robot_launch,
         camera_publisher_node,
-        map_server_node,
         static_tf_node,
-        static_map_to_odom_node,
-        shelfbot_orb3_node,
+        map_server_node,
+        shelfbot_orb3_node,  # Start SLAM before lifecycle manager
         delayed_lifecycle_manager,
     ] + nav2_nodes)
