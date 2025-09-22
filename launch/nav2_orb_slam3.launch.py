@@ -68,16 +68,6 @@ def generate_launch_description():
         arguments=['--ros-args', '--log-level', 'info']
     )
 
-    # 3. Static TF Publisher
-    static_tf_node = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_base_to_camera',
-        arguments=['0.0', '0.0', '0.02', '-1.5708', '0.0', '0.0', 'base_link', 'camera_link'],  # Fixed transform
-        output='screen',
-        parameters=[{'use_sim_time': False}]
-    )
-
     # 4. ORB-SLAM3 Node - This will be the AUTHORITATIVE source for map->odom
     shelfbot_orb3_node = Node(
         package='shelfbot',
@@ -143,7 +133,6 @@ def generate_launch_description():
         ),
         real_robot_launch,
         camera_publisher_node,
-        static_tf_node,
         map_server_node,
         shelfbot_orb3_node,  # Start SLAM before lifecycle manager
         delayed_lifecycle_manager,
