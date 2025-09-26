@@ -79,51 +79,61 @@ bt_navigator:
       - nav2_round_robin_node_bt_node
     bt_xml_filename: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml"
     
+# ────────────────────────────────────────────────────────────────────────────────
+# LOCAL COSTMAP
+# This section drives your controller_server’s local_costmap
 local_costmap:
   local_costmap:
     ros__parameters:
-      global_frame: odom
-      robot_base_frame: "base_footprint"
+      global_frame: odom                   # matches 'odom' in your ORB-SLAM3 launch
+      robot_base_frame: "base_footprint"   # matches static_tf publisher parent frame
       update_frequency: 5.0
       publish_frequency: 2.0
-      width: 10
+      width: 10           # 10 m × 10 m window
       height: 10
-      resolution: 0.05
+      resolution: 0.05    # 5 cm per cell
       robot_radius: 0.3
       transform_tolerance: 0.5
-      # FIXED: Remove voxel_layer that expects /rtabmap/obstacles
-      plugins: ["inflation_layer"]
-      # REMOVED voxel_layer - no sensor data available with ORB-SLAM3
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.35  # Slightly larger than robot radius
 
-global_costmap:
-  global_costmap:
-    ros__parameters:
-      global_frame: map
-      robot_base_frame: "base_footprint"
-      update_frequency: 1.0
-      publish_frequency: 1.0
-      transform_tolerance: 0.5
-      # Use static map, not rolling
-      rolling_window: false
-      width: 10
-      height: 10
-      resolution: 0.05
-      # FIXED: Remove obstacle_layer that expects /rtabmap/obstacles
-      plugins: ["static_layer", "inflation_layer"]
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        enabled: true
-        map_subscribe_transient_local: True
-        map_subscribe_topic: "/map"  # Subscribe to map_server's map
-      # REMOVED obstacle_layer - no sensor data available
+      # Only inflation_layer remains—no voxel or obstacle layers
+      plugins: ["inflation_layer"]
+
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
         inflation_radius: 0.35
+# ────────────────────────────────────────────────────────────────────────────────
+
+# ────────────────────────────────────────────────────────────────────────────────
+# GLOBAL COSTMAP
+# This section drives your planner_server’s global_costmap
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      global_frame: map                    # matches 'map' in your map_server node
+      robot_base_frame: "base_footprint"  # same robot_base_frame as local
+      update_frequency: 1.0
+      publish_frequency: 1.0
+      transform_tolerance: 0.5
+      rolling_window: false     # use static map, not rolling window
+      width: 10                 # covers ±10 m around origin
+      height: 10
+      resolution: 0.05
+
+      # Only static_layer + inflation_layer—no obstacle or voxel layers
+      plugins: ["static_layer", "inflation_layer"]
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        enabled: true
+        map_subscribe_transient_local: true
+        map_subscribe_topic: "/map"       # exactly your map_server’s topic
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.35
+# ────────────────────────────────────────────────────────────────────────────────
 
 map_server:
   ros__parameters:
