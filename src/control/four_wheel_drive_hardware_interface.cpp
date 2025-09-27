@@ -45,15 +45,13 @@ hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_init(cons
         return hardware_interface::CallbackReturn::ERROR;
     }
 
-    log_info("FourWheelDriveHardwareInterface", "on_init", "Initializing odometry.");
+    log_info("FourWheelDriveHardwareInterface", "on_init", "Initializing odometry with node clock.");
     odometry_ = std::make_unique<FourWheelDriveOdometry>(
-        node_,
-        rclcpp::Clock::SharedPtr(new rclcpp::Clock(RCL_ROS_TIME)),
-        std::stod(info_.hardware_parameters.at("wheel_separation")),
-        std::stod(info_.hardware_parameters.at("wheel_radius"))
-    );
+        node_, 
+        node_->get_clock(),  // Use node's clock instead of creating new one
+        std::stod(info_.hardware_parameters.at("wheel_separation")), 
+        std::stod(info_.hardware_parameters.at("wheel_radius")));
     log_info("FourWheelDriveHardwareInterface", "on_init", "Odometry initialized successfully.");
-
     log_info("FourWheelDriveHardwareInterface", "on_init", "--- on_init successful (Real Robot) ---");
     return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -118,19 +116,45 @@ hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_deactivat
 }
 
 hardware_interface::return_type FourWheelDriveHardwareInterface::read(const rclcpp::Time& time, const rclcpp::Duration& period) {
-    if (!comm_ || !comm_->readStateFromHardware(hw_positions_)) {
-        log_warn("FourWheelDriveHardwareInterface", "read", "Failed to read from hardware or communication not available.");
-        return hardware_interface::return_type::OK; // Keep controller running
+    if (!comm_) {
+        log_warn("FourWheelDriveHardwareInterface", "read", "Communication interface not available.");
+        return hardware_interface::return_type::OK;
     }
 
+    // Always try to read regardless of communication health
+    // But use health check to determine if we should expect success
+    bool communication_healthy = comm_->is_communication_healthy();
+    
+    if (!communication_healthy) {
+        static auto last_warn_time = time;
+        if ((time - last_warn_time).seconds() > 5.0) {
+            log_warn("FourWheelDriveHardwareInterface", "read", 
+                    "Micro-ROS communication unhealthy - attempting read anyway");
+            last_warn_time = time;
+        }
+    }
+
+    // Always attempt to read from hardware, even if communication appears unhealthy
+    // This gives the system a chance to recover
+    if (!comm_->readStateFromHardware(hw_positions_)) {
+        if (communication_healthy) {
+            // Only log as warning if we thought communication was healthy
+            log_warn("FourWheelDriveHardwareInterface", "read", "Failed to read from hardware despite healthy communication check");
+        }
+        // If communication was already unhealthy, failure is expected - don't log repeatedly
+        return hardware_interface::return_type::OK; // Keep controller running with last known values
+    }
+
+    // If we successfully read, log the positions for debugging
     std::stringstream ss;
-    ss << "[hw_positions] FourWheelDriveHardwareInterface::read: Values after readStateFromHardware: [";
+    ss << "[hw_positions] FourWheelDriveHardwareInterface::read: Successfully read positions: [";
     for (size_t i = 0; i < hw_positions_.size(); ++i) {
         ss << hw_positions_[i] << (i < hw_positions_.size() - 1 ? ", " : "");
     }
-    ss << "]";
+    ss << "] - Communication health: " << (communication_healthy ? "healthy" : "unhealthy");
     log_info("FourWheelDriveHardwareInterface", "read", ss.str());
 
+    // Update odometry with the new positions if we successfully read them
     if (odometry_) {
         odometry_->update(hw_positions_, period);
     }
@@ -144,20 +168,53 @@ hardware_interface::return_type FourWheelDriveHardwareInterface::write(const rcl
         return hardware_interface::return_type::ERROR;
     }
 
+    // Always try to write regardless of communication health
+    // But use health check to determine if we should expect success
+    bool communication_healthy = comm_->is_communication_healthy();
+    
+    if (!communication_healthy) {
+        static auto last_warn_time = time;
+        if ((time - last_warn_time).seconds() > 5.0) {
+            log_warn("FourWheelDriveHardwareInterface", "write", 
+                    "Micro-ROS communication unhealthy - attempting write anyway");
+            last_warn_time = time;
+        }
+    }
+
+    // Log the commands being written for debugging
     std::stringstream ss;
     ss << "Writing to hardware: Commands = [";
     for (size_t i = 0; i < hw_velocity_commands_.size(); ++i) {
         ss << hw_velocity_commands_[i] << (i < hw_velocity_commands_.size() - 1 ? ", " : "");
     }
-    ss << "]";
+    ss << "] - Communication health: " << (communication_healthy ? "healthy" : "unhealthy");
     log_info("FourWheelDriveHardwareInterface", "write", ss.str());
 
+    // Always attempt to write to hardware, even if communication appears unhealthy
+    // This gives the system a chance to recover
     if (!comm_->writeSpeedsToHardware(hw_velocity_commands_)) {
-        log_error("FourWheelDriveHardwareInterface", "write", "Failed to write speeds to hardware.");
-        return hardware_interface::return_type::ERROR;
+        if (communication_healthy) {
+            // Only log as error if we thought communication was healthy
+            log_error("FourWheelDriveHardwareInterface", "write", 
+                     "Failed to write speeds to hardware despite healthy communication check");
+            return hardware_interface::return_type::ERROR;
+        } else {
+            // If communication was already unhealthy, failure is expected - don't return error
+            log_warn("FourWheelDriveHardwareInterface", "write", 
+                    "Write failed as expected due to unhealthy communication");
+            return hardware_interface::return_type::OK; // Don't treat as fatal error
+        }
     }
+    
+    // If we get here, write was successful
+    if (!communication_healthy) {
+        log_info("FourWheelDriveHardwareInterface", "write", 
+                "Write succeeded despite previous communication issues - communication may be recovering");
+    }
+    
     return hardware_interface::return_type::OK;
 }
+
 
 }
 

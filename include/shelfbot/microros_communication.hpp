@@ -2,6 +2,7 @@
 
 #include "shelfbot/communication_interface.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp/time.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
 #include <mutex>
 #include <thread>
@@ -18,6 +19,7 @@ public:
     bool writeCommandsToHardware(const std::vector<double>& hw_commands) override;
     bool writeSpeedsToHardware(const std::vector<double>& hw_speeds) override;
     bool readStateFromHardware(std::vector<double>& hw_positions) override;
+    bool is_communication_healthy() const override;  // ADD override KEYWORD
 
 private:
     void position_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
@@ -32,6 +34,9 @@ private:
     std::mutex state_mutex_;
     std::vector<double> latest_hw_positions_;
     bool state_received_ = false;
+
+    rclcpp::Time last_received_time_;
+    rclcpp::Duration max_allowed_interval_{1, 0}; // 1 second
 };
 
 }

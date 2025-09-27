@@ -1,5 +1,3 @@
-// four_wheel_drive_odometry.hpp
-
 #ifndef SHELFBOT_FOUR_WHEEL_DRIVE_ODOMETRY_HPP_
 #define SHELFBOT_FOUR_WHEEL_DRIVE_ODOMETRY_HPP_
 
@@ -7,6 +5,7 @@
 #include <vector>
 #include <array>
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp/duration.hpp"  // ADD THIS LINE
 #include "nav_msgs/msg/odometry.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "tf2_ros/transform_broadcaster.h"

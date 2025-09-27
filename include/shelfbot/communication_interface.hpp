@@ -14,6 +14,9 @@ public:
     virtual bool writeCommandsToHardware(const std::vector<double>& hw_commands) = 0;
     virtual bool writeSpeedsToHardware(const std::vector<double>& hw_speeds) = 0;
     virtual bool readStateFromHardware(std::vector<double>& hw_positions) = 0;
+    
+    // ADD THIS METHOD TO MAKE INTERFACE COMPATIBLE
+    virtual bool is_communication_healthy() const = 0;
 };
 
 }

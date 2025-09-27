@@ -9,6 +9,7 @@
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "cv_bridge/cv_bridge.h"
 #include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/features2d.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "tf2/LinearMath/Matrix3x3.h"
 #include "tf2/LinearMath/Quaternion.h"
@@ -20,9 +21,9 @@
 #include "message_filters/time_synchronizer.h"
 #include "message_filters/sync_policies/approximate_time.h"
 
-#include <sophus/se3.hpp>  // For Sophus::SE3f
-#include <Eigen/Core>      // For Eigen::Matrix4f (already indirect via Sophus, but explicit is safer)
-#include "Tracking.h"      // For ORB_SLAM3::Tracking::OK enum
+#include <sophus/se3.hpp>
+#include <Eigen/Core>
+#include "Tracking.h"
 
 // ORB-SLAM3 core
 #include "System.h"
