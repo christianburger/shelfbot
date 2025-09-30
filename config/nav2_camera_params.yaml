@@ -115,7 +115,7 @@ global_costmap:
       update_frequency: 1.0
       publish_frequency: 1.0
       transform_tolerance: 0.5
-      rolling_window: false     # use static map, not rolling window
+      rolling_window: true # use static map, not rolling window
       width: 10                 # covers ±10 m around origin
       height: 10
       resolution: 0.05

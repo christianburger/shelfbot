@@ -37,7 +37,7 @@ def generate_launch_description():
         name='camera_publisher',
         output='screen',
         parameters=[{
-            'camera_info_url': os.path.join(shelfbot_share_dir, 'config', 'camera_info.yaml'),
+            'camera_info_url': os.path.join(shelfbot_share_dir, 'config', 'package://shelfbot/config/camera_info.yaml'),
             'camera_name': 'esp32_cam',
             'frame_id': 'camera_link',
             'image_width': 800,

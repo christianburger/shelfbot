@@ -65,11 +65,6 @@ CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::St
   return CallbackReturn::SUCCESS;
 }
 
-void FourWheelDriveController::cmd_vel_callback(const std::shared_ptr<geometry_msgs::msg::Twist> msg) {
-    last_cmd_vel_ = msg;
-    last_cmd_vel_time_ = get_node()->now();
-}
-
 CallbackReturn FourWheelDriveController::on_activate(const rclcpp_lifecycle::State& previous_state) {
   for (size_t i = 0; i < joint_names_.size(); ++i) {
     axis_commands_[joint_names_[i]] = state_interfaces_[i].get_value();
@@ -83,51 +78,145 @@ CallbackReturn FourWheelDriveController::on_deactivate(const rclcpp_lifecycle::S
 }
 
 controller_interface::return_type FourWheelDriveController::update(const rclcpp::Time& time, const rclcpp::Duration& period) {
+  // Read current positions from hardware
   for (size_t i = 0; i < joint_names_.size(); ++i) {
     axis_positions_[joint_names_[i]] = state_interfaces_[i].get_value();
   }
 
-  std::stringstream ss;
-  ss << "[hw_positions] FourWheelDriveController::update: Read from state interfaces: Positions = [";
-  for (const auto& joint : joint_names_) {
-    ss << axis_positions_[joint] << ", ";
+  // Diagnostic logging for position readings
+  static auto last_position_log = time;
+  if ((time - last_position_log).seconds() > 2.0) {
+    std::stringstream ss;
+    ss << "[NAV2_DIAG] Controller read positions: [";
+    for (size_t i = 0; i < joint_names_.size(); ++i) {
+      ss << joint_names_[i] << "=" << axis_positions_[joint_names_[i]];
+      if (i < joint_names_.size() - 1) ss << ", ";
+    }
+    ss << "] - Period: " << period.seconds() << "s";
+    log_info("FourWheelDriveController", "update", ss.str());
+    last_position_log = time;
   }
-  ss << "]";
-  log_info("FourWheelDriveController", "update", ss.str());
 
+  // Check for cmd_vel timeout and process commands
+  bool cmd_vel_valid = false;
+  double linear_vel = 0.0, angular_vel = 0.0;
+  
   if (last_cmd_vel_ && (time - last_cmd_vel_time_) < cmd_vel_timeout_) {
-      // Get the base commands
-      double linear_vel = last_cmd_vel_->linear.x;
-      double angular_vel = last_cmd_vel_->angular.z;
+    cmd_vel_valid = true;
+    linear_vel = last_cmd_vel_->linear.x;
+    angular_vel = last_cmd_vel_->angular.z;
+    
+    // Calculate wheel velocities
+    double vel_front_left  = (linear_vel + angular_vel * wheel_separation_ / 2.0) / wheel_radius_;
+    double vel_front_right = (linear_vel - angular_vel * wheel_separation_ / 2.0) / wheel_radius_;
+    double vel_back_left   = (-linear_vel + angular_vel * wheel_separation_ / 2.0) / wheel_radius_;
+    double vel_back_right  = (-linear_vel - angular_vel * wheel_separation_ / 2.0) / wheel_radius_;
 
-      // Calculate the final velocity for each wheel based on the robot's specific kinematics.
-      // The angular velocity is applied equally to all wheels for rotation.
-      // The linear velocity is inverted for the rear wheels for forward/backward motion.
-      double vel_front_left  = (linear_vel + angular_vel) / wheel_radius_;
-      double vel_front_right = (linear_vel + angular_vel) / wheel_radius_;
-      double vel_back_left   = (-linear_vel + angular_vel) / wheel_radius_;
-      double vel_back_right  = (-linear_vel + angular_vel) / wheel_radius_;
-
-      // Apply the calculated velocity to each specific joint
-      axis_commands_[front_left_joint_names_[0]] = vel_front_left;
-      axis_commands_[front_right_joint_names_[0]] = vel_front_right;
-      axis_commands_[back_left_joint_names_[0]] = vel_back_left;
-      axis_commands_[back_right_joint_names_[0]] = vel_back_right;
-
+    // Apply calculated velocities
+    axis_commands_[front_left_joint_names_[0]] = vel_front_left;
+    axis_commands_[front_right_joint_names_[0]] = vel_front_right;
+    axis_commands_[back_left_joint_names_[0]] = vel_back_left;
+    axis_commands_[back_right_joint_names_[0]] = vel_back_right;
+    
+    // Enhanced diagnostic logging for command processing
+    static auto last_cmd_log = time;
+    if ((time - last_cmd_log).seconds() > 1.0) {
+      std::stringstream cmd_ss;
+      cmd_ss << std::fixed << std::setprecision(3)
+             << "[NAV2_DIAG] Cmd_vel received: linear=" << linear_vel 
+             << " angular=" << angular_vel 
+             << " age=" << (time - last_cmd_vel_time_).seconds() << "s"
+             << " → wheel_vels: FL=" << vel_front_left
+             << " FR=" << vel_front_right 
+             << " BL=" << vel_back_left 
+             << " BR=" << vel_back_right;
+      log_info("FourWheelDriveController", "update", cmd_ss.str());
+      last_cmd_log = time;
+    }
   } else {
-      // Timeout: set all wheel velocities to zero
-      for (const auto& joint : joint_names_) {
-          axis_commands_[joint] = 0.0;
+    // Timeout or no command - zero all velocities
+    for (const auto& joint : joint_names_) {
+      axis_commands_[joint] = 0.0;
+    }
+    
+    // Log timeout condition
+    static auto last_timeout_log = time;
+    if ((time - last_timeout_log).seconds() > 3.0) {
+      std::string timeout_reason;
+      if (!last_cmd_vel_) {
+        timeout_reason = "No cmd_vel received yet";
+      } else {
+        double cmd_age = (time - last_cmd_vel_time_).seconds();
+        timeout_reason = "cmd_vel timeout: age=" + std::to_string(cmd_age) + 
+                        "s (limit=" + std::to_string(cmd_vel_timeout_.seconds()) + "s)";
       }
+      log_warn("FourWheelDriveController", "update", 
+               "[NAV2_DIAG] Setting zero velocities - " + timeout_reason);
+      last_timeout_log = time;
+    }
   }
 
+  // Write commands to hardware interfaces
   for (size_t i = 0; i < joint_names_.size(); ++i) {
     command_interfaces_[i].set_value(axis_commands_[joint_names_[i]]);
   }
 
+  // Enhanced diagnostic logging for command output
+  static auto last_output_log = time;
+  if ((time - last_output_log).seconds() > 1.0) {
+    std::stringstream out_ss;
+    out_ss << std::fixed << std::setprecision(3)
+           << "[NAV2_DIAG] Commands sent to hardware: [";
+    for (size_t i = 0; i < joint_names_.size(); ++i) {
+      out_ss << joint_names_[i] << "=" << axis_commands_[joint_names_[i]];
+      if (i < joint_names_.size() - 1) out_ss << ", ";
+    }
+    out_ss << "] Valid_cmd=" << (cmd_vel_valid ? "Yes" : "No");
+    log_info("FourWheelDriveController", "update", out_ss.str());
+    last_output_log = time;
+  }
+
+  // Publish joint states with enhanced diagnostics
   publish_joint_states();
 
+  // Overall system health check
+  static auto last_health_log = time;
+  if ((time - last_health_log).seconds() > 5.0) {
+    std::stringstream health_ss;
+    health_ss << "[NAV2_DIAG] Controller Health: "
+              << "Joints=" << joint_names_.size()
+              << " Period=" << std::fixed << std::setprecision(3) << period.seconds() << "s"
+              << " CmdVel=" << (cmd_vel_valid ? "ACTIVE" : "TIMEOUT")
+              << " LastCmd=" << (last_cmd_vel_ ? 
+                  std::to_string((time - last_cmd_vel_time_).seconds()) + "s ago" : "NEVER");
+    log_info("FourWheelDriveController", "update", health_ss.str());
+    last_health_log = time;
+  }
+
   return controller_interface::return_type::OK;
+}
+
+void FourWheelDriveController::cmd_vel_callback(const std::shared_ptr<geometry_msgs::msg::Twist> msg) {
+  last_cmd_vel_ = msg;
+  last_cmd_vel_time_ = get_node()->now();
+  
+  // Enhanced cmd_vel reception logging
+  static int cmd_count = 0;
+  static auto last_callback_log = get_node()->now();
+  
+  cmd_count++;
+  if ((get_node()->now() - last_callback_log).seconds() > 2.0) {
+    std::stringstream cb_ss;
+    cb_ss << std::fixed << std::setprecision(3)
+          << "[NAV2_DIAG] Cmd_vel callback: count=" << cmd_count 
+          << " rate=" << (cmd_count / 2.0) << "Hz"
+          << " linear.x=" << msg->linear.x 
+          << " angular.z=" << msg->angular.z
+          << " stamp=" << get_node()->now().seconds();
+    log_info("FourWheelDriveController", "cmd_vel_callback", cb_ss.str());
+    cmd_count = 0;
+    last_callback_log = get_node()->now();
+  }
 }
 
 void FourWheelDriveController::publish_joint_states() {

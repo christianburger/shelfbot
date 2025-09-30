@@ -70,40 +70,127 @@ bool MicroRosCommunication::writeCommandsToHardware(const std::vector<double>& h
 
 bool MicroRosCommunication::writeSpeedsToHardware(const std::vector<double>& hw_speeds) {
     if (!rclcpp::ok() || !speed_publisher_) {
-        log_error("MicroRosCommunication", "writeSpeedsToHardware", "Cannot write speeds, micro-ROS communication is not active.");
+        log_error("MicroRosCommunication", "writeSpeedsToHardware", 
+                  "[NAV2_DIAG] Cannot write speeds, micro-ROS communication is not active - CRITICAL");
         return false;
     }
 
+    // Enhanced diagnostic logging for command transmission
+    static auto last_write_log = node_->now();
+    static int write_count = 0;
+    static double max_speed_seen = 0.0;
+    static double total_commands_sent = 0.0;
+    
+    write_count++;
+    double command_magnitude = 0.0;
+    for (const auto& speed : hw_speeds) {
+        command_magnitude += std::abs(speed);
+    }
+    max_speed_seen = std::max(max_speed_seen, command_magnitude);
+    total_commands_sent += command_magnitude;
+    
+    // Publish the command
     auto msg = std_msgs::msg::Float32MultiArray();
     msg.data.assign(hw_speeds.begin(), hw_speeds.end());
     speed_publisher_->publish(msg);
+    
+    // Detailed logging every 2 seconds
+    if ((node_->now() - last_write_log).seconds() > 2.0) {
+        std::stringstream write_ss;
+        write_ss << std::fixed << std::setprecision(3)
+                 << "[NAV2_DIAG] MicroROS write status: count=" << write_count
+                 << " rate=" << (write_count / 2.0) << "Hz"
+                 << " current_magnitude=" << command_magnitude
+                 << " max_seen=" << max_speed_seen
+                 << " avg_magnitude=" << (write_count > 0 ? total_commands_sent / write_count : 0.0)
+                 << " speeds=[";
+        for (size_t i = 0; i < hw_speeds.size(); ++i) {
+            write_ss << hw_speeds[i];
+            if (i < hw_speeds.size() - 1) write_ss << ", ";
+        }
+        write_ss << "]";
+        
+        if (command_magnitude > 0.001) {
+            log_info("MicroRosCommunication", "writeSpeedsToHardware", write_ss.str());
+        } else {
+            log_debug("MicroRosCommunication", "writeSpeedsToHardware", write_ss.str());
+        }
+        
+        write_count = 0;
+        max_speed_seen = 0.0;
+        total_commands_sent = 0.0;
+        last_write_log = node_->now();
+    }
+    
     return true;
 }
 
 bool MicroRosCommunication::readStateFromHardware(std::vector<double>& hw_positions) {
     if (!rclcpp::ok()) {
-        log_error("MicroRosCommunication", "readStateFromHardware", "Cannot read state, micro-ROS communication is not active.");
+        log_error("MicroRosCommunication", "readStateFromHardware", 
+                  "[NAV2_DIAG] Cannot read state, micro-ROS communication is not active - CRITICAL");
         return false;
     }
 
     std::lock_guard<std::mutex> lock(state_mutex_);
-    if (!state_received_) {
-        log_warn("MicroRosCommunication", "readStateFromHardware", "No motor position data received from firmware yet.");
+    
+    // Enhanced diagnostic for state reception
+    static auto last_read_log = node_->now();
+    static int successful_reads = 0;
+    static int failed_reads = 0;
+    static auto last_data_time = rclcpp::Time(0, 0, node_->get_clock()->get_clock_type());
+    
+    bool read_success = state_received_;
+    
+    if (!read_success) {
+        failed_reads++;
+        
+        static auto last_fail_log = node_->now();
+        if ((node_->now() - last_fail_log).seconds() > 5.0) {
+            log_warn("MicroRosCommunication", "readStateFromHardware", 
+                     "[NAV2_DIAG] No motor position data received from firmware - Check ESP32 connection");
+            last_fail_log = node_->now();
+        }
         return false;
     }
-
+    
+    successful_reads++;
+    last_data_time = last_received_time_;
+    
+    // Copy data
     size_t size_to_copy = std::min(hw_positions.size(), latest_hw_positions_.size());
     for (size_t i = 0; i < size_to_copy; ++i) {
         hw_positions[i] = latest_hw_positions_[i];
     }
     
-    std::stringstream ss;
-    ss << "[hw_positions] Reading positions: [";
-    for (size_t i = 0; i < hw_positions.size(); ++i) {
-        ss << hw_positions[i] << (i < hw_positions.size() - 1 ? ", " : "");
+    // Periodic detailed logging
+    if ((node_->now() - last_read_log).seconds() > 2.0) {
+        double data_age = (node_->now() - last_data_time).seconds();
+        double success_rate = successful_reads * 100.0 / std::max(1, successful_reads + failed_reads);
+        
+        std::stringstream read_ss;
+        read_ss << std::fixed << std::setprecision(3)
+                << "[NAV2_DIAG] MicroROS read status: SUCCESS=" << successful_reads
+                << " FAIL=" << failed_reads 
+                << " rate=" << success_rate << "%"
+                << " data_age=" << data_age << "s"
+                << " positions=[";
+        for (size_t i = 0; i < hw_positions.size(); ++i) {
+            read_ss << hw_positions[i];
+            if (i < hw_positions.size() - 1) read_ss << ", ";
+        }
+        read_ss << "] comm_healthy=" << (is_communication_healthy() ? "Yes" : "No");
+        
+        if (success_rate > 80.0 && data_age < 1.0) {
+            log_info("MicroRosCommunication", "readStateFromHardware", read_ss.str());
+        } else {
+            log_warn("MicroRosCommunication", "readStateFromHardware", read_ss.str());
+        }
+        
+        successful_reads = 0;
+        failed_reads = 0;
+        last_read_log = node_->now();
     }
-    ss << "]";
-    log_info("MicroRosCommunication", "readStateFromHardware", ss.str());
 
     return true;
 }
@@ -112,47 +199,85 @@ void MicroRosCommunication::position_callback(const std_msgs::msg::Float32MultiA
     std::lock_guard<std::mutex> lock(state_mutex_);
     
     if (!node_) {
-        log_error("MicroRosCommunication", "position_callback", "Node not initialized");
+        log_error("MicroRosCommunication", "position_callback", 
+                  "[NAV2_DIAG] Node not initialized in position callback - CRITICAL");
         return;
     }
     
     auto now = node_->now();
     
-    // FIX: Safe time subtraction with validation
-    double time_since_last_msg = 0.0;
+    // Enhanced callback diagnostics
+    static auto last_callback_log = now;
+    static int callback_count = 0;
+    static double min_interval = std::numeric_limits<double>::max();
+    static double max_interval = 0.0;
+    static auto first_callback_time = now;
+    
+    callback_count++;
+    
+    // Calculate interval since last message
+    double interval = 0.0;
     if (last_received_time_.nanoseconds() > 0) {
         try {
-            time_since_last_msg = (now - last_received_time_).seconds();
+            interval = (now - last_received_time_).seconds();
+            min_interval = std::min(min_interval, interval);
+            max_interval = std::max(max_interval, interval);
         } catch (const std::runtime_error& e) {
             log_error("MicroRosCommunication", "position_callback", 
-                     std::string("Time subtraction error: ") + e.what());
-            // Reset to avoid repeated errors
+                     "[NAV2_DIAG] Time calculation error: " + std::string(e.what()));
             last_received_time_ = now;
-            time_since_last_msg = 0.0;
+            interval = 0.0;
         }
-    }
-    
-    if (last_received_time_.nanoseconds() > 0 && time_since_last_msg > 1.0) {
-        log_warn("MicroRosCommunication", "position_callback", 
-                "Long interval since last motor data: " + std::to_string(time_since_last_msg) + " seconds");
     }
     
     last_received_time_ = now;
     
+    // Update position data
     latest_hw_positions_.resize(msg->data.size());
     for (size_t i = 0; i < msg->data.size(); ++i) {
         latest_hw_positions_[i] = static_cast<double>(msg->data[i]);
     }
     
     state_received_ = true;
-
-    std::stringstream ss;
-    ss << "[hw_positions] Received new motor positions: [";
-    for (size_t i = 0; i < latest_hw_positions_.size(); ++i) {
-        ss << latest_hw_positions_[i] << (i < latest_hw_positions_.size() - 1 ? ", " : "");
+    
+    // Periodic detailed callback statistics
+    if ((now - last_callback_log).seconds() > 3.0) {
+        double total_runtime = (now - first_callback_time).seconds();
+        double avg_rate = callback_count / std::max(0.001, total_runtime);
+        
+        std::stringstream cb_ss;
+        cb_ss << std::fixed << std::setprecision(3)
+              << "[NAV2_DIAG] Motor data callback stats: count=" << callback_count
+              << " rate=" << avg_rate << "Hz"
+              << " interval: min=" << min_interval << "s max=" << max_interval << "s current=" << interval << "s"
+              << " positions=[";
+        for (size_t i = 0; i < std::min<size_t>(latest_hw_positions_.size(), 4); ++i) {
+            cb_ss << latest_hw_positions_[i];
+            if (i < std::min<size_t>(latest_hw_positions_.size(), 4) - 1) cb_ss << ", ";
+        }
+        if (latest_hw_positions_.size() > 4) cb_ss << "...";
+        cb_ss << "]";
+        
+        if (avg_rate > 5.0 && interval < 1.0) {
+            log_info("MicroRosCommunication", "position_callback", cb_ss.str());
+        } else {
+            log_warn("MicroRosCommunication", "position_callback", 
+                    cb_ss.str() + " - LOW RATE OR HIGH LATENCY");
+        }
+        
+        // Reset counters for next period
+        callback_count = 0;
+        min_interval = std::numeric_limits<double>::max();
+        max_interval = 0.0;
+        last_callback_log = now;
+        first_callback_time = now;
     }
-    ss << "] - Time since last message: " << time_since_last_msg << "s";
-    log_info("MicroRosCommunication", "position_callback", ss.str());
+    
+    // Log data reception issues
+    if (interval > 2.0) {
+        log_warn("MicroRosCommunication", "position_callback", 
+                "[NAV2_DIAG] Large gap in motor data: " + std::to_string(interval) + "s - Check ESP32");
+    }
 }
 
 bool MicroRosCommunication::is_communication_healthy() const {
