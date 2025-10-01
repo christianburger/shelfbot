@@ -138,6 +138,9 @@ public:
 private:
   using SyncPolicy = message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, sensor_msgs::msg::CameraInfo>;
 
+  // Utility: convert OpenCV optical coordinates (ORB-SLAM3) to ROS REP-105
+  static tf2::Transform convertFromCvToRos(const tf2::Transform& cv_tf);
+
   // Add these to your class private members
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
@@ -245,18 +248,17 @@ private:
   * @param stamp The timestamp for the pose.
   * @param camera_info (unused) The associated camera info message.
   */
-  void processSuccessfulTracking(const cv::Mat& Tcw, const builtin_interfaces::msg::Time& stamp, const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info) {
-    // This argument is unused in the new logic but kept for function signature consistency.
-    (void)camera_info;
+
+void processSuccessfulTracking(const cv::Mat& Tcw, const builtin_interfaces::msg::Time& stamp, const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info) {
+    (void)camera_info;  // unused, kept for consistency
 
     // 1. Convert camera pose in world (Tcw) to world pose in camera (Twc = Tcw^-1)
-    // This calculation remains the same.
     cv::Mat Rcw = Tcw.rowRange(0, 3).colRange(0, 3);
     cv::Mat tcw = Tcw.rowRange(0, 3).col(3);
     cv::Mat Rwc = Rcw.t();
     cv::Mat twc = -Rwc * tcw;
 
-    // 2. Convert the OpenCV matrix components into tf2 data types.
+    // 2. Convert the OpenCV matrix to tf2 types
     tf2::Matrix3x3 tf_rotation(
         Rwc.at<float>(0, 0), Rwc.at<float>(0, 1), Rwc.at<float>(0, 2),
         Rwc.at<float>(1, 0), Rwc.at<float>(1, 1), Rwc.at<float>(1, 2),
@@ -265,30 +267,31 @@ private:
     
     tf2::Quaternion tf_quaternion;
     tf_rotation.getRotation(tf_quaternion);
-    tf_quaternion.normalize(); // Ensure the quaternion is valid.
+    tf_quaternion.normalize();
 
     tf2::Vector3 tf_translation(
         twc.at<float>(0), twc.at<float>(1), twc.at<float>(2)
     );
 
-    // 3. Combine the components into a single tf2::Transform object.
-    // This is the clean representation of the camera's pose in the map frame.
-    tf2::Transform camera_pose_in_map(tf_quaternion, tf_translation);
+    // 3. Pose in OpenCV optical frame
+    tf2::Transform cv_pose_in_map(tf_quaternion, tf_translation);
 
-    // 4. Delegate the complex TF publishing logic to the new, specialized function.
-    // This replaces all previous calls to publishTransform, publishOdometry, and the
-    // incorrect identity map->odom publisher.
+    // 4. Convert OpenCV optical -> ROS REP-105
+    tf2::Transform camera_pose_in_map = convertFromCvToRos(cv_pose_in_map);
+
+    // 5. Publish TF
     if (publish_tf_) {
         publishMapToOdomTransform(camera_pose_in_map, stamp);
     }
 
-    // 5. Keep the logging for debugging purposes.
+    // 6. Debug logging
     static int pose_count = 0;
-    if (++pose_count % 30 == 1) { // Log every ~1 second at 30fps
+    if (++pose_count % 30 == 1) {
+        const tf2::Vector3 t = camera_pose_in_map.getOrigin();
+        const tf2::Quaternion q = camera_pose_in_map.getRotation();
         RCLCPP_INFO(get_logger(),
-            "SLAM pose (camera in map): [%.3f, %.3f, %.3f] [%.3f, %.3f, %.3f, %.3f]",
-            tf_translation.x(), tf_translation.y(), tf_translation.z(),
-            tf_quaternion.x(), tf_quaternion.y(), tf_quaternion.z(), tf_quaternion.w());
+            "SLAM pose (camera in map, ROS frame): [%.3f, %.3f, %.3f] [%.3f, %.3f, %.3f, %.3f]",
+            t.x(), t.y(), t.z(), q.x(), q.y(), q.z(), q.w());
     }
   }
 
@@ -387,6 +390,26 @@ private:
   // TROUBLESHOOT: Counters
   int image_count_, camera_info_count_;
 };
+
+/**
+ * @brief Convert a transform from OpenCV optical coordinates (ORB-SLAM3) to ROS REP-105 coordinates.
+ * ORB-SLAM3 outputs poses in the OpenCV optical frame:
+ *   X -> right, Y -> down, Z -> forward
+ * ROS expects REP-105 frames:
+ *   X -> forward, Y -> left, Z -> up
+ * This function applies the static rotation to convert between the two.
+ */
+tf2::Transform ShelfbotORB3Node::convertFromCvToRos(const tf2::Transform& cv_tf) {
+    // Rotation matrix to map OpenCV optical -> ROS
+    tf2::Matrix3x3 R_cv_to_ros( 0,  0,  1,
+                               -1,  0,  0,
+                                0, -1,  0);
+
+    tf2::Transform ros_tf;
+    ros_tf.setOrigin(cv_tf.getOrigin());
+    ros_tf.setBasis(R_cv_to_ros * cv_tf.getBasis());
+    return ros_tf;
+}
 
 int main(int argc, char ** argv) {
   rclcpp::init(argc, argv);

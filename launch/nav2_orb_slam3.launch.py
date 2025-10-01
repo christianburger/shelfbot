@@ -9,10 +9,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 def generate_launch_description():
     shelfbot_share_dir = get_package_share_directory('shelfbot')
 
-    params_file = LaunchConfiguration(
-        'params_file',
-        default=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml')
-    )
+    params_file = LaunchConfiguration( 'params_file', default=os.path.join(shelfbot_share_dir, 'config', 'nav2_camera_params.yaml'))
 
     # 1. Define ORB-SLAM3 paths
     orbslam3_root = '/home/chris/ORB_SLAM3'
@@ -24,11 +21,7 @@ def generate_launch_description():
         print("Please update the orbslam3_root variable in the launch file")
 
     # 2. Real robot drivers (includes micro-ROS bridge)
-    real_robot_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(shelfbot_share_dir, 'launch', 'real_robot_microros.launch.py')
-        )
-    )
+    real_robot_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource( os.path.join(shelfbot_share_dir, 'launch', 'real_robot_microros.launch.py')))
 
     # 3. Synchronized camera publisher (single source of image and camera_info)
     camera_publisher_node = Node(
@@ -161,3 +154,4 @@ def generate_launch_description():
         delayed_lifecycle_manager,
         apriltag_detector_node,
     ] + nav2_nodes)
+
