@@ -108,16 +108,17 @@ add_executable(shelfbot_slam_orb3_node
 )
 
 target_include_directories(shelfbot_slam_orb3_node PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}
-  ${ORB_SLAM3_ROOT_DIR}                                    # Add root dir so relative paths work
+  ${ORB_SLAM3_ROOT_DIR}
   ${ORB_SLAM3_INCLUDE_DIRS}
-  ${ORB_SLAM3_ROOT_DIR}/include/CameraModels                # <-- ADD THIS LINE
+  ${ORB_SLAM3_ROOT_DIR}/include/CameraModels
   ${OpenCV_INCLUDE_DIRS}
   ${Pangolin_INCLUDE_DIRS}
   ${ORB_SLAM3_ROOT_DIR}/Thirdparty/DBoW2/include
   ${ORB_SLAM3_ROOT_DIR}/Thirdparty/g2o/include
-  ${ORB_SLAM3_ROOT_DIR}/Thirdparty/Sophus                 # Add Sophus includes
-  ${EIGEN3_INCLUDE_DIRS}                                   # Add Eigen3 includes
+  ${ORB_SLAM3_ROOT_DIR}/Thirdparty/Sophus
+  ${EIGEN3_INCLUDE_DIRS}
   ${GLEW_INCLUDE_DIRS}
 )
 
@@ -129,6 +130,7 @@ target_link_libraries(shelfbot_slam_orb3_node
   ${OpenCV_LIBS}
   ${OPENGL_LIBRARIES}
   ${GLEW_LIBRARIES}
+  shelfbot_utils
 )
 
 ament_target_dependencies(shelfbot_slam_orb3_node
