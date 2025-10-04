@@ -81,7 +81,7 @@ def generate_launch_description():
             'odom_frame': 'odom',
             'base_link_frame': 'base_link',
             'publish_tf': True,  # This will publish map->odom
-            'publish_odom': False,  # Don't duplicate odometry
+            'publish_odom' : True,  
             'tracking_lost_timeout': 5.0
         }]
     )

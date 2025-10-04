@@ -234,8 +234,7 @@ void ShelfbotORB3Node::processSuccessfulTracking(const cv::Mat& Tcw, const built
 
   geometry_msgs::msg::TransformStamped base_to_camera_link_tf;
   try {
-      base_to_camera_link_tf = tf_buffer_->lookupTransform(
-          base_link_frame_, camera_frame_, stamp, rclcpp::Duration::from_seconds(1.0));
+      base_to_camera_link_tf = tf_buffer_->lookupTransform(base_link_frame_, camera_frame_, stamp, rclcpp::Duration::from_seconds(1.0));
   } catch (const tf2::TransformException & ex) {
       shelfbot::log_warn("shelfbot_slam_orb3_node", "TF_LOOKUP_FAIL", std::string("shelfbot_slam_orb3: TF lookup failed: ") + ex.what());
       return;
@@ -311,9 +310,17 @@ void ShelfbotORB3Node::publishMapToOdomTransform(const tf2::Transform& camera_po
 }
 
 void ShelfbotORB3Node::publishSlamOdom(const tf2::Transform& camera_pose_in_map, const builtin_interfaces::msg::Time& stamp) {
-  if (!publish_odom_) return;
-  // Use camera_pose_in_map as proxy for map_to_base_link (assume base_to_camera identity for initial)
-  tf2::Transform map_to_base_link = camera_pose_in_map; // Fix: no TF dependency
+  // Add debugging at the start of the function
+  shelfbot::log_info("shelfbot_slam_orb3_node", "ODOM_PUBLISH_CHECK", std::string("publishSlamOdom called - publish_odom_=") + (publish_odom_ ? "TRUE" : "FALSE"));
+  
+  if (!publish_odom_) {
+    shelfbot::log_warn("shelfbot_slam_orb3_node", "ODOM_DISABLED", 
+                       "Skipping /slam_odom publication - publish_odom parameter is FALSE");
+    return;
+  }
+  
+  // Rest of the function remains the same
+  tf2::Transform map_to_base_link = camera_pose_in_map;
   nav_msgs::msg::Odometry odom_msg;
   odom_msg.header.stamp = stamp;
   odom_msg.header.frame_id = map_frame_;
@@ -323,7 +330,7 @@ void ShelfbotORB3Node::publishSlamOdom(const tf2::Transform& camera_pose_in_map,
   odom_msg.pose.covariance[0] = odom_msg.pose.covariance[7] = odom_msg.pose.covariance[14] = 0.01;
   odom_msg.pose.covariance[21] = odom_msg.pose.covariance[28] = odom_msg.pose.covariance[35] = 0.01;
   odom_publisher_->publish(odom_msg);
-  shelfbot::log_debug("shelfbot_slam_orb3_node", "ODOM_PUBLISH", "Published /slam_odom");
+  shelfbot::log_info("shelfbot_slam_orb3_node", "ODOM_PUBLISH_SUCCESS", "Successfully published /slam_odom");
 }
 
 tf2::Transform ShelfbotORB3Node::convertFromCvToRos(const tf2::Transform& cv_tf) {
