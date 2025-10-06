@@ -57,6 +57,10 @@ behavior_server:
       plugin: "nav2_behaviors/Wait"
     global_frame: "odom"
     robot_base_frame: "base_footprint"
+    # CRITICAL: Add these global parameters for spin behavior
+    simulate_ahead_time: 5.0
+    max_rotational_vel: 0.5
+    min_rotational_vel: 0.1
 
 bt_navigator:
   ros__parameters:
@@ -90,7 +94,7 @@ bt_navigator:
     
 # ────────────────────────────────────────────────────────────────────────────────
 # LOCAL COSTMAP
-# This section drives your controller_server’s local_costmap
+# This section drives your controller_server's local_costmap
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -98,11 +102,12 @@ local_costmap:
       robot_base_frame: "base_footprint"   # matches static_tf publisher parent frame
       update_frequency: 5.0
       publish_frequency: 2.0
-      width: 10           # 10 m × 10 m window
-      height: 10
-      resolution: 0.05    # 5 cm per cell
-      robot_radius: 0.3
+      width: 15           # 15m × 15m window (increased for spinning)
+      height: 15
+      resolution: 0.05    # 5cm per cell
+      robot_radius: 0.4   # Increased for spinning clearance
       transform_tolerance: 0.5
+      rolling_window: true
 
       # Only inflation_layer remains—no voxel or obstacle layers
       plugins: ["inflation_layer"]
@@ -110,12 +115,12 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.35
+        inflation_radius: 0.5
 # ────────────────────────────────────────────────────────────────────────────────
 
 # ────────────────────────────────────────────────────────────────────────────────
 # GLOBAL COSTMAP
-# This section drives your planner_server’s global_costmap
+# This section drives your planner_server's global_costmap
 global_costmap:
   global_costmap:
     ros__parameters:
@@ -124,10 +129,11 @@ global_costmap:
       update_frequency: 1.0
       publish_frequency: 1.0
       transform_tolerance: 0.5
-      rolling_window: true # use static map, not rolling window
-      width: 10                 # covers ±10 m around origin
-      height: 10
+      rolling_window: false
+      width: 15                 # covers ±15m around origin (increased)
+      height: 15
       resolution: 0.05
+      robot_radius: 0.4   # Increased for spinning clearance
 
       # Only static_layer + inflation_layer—no obstacle or voxel layers
       plugins: ["static_layer", "inflation_layer"]
@@ -136,12 +142,12 @@ global_costmap:
         plugin: "nav2_costmap_2d::StaticLayer"
         enabled: true
         map_subscribe_transient_local: true
-        map_subscribe_topic: "/map"       # exactly your map_server’s topic
+        map_subscribe_topic: "/map"       # exactly your map_server's topic
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.35
+        inflation_radius: 0.5
 # ────────────────────────────────────────────────────────────────────────────────
 
 map_server:
@@ -163,4 +169,3 @@ lifecycle_manager:
       - bt_navigator
       - waypoint_follower
       - map_server
-      

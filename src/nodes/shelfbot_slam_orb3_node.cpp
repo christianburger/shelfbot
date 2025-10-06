@@ -174,6 +174,18 @@ void ShelfbotORB3Node::syncCallback(const sensor_msgs::msg::Image::ConstSharedPt
     shelfbot::log_info("shelfbot_slam_orb3_node", "KEYPOINT", std::string("KP[") + std::to_string(i) + "]: pt=(" + std::to_string(kp.pt.x) + ", " + std::to_string(kp.pt.y) + "), size=" + std::to_string(kp.size) + ", angle=" + std::to_string(kp.angle) + ", response=" + std::to_string(kp.response));
   }
 
+  // Add detailed tracking state logging
+  const char* state_names[] = { "NO_IMAGES_YET", "NOT_INITIALIZED", "OK", "RECENTLY_LOST", "LOST" };
+  int state_index = tracking_state + 1; // Adjust for SYSTEM_NOT_READY
+  if (state_index >= 0 && state_index <= 4) {
+    shelfbot::log_info("shelfbot_slam_orb3_node", "TRACKING_STATE", std::string("ORB-SLAM3 State: ") + state_names[state_index]);
+  }
+
+  // Check feature count quality
+  if (keypoints.size() < 100) {
+    shelfbot::log_warn("shelfbot_slam_orb3_node", "INSUFFICIENT_FEATURES", "Only " + std::to_string(keypoints.size()) + " features - need more texture!");
+  }
+
   const auto current_time = this->now();
   if (tracking_successful) {
       last_tracking_time_ = current_time;
@@ -203,58 +215,62 @@ void ShelfbotORB3Node::syncCallback(const sensor_msgs::msg::Image::ConstSharedPt
 }
 
 void ShelfbotORB3Node::processSuccessfulTracking(const cv::Mat& Tcw, const builtin_interfaces::msg::Time& stamp, const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info) {
-  (void)camera_info;
+    (void)camera_info;
 
-  cv::Mat Rcw = Tcw.rowRange(0, 3).colRange(0, 3);
-  cv::Mat tcw = Tcw.rowRange(0, 3).col(3);
-  cv::Mat Rwc = Rcw.t();
-  cv::Mat twc = -Rwc * tcw;
+    cv::Mat Rcw = Tcw.rowRange(0, 3).colRange(0, 3);
+    cv::Mat tcw = Tcw.rowRange(0, 3).col(3);
+    cv::Mat Rwc = Rcw.t();
+    cv::Mat twc = -Rwc * tcw;
 
-  tf2::Matrix3x3 tf_rotation(
-      Rwc.at<float>(0, 0), Rwc.at<float>(0, 1), Rwc.at<float>(0, 2),
-      Rwc.at<float>(1, 0), Rwc.at<float>(1, 1), Rwc.at<float>(1, 2),
-      Rwc.at<float>(2, 0), Rwc.at<float>(2, 1), Rwc.at<float>(2, 2)
-  );
-  
-  tf2::Quaternion tf_quaternion;
-  tf_rotation.getRotation(tf_quaternion);
-  tf_quaternion.normalize();
+    tf2::Matrix3x3 tf_rotation(
+        Rwc.at<float>(0, 0), Rwc.at<float>(0, 1), Rwc.at<float>(0, 2),
+        Rwc.at<float>(1, 0), Rwc.at<float>(1, 1), Rwc.at<float>(1, 2),
+        Rwc.at<float>(2, 0), Rwc.at<float>(2, 1), Rwc.at<float>(2, 2)
+    );
+    
+    tf2::Quaternion tf_quaternion;
+    tf_rotation.getRotation(tf_quaternion);
+    tf_quaternion.normalize();
 
-  tf2::Vector3 tf_translation(
-      twc.at<float>(0), twc.at<float>(1), twc.at<float>(2)
-  );
+    tf2::Vector3 tf_translation(
+        twc.at<float>(0), twc.at<float>(1), twc.at<float>(2)
+    );
 
-  tf2::Transform cv_pose_in_map(tf_quaternion, tf_translation);
-  tf2::Transform camera_pose_in_map = convertFromCvToRos(cv_pose_in_map);
+    tf2::Transform cv_pose_in_map(tf_quaternion, tf_translation);
+    tf2::Transform camera_pose_in_map = convertFromCvToRos(cv_pose_in_map);
 
-  if (!tf_buffer_->canTransform(base_link_frame_, camera_frame_, stamp, rclcpp::Duration::from_seconds(1.0))) {
-      shelfbot::log_warn("shelfbot_slam_orb3_node", "TF_NOT_READY", "shelfbot_slam_orb3: TF chain not ready, skipping publish");
-      return;
-  }
+    if (!tf_buffer_->canTransform(base_link_frame_, camera_frame_, stamp, rclcpp::Duration::from_seconds(1.0))) {
+        shelfbot::log_warn("shelfbot_slam_orb3_node", "TF_NOT_READY", "shelfbot_slam_orb3: TF chain not ready, skipping publish");
+        return;
+    }
 
-  geometry_msgs::msg::TransformStamped base_to_camera_link_tf;
-  try {
-      base_to_camera_link_tf = tf_buffer_->lookupTransform(base_link_frame_, camera_frame_, stamp, rclcpp::Duration::from_seconds(1.0));
-  } catch (const tf2::TransformException & ex) {
-      shelfbot::log_warn("shelfbot_slam_orb3_node", "TF_LOOKUP_FAIL", std::string("shelfbot_slam_orb3: TF lookup failed: ") + ex.what());
-      return;
-  }
-  tf2::Transform base_to_camera_link;
-  tf2::fromMsg(base_to_camera_link_tf.transform, base_to_camera_link);
-  tf2::Transform map_to_base_link = camera_pose_in_map * base_to_camera_link.inverse();
+    geometry_msgs::msg::TransformStamped base_to_camera_link_tf;
+    try {
+        base_to_camera_link_tf = tf_buffer_->lookupTransform(base_link_frame_, camera_frame_, stamp, rclcpp::Duration::from_seconds(1.0));
+    } catch (const tf2::TransformException & ex) {
+        shelfbot::log_warn("shelfbot_slam_orb3_node", "TF_LOOKUP_FAIL", std::string("shelfbot_slam_orb3: TF lookup failed: ") + ex.what());
+        return;
+    }
+    tf2::Transform base_to_camera_link;
+    tf2::fromMsg(base_to_camera_link_tf.transform, base_to_camera_link);
+    tf2::Transform map_to_base_link = camera_pose_in_map * base_to_camera_link.inverse();
 
-  if (publish_tf_) {
-      publishMapToOdomTransform(camera_pose_in_map, stamp);
-  }
+    if (publish_tf_) {
+        publishMapToOdomTransform(camera_pose_in_map, stamp);
+    }
 
-  publishSlamOdom(camera_pose_in_map, stamp);
+    if (last_pose_valid_) {
+        publishInitialPose(map_to_base_link, stamp);
+    }
 
-  static int pose_count = 0;
-  if (++pose_count % 30 == 1) {
-      const tf2::Vector3 t = camera_pose_in_map.getOrigin();
-      const tf2::Quaternion q = camera_pose_in_map.getRotation();
-      shelfbot::log_info("shelfbot_slam_orb3_node", "SLAM_POSE", std::string("shelfbot_slam_orb3: SLAM pose (camera in map, ROS frame): [") + std::to_string(t.x()) + ", " + std::to_string(t.y()) + ", " + std::to_string(t.z()) + "] [" + std::to_string(q.x()) + ", " + std::to_string(q.y()) + ", " + std::to_string(q.z()) + ", " + std::to_string(q.w()) + "]");
-  }
+    publishSlamOdom(camera_pose_in_map, stamp);
+
+    static int pose_count = 0;
+    if (++pose_count % 30 == 1) {
+        const tf2::Vector3 t = camera_pose_in_map.getOrigin();
+        const tf2::Quaternion q = camera_pose_in_map.getRotation();
+        shelfbot::log_info("shelfbot_slam_orb3_node", "SLAM_POSE", std::string("shelfbot_slam_orb3: SLAM pose (camera in map, ROS frame): [") + std::to_string(t.x()) + ", " + std::to_string(t.y()) + ", " + std::to_string(t.z()) + "] [" + std::to_string(q.x()) + ", " + std::to_string(q.y()) + ", " + std::to_string(q.z()) + ", " + std::to_string(q.w()) + "]");
+    }
 }
 
 void ShelfbotORB3Node::publishMapToOdomTransform(const tf2::Transform& camera_pose_in_map, const builtin_interfaces::msg::Time& stamp) {
@@ -333,13 +349,50 @@ void ShelfbotORB3Node::publishSlamOdom(const tf2::Transform& camera_pose_in_map,
   shelfbot::log_info("shelfbot_slam_orb3_node", "ODOM_PUBLISH_SUCCESS", "Successfully published /slam_odom");
 }
 
+void ShelfbotORB3Node::publishInitialPose(const tf2::Transform& camera_pose_in_map, const builtin_interfaces::msg::Time& stamp) {
+    if (!tf_buffer_->canTransform(base_link_frame_, camera_frame_, stamp, rclcpp::Duration::from_seconds(1.0))) {
+        shelfbot::log_warn("shelfbot_slam_orb3_node", "TF_NOT_READY", "shelfbot_slam_orb3: TF chain not ready for initial pose");
+        return;
+    }
+
+    geometry_msgs::msg::TransformStamped base_to_camera_link_tf;
+    try {
+        base_to_camera_link_tf = tf_buffer_->lookupTransform(base_link_frame_, camera_frame_, stamp, rclcpp::Duration::from_seconds(1.0));
+    } catch (const tf2::TransformException & ex) {
+        shelfbot::log_warn("shelfbot_slam_orb3_node", "TF_LOOKUP_FAIL", std::string("shelfbot_slam_orb3: TF lookup failed for initial pose: ") + ex.what());
+        return;
+    }
+    
+    tf2::Transform base_to_camera_link;
+    tf2::fromMsg(base_to_camera_link_tf.transform, base_to_camera_link);
+    tf2::Transform map_to_base_link = camera_pose_in_map * base_to_camera_link.inverse();
+
+    geometry_msgs::msg::PoseWithCovarianceStamped initial_pose;
+    initial_pose.header.stamp = stamp;
+    initial_pose.header.frame_id = map_frame_;
+    
+    // Convert transform to pose
+    tf2::toMsg(map_to_base_link, initial_pose.pose.pose);
+    
+    // Set reasonable covariance
+    std::fill(initial_pose.pose.covariance.begin(), initial_pose.pose.covariance.end(), 0.0);
+    initial_pose.pose.covariance[0] = 0.25;  // x
+    initial_pose.pose.covariance[7] = 0.25;  // y  
+    initial_pose.pose.covariance[35] = 0.068; // yaw
+    
+    pose_publisher_->publish(initial_pose);
+    shelfbot::log_info("shelfbot_slam_orb3_node", "INITIAL_POSE_PUBLISHED", "Published initial pose for Nav2 alignment");
+}
+
 tf2::Transform ShelfbotORB3Node::convertFromCvToRos(const tf2::Transform& cv_tf) {
-  tf2::Matrix3x3 R_cv_to_ros( 0,  0,  1,
-                             -1,  0,  0,
-                              0, -1,  0);
+  tf2::Matrix3x3 R_cv_to_ros(0, 0, 1, -1, 0, 0, 0, -1, 0);
   tf2::Transform ros_tf;
   ros_tf.setOrigin(cv_tf.getOrigin());
   ros_tf.setBasis(R_cv_to_ros * cv_tf.getBasis());
+  shelfbot::log_info("shelfbot_slam_orb3_node", "CV_TO_ROS", 
+      "CV pose: t=[" + std::to_string(cv_tf.getOrigin().x()) + ", " + 
+      std::to_string(cv_tf.getOrigin().y()) + ", " + 
+      std::to_string(cv_tf.getOrigin().z()) + "]");
   return ros_tf;
 }
 

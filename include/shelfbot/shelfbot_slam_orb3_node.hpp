@@ -52,6 +52,7 @@ private:
   void syncCallback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg, const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info_msg);
   void processSuccessfulTracking(const cv::Mat& Tcw, const builtin_interfaces::msg::Time& stamp, const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info);
   void publishMapToOdomTransform(const tf2::Transform& camera_pose_in_map, const builtin_interfaces::msg::Time& stamp);
+  void publishInitialPose(const tf2::Transform& map_to_odom, const builtin_interfaces::msg::Time& stamp);
 
   // Parameters
   std::string voc_file_, settings_file_;

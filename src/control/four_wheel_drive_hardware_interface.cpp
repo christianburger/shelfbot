@@ -117,89 +117,46 @@ hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_deactivat
 
 hardware_interface::return_type FourWheelDriveHardwareInterface::read(const rclcpp::Time& time, const rclcpp::Duration& period) {
     if (!comm_) {
-        log_error("FourWheelDriveHardwareInterface", "read", 
-                  "[NAV2_DIAG] Communication interface not available - CRITICAL");
-        return hardware_interface::return_type::ERROR;
+        log_warn("FourWheelDriveHardwareInterface", "read", "Communication interface not available.");
+        return hardware_interface::return_type::OK;
     }
 
-    // Check communication health
+    // Always try to read regardless of communication health
+    // But use health check to determine if we should expect success
     bool communication_healthy = comm_->is_communication_healthy();
     
-    // Enhanced diagnostic logging for communication status
-    static auto last_comm_status_log = time;
-    if ((time - last_comm_status_log).seconds() > 3.0) {
-        std::stringstream comm_ss;
-        comm_ss << "[NAV2_DIAG] Communication status: " 
-                << (communication_healthy ? "HEALTHY" : "UNHEALTHY")
-                << " - Period: " << std::fixed << std::setprecision(3) << period.seconds() << "s";
-        if (communication_healthy) {
-            log_info("FourWheelDriveHardwareInterface", "read", comm_ss.str());
-        } else {
-            log_warn("FourWheelDriveHardwareInterface", "read", comm_ss.str());
-        }
-        last_comm_status_log = time;
-    }
-
-    // Attempt to read hardware state
-    bool read_success = comm_->readStateFromHardware(hw_positions_);
-    
-    // Enhanced diagnostic logging for read operations
-    static auto last_read_log = time;
-    static int successful_reads = 0;
-    static int failed_reads = 0;
-    
-    if (read_success) {
-        successful_reads++;
-    } else {
-        failed_reads++;
-    }
-    
-    if ((time - last_read_log).seconds() > 2.0) {
-        std::stringstream read_ss;
-        read_ss << std::fixed << std::setprecision(3)
-                << "[NAV2_DIAG] Hardware read status: SUCCESS=" << successful_reads 
-                << " FAIL=" << failed_reads 
-                << " Success_rate=" << (100.0 * successful_reads / std::max(1, successful_reads + failed_reads)) << "%"
-                << " Positions=[";
-        for (size_t i = 0; i < hw_positions_.size(); ++i) {
-            read_ss << hw_positions_[i];
-            if (i < hw_positions_.size() - 1) read_ss << ", ";
-        }
-        read_ss << "] Comm_healthy=" << (communication_healthy ? "Yes" : "No");
-        
-        if (read_success && communication_healthy) {
-            log_info("FourWheelDriveHardwareInterface", "read", read_ss.str());
-        } else {
-            log_warn("FourWheelDriveHardwareInterface", "read", read_ss.str());
-        }
-        
-        successful_reads = 0;
-        failed_reads = 0;
-        last_read_log = time;
-    }
-
-    // Update odometry with enhanced diagnostics
-    if (odometry_ && read_success) {
-        try {
-            odometry_->update(hw_positions_, period);
-            
-            static auto last_odom_log = time;
-            if ((time - last_odom_log).seconds() > 4.0) {
-                log_info("FourWheelDriveHardwareInterface", "read", 
-                         "[NAV2_DIAG] Odometry updated successfully with wheel positions");
-                last_odom_log = time;
-            }
-        } catch (const std::exception& e) {
-            log_error("FourWheelDriveHardwareInterface", "read", 
-                      "[NAV2_DIAG] Odometry update failed: " + std::string(e.what()));
-        }
-    } else if (!odometry_) {
-        static auto last_odom_warn = time;
-        if ((time - last_odom_warn).seconds() > 10.0) {
+    if (!communication_healthy) {
+        static auto last_warn_time = time;
+        if ((time - last_warn_time).seconds() > 5.0) {
             log_warn("FourWheelDriveHardwareInterface", "read", 
-                     "[NAV2_DIAG] Odometry not initialized - tf tree may be incomplete");
-            last_odom_warn = time;
+                    "Micro-ROS communication unhealthy - attempting read anyway");
+            last_warn_time = time;
         }
+    }
+
+    // Always attempt to read from hardware, even if communication appears unhealthy
+    // This gives the system a chance to recover
+    if (!comm_->readStateFromHardware(hw_positions_)) {
+        if (communication_healthy) {
+            // Only log as warning if we thought communication was healthy
+            log_warn("FourWheelDriveHardwareInterface", "read", "Failed to read from hardware despite healthy communication check");
+        }
+        // If communication was already unhealthy, failure is expected - don't log repeatedly
+        return hardware_interface::return_type::OK; // Keep controller running with last known values
+    }
+
+    // If we successfully read, log the positions for debugging
+    std::stringstream ss;
+    ss << "[hw_positions] FourWheelDriveHardwareInterface::read: Successfully read positions: [";
+    for (size_t i = 0; i < hw_positions_.size(); ++i) {
+        ss << hw_positions_[i] << (i < hw_positions_.size() - 1 ? ", " : "");
+    }
+    ss << "] - Communication health: " << (communication_healthy ? "healthy" : "unhealthy");
+    log_info("FourWheelDriveHardwareInterface", "read", ss.str());
+
+    // Update odometry with the new positions if we successfully read them
+    if (odometry_) {
+        odometry_->update(hw_positions_, period);
     }
 
     return hardware_interface::return_type::OK;
@@ -207,87 +164,58 @@ hardware_interface::return_type FourWheelDriveHardwareInterface::read(const rclc
 
 hardware_interface::return_type FourWheelDriveHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& period) {
     if (!comm_) {
-        log_error("FourWheelDriveHardwareInterface", "write", 
-                  "[NAV2_DIAG] Communication interface not available - CRITICAL");
+        log_error("FourWheelDriveHardwareInterface", "write", "Communication interface not available.");
         return hardware_interface::return_type::ERROR;
     }
 
-    // Check communication health
+    // Always try to write regardless of communication health
+    // But use health check to determine if we should expect success
     bool communication_healthy = comm_->is_communication_healthy();
     
-    // Enhanced diagnostic logging for write operations
-    static auto last_write_log = time;
-    static int successful_writes = 0;
-    static int failed_writes = 0;
-    static double max_command = 0.0;
-    
-    // Track command magnitude for diagnostics
-    double command_magnitude = 0.0;
-    for (const auto& cmd : hw_velocity_commands_) {
-        command_magnitude += std::abs(cmd);
-    }
-    max_command = std::max(max_command, command_magnitude);
-    
-    if ((time - last_write_log).seconds() > 1.0) {
-        std::stringstream write_ss;
-        write_ss << std::fixed << std::setprecision(3)
-                 << "[NAV2_DIAG] Writing commands: [";
-        for (size_t i = 0; i < hw_velocity_commands_.size(); ++i) {
-            write_ss << hw_velocity_commands_[i];
-            if (i < hw_velocity_commands_.size() - 1) write_ss << ", ";
+    if (!communication_healthy) {
+        static auto last_warn_time = time;
+        if ((time - last_warn_time).seconds() > 5.0) {
+            log_warn("FourWheelDriveHardwareInterface", "write", 
+                    "Micro-ROS communication unhealthy - attempting write anyway");
+            last_warn_time = time;
         }
-        write_ss << "] Magnitude=" << command_magnitude 
-                 << " Max_seen=" << max_command
-                 << " Comm_healthy=" << (communication_healthy ? "Yes" : "No")
-                 << " Period=" << period.seconds() << "s";
-        
-        if (command_magnitude > 0.001) {
-            log_info("FourWheelDriveHardwareInterface", "write", write_ss.str());
-        } else {
-            log_debug("FourWheelDriveHardwareInterface", "write", write_ss.str());
-        }
-        last_write_log = time;
     }
 
-    // Attempt to write to hardware
-    bool write_success = comm_->writeSpeedsToHardware(hw_velocity_commands_);
-    
-    if (write_success) {
-        successful_writes++;
-    } else {
-        failed_writes++;
-        
+    // Log the commands being written for debugging
+    std::stringstream ss;
+    ss << "Writing to hardware: Commands = [";
+    for (size_t i = 0; i < hw_velocity_commands_.size(); ++i) {
+        ss << hw_velocity_commands_[i] << (i < hw_velocity_commands_.size() - 1 ? ", " : "");
+    }
+    ss << "] - Communication health: " << (communication_healthy ? "healthy" : "unhealthy");
+    log_info("FourWheelDriveHardwareInterface", "write", ss.str());
+
+    // Always attempt to write to hardware, even if communication appears unhealthy
+    // This gives the system a chance to recover
+    if (!comm_->writeSpeedsToHardware(hw_velocity_commands_)) {
         if (communication_healthy) {
+            // Only log as error if we thought communication was healthy
             log_error("FourWheelDriveHardwareInterface", "write", 
-                      "[NAV2_DIAG] Write failed despite healthy communication - Hardware issue?");
+                     "Failed to write speeds to hardware despite healthy communication check");
             return hardware_interface::return_type::ERROR;
         } else {
+            // If communication was already unhealthy, failure is expected - don't return error
             log_warn("FourWheelDriveHardwareInterface", "write", 
-                     "[NAV2_DIAG] Write failed due to unhealthy communication - Expected");
-            return hardware_interface::return_type::OK; // Don't treat as fatal
+                    "Write failed as expected due to unhealthy communication");
+            return hardware_interface::return_type::OK; // Don't treat as fatal error
         }
     }
     
-    // Periodic write statistics
-    static auto last_stats_log = time;
-    if ((time - last_stats_log).seconds() > 5.0 && (successful_writes + failed_writes) > 0) {
-        double write_success_rate = 100.0 * successful_writes / (successful_writes + failed_writes);
-        std::stringstream stats_ss;
-        stats_ss << std::fixed << std::setprecision(1)
-                 << "[NAV2_DIAG] Write statistics: SUCCESS=" << successful_writes 
-                 << " FAIL=" << failed_writes 
-                 << " Rate=" << write_success_rate << "%"
-                 << " Max_cmd_magnitude=" << max_command;
-        log_info("FourWheelDriveHardwareInterface", "write", stats_ss.str());
-        
-        successful_writes = 0;
-        failed_writes = 0;
-        max_command = 0.0;
-        last_stats_log = time;
+    // If we get here, write was successful
+    if (!communication_healthy) {
+        log_info("FourWheelDriveHardwareInterface", "write", 
+                "Write succeeded despite previous communication issues - communication may be recovering");
     }
     
     return hardware_interface::return_type::OK;
-  }
+}
+
+
 }
 
 #include "pluginlib/class_list_macros.hpp"
