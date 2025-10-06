@@ -130,8 +130,8 @@ global_costmap:
       publish_frequency: 1.0
       transform_tolerance: 0.5
       rolling_window: false
-      width: 15                 # covers ±15m around origin (increased)
-      height: 15
+      width: 10                 # covers ±10m around origin (increased)
+      height: 10
       resolution: 0.05
       robot_radius: 0.4   # Increased for spinning clearance
 
