@@ -8,41 +8,63 @@
   <maintainer email="burger.christian@gmail.com">chris</maintainer>
   <license>Proprietary</license>
 
-  <!-- Core build dependencies -->
+  <!-- Build toolchain -->
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <!-- Runtime dependencies for nodes and hardware -->
+  <!-- ── Core ROS 2 / rclcpp ──────────────────────────────────────────── -->
   <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
-  <depend>tf2_ros</depend>
-  <depend>rviz2</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
+  <depend>visualization_msgs</depend>
+
+  <!-- ── TF2 ──────────────────────────────────────────────────────────── -->
   <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+
+  <!-- ── ros2_control ─────────────────────────────────────────────────── -->
   <depend>controller_interface</depend>
   <depend>hardware_interface</depend>
   <depend>realtime_tools</depend>
   <depend>pluginlib</depend>
-  <depend>xacro</depend>
+  <depend>ros2_control</depend>
   <depend>ros2_controllers</depend>
-  <depend>apriltag_ros</depend>
-  <depend>apriltag_msgs</depend>
-  <depend>behaviortree_cpp</depend>
+
+  <!-- ── Perception / Vision ──────────────────────────────────────────── -->
   <depend>image_transport</depend>
   <depend>cv_bridge</depend>
-  <depend>visualization_msgs</depend>
   <depend>camera_info_manager</depend>
-  <depend>std_msgs</depend>
+  <depend>message_filters</depend>
+  <depend>apriltag_ros</depend>
+  <depend>apriltag_msgs</depend>
 
-  <!-- Nav2 and RTAB-Map Dependencies -->
+  <!-- ── Navigation 2 ─────────────────────────────────────────────────── -->
+  <!--
+    nav2_bringup pulls in the full Nav2 stack at runtime.
+    Individual packages are listed so rosdep installs them
+    even when nav2_bringup is not present.
+  -->
   <depend>nav2_bringup</depend>
   <depend>nav2_controller</depend>
   <depend>nav2_planner</depend>
   <depend>nav2_map_server</depend>
   <depend>nav2_lifecycle_manager</depend>
   <depend>nav2_common</depend>
+  <depend>nav2_bt_navigator</depend>
+  <depend>nav2_behaviors</depend>
+  <depend>nav2_waypoint_follower</depend>
+  <depend>nav2_smoother</depend>
+
+  <!-- ── SLAM / Localisation ──────────────────────────────────────────── -->
   <depend>rtabmap_ros</depend>
   <depend>robot_localization</depend>
+
+  <!-- ── Misc tooling ─────────────────────────────────────────────────── -->
+  <depend>xacro</depend>
+  <depend>rviz2</depend>
 
   <export>
     <build_type>ament_cmake</build_type>
