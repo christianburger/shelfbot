@@ -1,0 +1,36 @@
+{
+  "name": "Shelfbot ROS 2 Dev Container",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "shelfbot",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+
+  // Use the same mount points as defined in docker-compose.yml
+  // (They are already there – no need to repeat, but we ensure the workspace is mounted)
+  "mounts": [
+    "source=${localWorkspaceFolder}/shelfbot_ws,target=/workspace,type=bind"
+  ],
+
+  // Forward the host's X11 socket for GUI apps (RViz2, rqt)
+  "containerEnv": {
+    "DISPLAY": "${localEnv:DISPLAY}",
+    "QT_X11_NO_MITSHM": "1"
+  },
+  "runArgs": [
+    "--network=host",
+    "--privileged",
+    "-v", "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+  ],
+
+  // Optional: set the user to match your host UID/GID to avoid permission issues
+  // If you need to write files that are readable on the host, uncomment and adjust:
+  // "remoteUser": "root",
+  // "containerUser": "root"
+
+  // Enable the IDE to use the container's ROS and workspace environment
+  "customizations": {
+    "vscode": {
+      "extensions": []   // not needed for CLion, but keeps the file compatible
+    }
+  }
+}

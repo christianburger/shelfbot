@@ -1,0 +1,77 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Shelfbot — Docker Compose
+#
+# Key design decisions
+#   network_mode: host   — required for ROS 2 DDS (no NAT, no port mapping)
+#   bind-mount           — ./shelfbot_ws is shared two-ways with /workspace
+#   X11 pass-through     — allows RViz2 / GUI tools to appear on the host display
+#
+# Usage (see INSTRUCTIONS.md for full workflow):
+#   docker compose build          # first build only
+#   docker compose up -d          # start detached
+#   docker compose exec shelfbot bash   # open a shell
+#   docker compose down           # stop
+# ═══════════════════════════════════════════════════════════════════════════════
+
+services:
+  shelfbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # target: final   # uncomment to use the full multi-stage build
+      # If you want to skip the ORB-SLAM3 build during development,
+      # build only the 'base' stage:
+      # target: base
+
+    image: shelfbot:humble
+
+    container_name: shelfbot
+
+    # ── Network ──────────────────────────────────────────────────────────────
+    # host networking is mandatory for ROS 2 DDS discovery to work without
+    # extra configuration. With host mode, all ROS 2 nodes on the host and
+    # inside the container share the same network interfaces automatically.
+    network_mode: host
+
+    # ── Volumes (two-way bind mount) ──────────────────────────────────────────
+    volumes:
+      # Primary workspace — changes made inside the container are immediately
+      # visible on the host and vice versa.
+      - ./shelfbot_ws:/workspace
+
+      # X11 socket for GUI applications (RViz2, rqt, etc.)
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+    # ── Environment ──────────────────────────────────────────────────────────
+    environment:
+      # X11 display forwarding (host value propagated into container)
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1           # prevents Qt shared-memory crash in Docker
+
+      # ROS 2 domain ID — change if you run multiple ROS 2 setups on the same
+      # machine to avoid topic cross-talk.
+      - ROS_DOMAIN_ID=0
+
+      # Colcon build parallelism
+      - MAKEFLAGS=-j${NPROC:-$(nproc)}
+
+    # ── Hardware / privileges ─────────────────────────────────────────────────
+    # Needed to access physical devices (serial, USB) for micro-ROS bridge.
+    privileged: true
+    devices:
+      - /dev:/dev   # expose all host devices; narrow this down in production
+
+    # ── Runtime behaviour ─────────────────────────────────────────────────────
+    stdin_open: true    # keep STDIN open for interactive shells
+    tty: true           # allocate a pseudo-TTY
+
+    # The default CMD in the Dockerfile is /bin/bash; override here if needed.
+    # command: ros2 launch shelfbot real_robot_microros.launch.py
+
+    # ── Resource hints (optional) ─────────────────────────────────────────────
+    # Uncomment to cap container resource usage.
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "6"
+    #       memory: 8G
