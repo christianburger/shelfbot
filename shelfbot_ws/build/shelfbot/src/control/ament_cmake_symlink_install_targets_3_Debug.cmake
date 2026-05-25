@@ -1,1 +1,0 @@
-ament_cmake_symlink_install_targets("TARGET_FILES" "/workspace/build/shelfbot/src/control/libfour_wheel_drive_controller.so" "TARGETS" "four_wheel_drive_controller" "ARCHIVE_DESTINATION" "lib" "LIBRARY_DESTINATION" "lib" "RUNTIME_DESTINATION" "bin")

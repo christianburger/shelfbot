@@ -1,1 +1,0 @@
-/workspace/src/shelfbot/launch/real_robot.launch.py

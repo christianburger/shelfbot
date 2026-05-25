@@ -1,1 +1,0 @@
-/workspace/src/shelfbot/include/shelfbot/shelfbot_slam_orb3_node.hpp

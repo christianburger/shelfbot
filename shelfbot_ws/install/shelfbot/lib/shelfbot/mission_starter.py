@@ -1,1 +1,0 @@
-/workspace/src/shelfbot/scripts/mission_starter.py
