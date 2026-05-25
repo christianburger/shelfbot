@@ -1,15 +1,42 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <xacro:macro name="camera" params="name width length height radius">
+
+  <!--
+    Camera body + optical frame.
+
+    params:
+      name   - link name (also used as prefix for child links/joints)
+      width  - x dimension of camera box
+      length - y dimension of camera box
+      height - z dimension of camera box  (lens face is at +Z of this link)
+
+    Coordinate convention after joint_camera (rpy="-pi/2 0 0") is applied:
+      camera_link +Z = base_link +Y (forward, optical axis)
+      camera_link +X = base_link +X (right)
+      camera_link +Y = base_link -Z (down)
+
+    camera_link is therefore already in ROS optical convention.
+    The _optical_frame child adds the standard rpy="-pi/2 0 -pi/2" transform
+    so that image_pipeline, rtabmap and other tools that look for an optical
+    frame find one with the expected parent→child relationship.
+
+    The frame_id in camera_info messages must be "${name}_optical_frame".
+    Update the camera_publisher frame_id parameter accordingly.
+  -->
+
+  <xacro:macro name="camera" params="name width length height">
+
+    <!-- Camera body -->
     <link name="${name}">
       <visual>
-        <origin xyz="0 0 ${height/2}"/>
+        <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
         <geometry>
           <box size="${width} ${length} ${height}"/>
         </geometry>
+        <material name="metallic_dark_lead"/>
       </visual>
       <collision>
-        <origin xyz="0 0 ${height/2}"/>
+        <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
         <geometry>
           <box size="${width} ${length} ${height}"/>
         </geometry>
@@ -20,5 +47,24 @@
         <xacro:box_inertia m="${camera_mass}" x="${width}" y="${length}" z="${height}"/>
       </inertial>
     </link>
+
+    <!--
+      Optical frame.
+      Positioned at the lens face (z = height of the camera body).
+      rpy="-pi/2 0 -pi/2" is the standard ROS transform from a camera body
+      link to its optical frame: converts from body convention (X fwd, Y left,
+      Z up) to optical convention (Z fwd, X right, Y down).
+      All camera_info and image messages should use "${name}_optical_frame"
+      as their frame_id.
+    -->
+    <link name="${name}_optical_frame"/>
+
+    <joint name="joint_${name}_optical" type="fixed">
+      <parent link="${name}"/>
+      <child link="${name}_optical_frame"/>
+      <origin xyz="0 0 ${height}" rpy="-1.5708 0 -1.5708"/>
+    </joint>
+
   </xacro:macro>
+
 </robot>

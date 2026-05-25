@@ -1,4 +1,7 @@
 # VS Code specific files
+build/
+install/
+
 shelfbot_ws/*
 .vscode/
 AGENT.md
