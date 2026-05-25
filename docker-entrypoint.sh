@@ -1,7 +1,27 @@
 #!/usr/bin/env bash
 # docker-entrypoint.sh
-# Fixes ownership of named-volume mount points so the runtime user can write
-# to them, then hands off to the container's CMD.
+#
+# Ensures named-volume mount points are owned by the runtime user, then
+# hands off to the container CMD.
+#
+# ┌─ PREREQUISITE ──────────────────────────────────────────────────────────┐
+# │ This script uses sudo.  The Dockerfile MUST include:                    │
+# │                                                                         │
+# │   RUN echo "Defaults !fqdn" > /etc/sudoers.d/no-fqdn \                 │
+# │       && chmod 0440 /etc/sudoers.d/no-fqdn                             │
+# │                                                                         │
+# │ Without it, Ubuntu's sudo attempts FQDN resolution on every call and   │
+# │ prints "sudo: unable to resolve host <hostname>" because the container  │
+# │ inherits the host hostname via network_mode: host but /etc/hosts has    │
+# │ no matching entry.                                                       │
+# │                                                                         │
+# │ Patching /etc/hosts from inside the entrypoint cannot fix this:         │
+# │   • writing to /etc/hosts requires sudo (root-owned, mode 644)          │
+# │   • sudo warns about the hostname before it executes any command        │
+# │   • with tty: true, sudo writes to /dev/tty — 2>/dev/null has no       │
+# │     effect, making stderr redirection completely useless here            │
+# └─────────────────────────────────────────────────────────────────────────┘
+
 set -euo pipefail
 
 EXPECTED_UID=$(id -u)
@@ -9,40 +29,29 @@ EXPECTED_GID=$(id -g)
 
 echo "[entrypoint] Starting (UID=${EXPECTED_UID}, GID=${EXPECTED_GID})"
 
-# ── Fix sudo hostname resolution ──────────────────────────────────────────────
-# network_mode: host makes the container inherit the host's hostname, but the
-# container's /etc/hosts has no entry for it.  sudo calls gethostbyname() for
-# PAM/logging on every invocation and prints:
-#   "sudo: unable to resolve host <hostname>: Name or service not known"
-# Fix: append the entry to /etc/hosts once, before any other sudo call.
-# stderr is suppressed on this one write so the warning never surfaces;
-# if the write fails, subsequent sudo calls still work — the warning is
-# cosmetic, not fatal.
-CONTAINER_HOSTNAME=$(hostname 2>/dev/null || true)
-if [ -n "${CONTAINER_HOSTNAME}" ] && \
-   ! grep -qwF "${CONTAINER_HOSTNAME}" /etc/hosts 2>/dev/null; then
-    echo "[entrypoint] Patching /etc/hosts for hostname '${CONTAINER_HOSTNAME}'"
-    echo "127.0.0.1 ${CONTAINER_HOSTNAME}" \
-        | sudo tee -a /etc/hosts >/dev/null 2>/dev/null \
-        || echo "[entrypoint] NOTE: /etc/hosts patch failed — sudo warnings on subsequent calls are harmless"
-fi
-
-# ── Helper ────────────────────────────────────────────────────────────────────
-# fix_ownership <dir> [recursive=false]
+# ── fix_ownership <dir> [recursive=false] ─────────────────────────────────────
 #
-#   • Creates <dir> (and all parents) if missing.
-#   • If the directory is not owned by the current user, uses sudo to correct
-#     it.  Failures are warned rather than fatal so a misconfigured sudo cannot
-#     prevent the container from starting.
-#   • Pass "true" as the second argument to recurse into subdirectories.
-#     Use sparingly — recursion on a large tree (e.g. the colcon workspace) is
-#     very slow.
+# 1. Creates <dir> and all parents if they do not exist.
+# 2. Checks the directory owner.  If it is already the current user, skips.
+# 3. Otherwise calls sudo chown to correct ownership.
+#
+# recursive=false  →  chown the directory itself only (no -R).
+#   Use for workspace roots and intermediate path components where the
+#   contents are either bind-mounted or created by user processes.
+#
+# recursive=true   →  chown -R the entire subtree.
+#   Use for named-volume IDE dirs so the backend can read/write freely.
+#   Do NOT use on large trees (build/, install/, log/) — extremely slow.
+#
+# Failures are non-fatal: a warning is printed and the script continues so
+# that a misconfigured sudo cannot prevent the container from starting.
 # ─────────────────────────────────────────────────────────────────────────────
 fix_ownership() {
     local dir="$1"
     local recursive="${2:-false}"
 
-    # Ensure the directory exists (mkdir -p is idempotent and creates parents).
+    # mkdir -p is idempotent; suppressing stderr keeps the log clean for
+    # dirs that already exist (the common case after the first startup).
     if ! mkdir -p "${dir}" 2>/dev/null; then
         echo "[entrypoint] WARNING: cannot create ${dir} — skipping"
         return 0
@@ -67,18 +76,32 @@ fix_ownership() {
 }
 
 # ── Colcon workspace ──────────────────────────────────────────────────────────
-# Fix the workspace root only — NOT recursively.
-# • src/  is a bind-mount owned by the host user; no fix needed.
-# • build/ install/ log/  are created by colcon under the correct user; a
-#   recursive chown here would be extremely slow on an active workspace.
+#
+# Fix the workspace root only — never recurse.
+#
+# Why not recursive?
+#   src/          bind-mount from the host; already owned by the host user
+#   build/        created by colcon running as chris; correct owner already
+#   install/      same
+#   log/          same
+#
+# A recursive chown here on an active workspace (hundreds of thousands of
+# files across build/ install/ log/) would be extremely slow for no benefit.
 fix_ownership "/home/chris/shelfbot_ws"
 
 # ── JetBrains named-volume mount points ──────────────────────────────────────
-# Each volume is mounted at a *subdirectory* of ~/.cache / ~/.config / ~/.local.
-# Docker may create the intermediate parent directories (e.g. .local/share) as
-# root when it sets up the mount point.  Fix parents first (non-recursive) so
-# the full path is traversable, then recurse into the JetBrains dirs so the
-# IDE backend can read and write its config and plugin files freely.
+#
+# Each JetBrains volume is mounted at a subdirectory:
+#   clion_cache  →  /home/chris/.cache/JetBrains
+#   clion_config →  /home/chris/.config/JetBrains
+#   clion_local  →  /home/chris/.local/share/JetBrains
+#
+# Docker creates the volume mount point and any missing intermediate
+# directories (e.g. .local/share) as root.  If those intermediates are
+# root-owned, the JetBrains backend cannot traverse the path.
+#
+# Fix order: parent first (non-recursive, just the dir node itself), then
+# the JetBrains subdir recursively so the backend can read/write freely.
 fix_ownership "/home/chris/.cache"
 fix_ownership "/home/chris/.cache/JetBrains"        true
 

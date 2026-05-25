@@ -116,8 +116,8 @@ RUN groupadd --gid ${USER_GID} chris \
         --shell /bin/bash \
         chris \
     && echo "chris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/chris \
+    && echo "Defaults !fqdn" > /etc/sudoers.d/no-fqdn \
     && chmod 0440 /etc/sudoers.d/chris
-
 
 # ── Stage 2: Pangolin ─────────────────────────────────────────────────────────
 FROM base AS pangolin
