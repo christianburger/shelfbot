@@ -1,0 +1,1 @@
+/workspace/build/shelfbot/ament_cmake_core/shelfbotConfig-version.cmake

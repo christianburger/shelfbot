@@ -1,0 +1,1 @@
+ament_cmake_symlink_install_targets("TARGET_FILES" "/workspace/build/shelfbot/src/nodes/camera_publisher" "/workspace/build/shelfbot/src/nodes/apriltag_detector_node" "/workspace/build/shelfbot/src/nodes/shelfbot_slam_orb3_node" "TARGETS" "camera_publisher" "apriltag_detector_node" "shelfbot_slam_orb3_node" "DESTINATION" "lib/shelfbot")

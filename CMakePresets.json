@@ -1,0 +1,86 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 10,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "ros2-humble-debug",
+      "displayName": "ROS 2 Humble — Debug",
+      "description": "CLion direct-CMake build. Run 'colcon build' first so /workspace/install exists.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/cmake-build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":             "Debug",
+        "CMAKE_PREFIX_PATH":            "/workspace/install;/opt/ros/humble",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "environment": {
+        "AMENT_PREFIX_PATH": "/workspace/install:/opt/ros/humble",
+        "ROS_DISTRO":        "humble",
+        "ROS_VERSION":       "2",
+        "ROS_PYTHON_VERSION": "3",
+        "COLCON_PREFIX_PATH": "/workspace/install",
+        "LD_LIBRARY_PATH":   "/workspace/install/lib:/opt/ros/humble/lib:/opt/pangolin/lib:/opt/ORB_SLAM3/lib:/opt/ORB_SLAM3/Thirdparty/DBoW2/lib:/opt/ORB_SLAM3/Thirdparty/g2o/lib"
+      }
+    },
+    {
+      "name": "ros2-humble-release",
+      "displayName": "ROS 2 Humble — Release",
+      "description": "CLion direct-CMake build. Run 'colcon build' first so /workspace/install exists.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/cmake-build-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":             "RelWithDebInfo",
+        "CMAKE_PREFIX_PATH":            "/workspace/install;/opt/ros/humble",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "environment": {
+        "AMENT_PREFIX_PATH": "/workspace/install:/opt/ros/humble",
+        "ROS_DISTRO":        "humble",
+        "ROS_VERSION":       "2",
+        "ROS_PYTHON_VERSION": "3",
+        "COLCON_PREFIX_PATH": "/workspace/install",
+        "LD_LIBRARY_PATH":   "/workspace/install/lib:/opt/ros/humble/lib:/opt/pangolin/lib:/opt/ORB_SLAM3/lib:/opt/ORB_SLAM3/Thirdparty/DBoW2/lib:/opt/ORB_SLAM3/Thirdparty/g2o/lib"
+      }
+    },
+    {
+      "name": "ros2-humble-debug-no-install",
+      "displayName": "ROS 2 Humble — Debug (first-time, no install/ yet)",
+      "description": "Use this preset the very first time before colcon build has run.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/cmake-build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":             "Debug",
+        "CMAKE_PREFIX_PATH":            "/opt/ros/humble",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "environment": {
+        "AMENT_PREFIX_PATH": "/opt/ros/humble",
+        "ROS_DISTRO":        "humble",
+        "ROS_VERSION":       "2",
+        "ROS_PYTHON_VERSION": "3",
+        "LD_LIBRARY_PATH":   "/opt/ros/humble/lib:/opt/pangolin/lib:/opt/ORB_SLAM3/lib:/opt/ORB_SLAM3/Thirdparty/DBoW2/lib:/opt/ORB_SLAM3/Thirdparty/g2o/lib"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "displayName": "Build Debug",
+      "configurePreset": "ros2-humble-debug"
+    },
+    {
+      "name": "release",
+      "displayName": "Build Release",
+      "configurePreset": "ros2-humble-release"
+    },
+    {
+      "name": "debug-no-install",
+      "displayName": "Build Debug (first-time)",
+      "configurePreset": "ros2-humble-debug-no-install"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+ament_cmake_symlink_install_targets("TARGET_FILES" "/workspace/build/shelfbot/libfour_wheel_drive_hardware_interface.so" "TARGETS" "four_wheel_drive_hardware_interface" "ARCHIVE_DESTINATION" "lib" "LIBRARY_DESTINATION" "lib")

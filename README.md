@@ -1,83 +1,175 @@
-# Shelfbot Project
+# Shelfbot
 
-Shelfbot is a ROS 2 application for a delivery robot, featuring autonomous navigation using the Nav2 stack and visual SLAM with RTAB-Map.
+Shelfbot is a ROS 2 Humble application for a four-wheeled skid-steer delivery robot.
+It provides autonomous navigation (Nav2), visual SLAM (RTAB-Map or ORB-SLAM3),
+hardware abstraction via `ros2_control`, AprilTag detection, and a micro-ROS bridge
+to ESP32 firmware.
 
-The project is a comprehensive robotic system designed to control a four-wheeled robot. It includes a detailed robot model and control interfaces that allow for real-time operation.
+**Development environment:** Docker is the recommended approach.
+See [`INSTRUCTIONS.md`](INSTRUCTIONS.md) for the complete Docker setup.
+See [`ENVIRONMENT.md`](ENVIRONMENT.md) for native (bare-metal) installation.
+
+---
+
+## Repository layout
+
+```
+/home/chris/shelfbot/shelfbot/     ← repo root  (this directory)
+├── CMakeLists.txt
+├── CMakePresets.json              ← CLion CMake profiles
+├── package.xml
+├── Dockerfile
+├── docker-compose.yml
+├── docker-entrypoint.sh           ← auto-fixes /workspace ownership on start
+├── .env                           ← DOCKER_UID / DOCKER_GID (1000/1000)
+├── .devcontainer/devcontainer.json
+├── include/shelfbot/
+├── src/
+│   ├── control/                   ← FourWheelDriveController, HardwareInterface
+│   ├── hardware/                  ← MicroRosCommunication
+│   ├── navigation/                ← FourWheelDriveOdometry
+│   ├── nodes/                     ← camera_publisher, apriltag_detector, slam_orb3
+│   ├── perception/
+│   └── utils/                     ← shelfbot_utils (logging)
+├── config/
+├── launch/
+├── urdf/
+├── scripts/
+└── shelfbot_ws/                   ← colcon workspace (bind-mounted to /workspace)
+    ├── src/shelfbot → repo root   ← provided by second Docker bind-mount
+    ├── build/
+    ├── install/
+    └── log/
+```
+
+---
 
 ## Features
 
-- **Autonomous Navigation**: Utilizes the industry-standard ROS 2 Nav2 stack for robust and flexible path planning, obstacle avoidance, and goal execution.
-- **Visual SLAM**: Employs RTAB-Map for real-time Simultaneous Localization and Mapping (SLAM) using the robot's camera, allowing it to navigate in previously unseen environments.
-- **Sensor Fusion**: Uses `robot_localization` (EKF) to fuse data from wheel odometry, providing a more accurate and stable estimate of the robot's position.
-- **Real-World Operation**: The robot can be operated with real hardware.
-- **ROS 2 Control**: Integrated with `ros2_control` for a standardized hardware abstraction layer, featuring a four-wheel skid-steer drive controller.
+- **Autonomous Navigation** — Nav2 stack (planner, controller, costmaps, BT navigator)
+- **Visual SLAM** — RTAB-Map (production) or ORB-SLAM3 (optional, baked into Docker image)
+- **Sensor Fusion** — `robot_localization` EKF fuses wheel odometry
+- **ros2_control** — standardised hardware abstraction; four-wheel skid-steer controller
+- **AprilTag Detection** — pose estimation via the apriltag C library; TF + marker publishing
+- **micro-ROS Bridge** — talks to ESP32 firmware over serial or UDP
+- **Docker Environment** — reproducible ROS 2 Humble build; ORB-SLAM3 + Pangolin compiled inside image
 
-## System Architecture
+---
 
-The robot's navigation capability is built on a foundation of several key ROS 2 packages that work in concert:
-
-1.  **RTAB-Map (Visual Odometry)**: The core of the localization system. In its current configuration (RGB camera only), it functions as a Visual Odometry (VO) system. It processes sensor data (`/odom` from wheel encoders and `/camera/image_raw`) to produce a drift-corrected, smooth odometry estimate. It **does not** produce a global, fixed `map` frame.
-
-2.  **robot_localization (EKF)**: The Extended Kalman Filter node fuses the raw wheel odometry to produce a stable `odom` -> `base_footprint` transform.
-
-3.  **Nav2 (Navigation Stack)**: The high-level "brain" for autonomous movement. The entire stack has been configured to operate in the `odom` frame, allowing for navigation relative to the robot's starting point. Its key components include:
-    *   **Planner Server**: Creates a global path from the robot's current position to the goal within the `odom` frame.
-    *   **Controller Server**: Follows the global path, generating local velocity commands.
-    *   **Costmaps (Global and Local)**: 2D grid representations of obstacles, populated with data from RTAB-Map's point cloud. Both are configured to operate in the `odom` frame.
-    *   **BT Navigator**: Executes a Behavior Tree to manage the navigation logic.
-
-## Launching
-
-### Full Autonomous Navigation (Nav2 + RTAB-Map)
-This is the recommended way to test the full software stack. It launches Gazebo, the robot model, RViz, RTAB-Map, and the complete Nav2 stack.
+## Quick start (Docker)
 
 ```bash
-ros2 launch shelfbot nav2_dynamic.launch.py
+# 1. Clone and enter repo
+cd /home/chris/shelfbot/shelfbot
+
+# 2. Create the colcon workspace directory as chris (must exist before docker compose up)
+mkdir -p shelfbot_ws
+
+# 3. Allow GUI apps (RViz2) to use the host display
+xhost +local:docker
+
+# 4. Build the image (~10 min base, ~20 min full with ORB-SLAM3)
+docker compose build
+
+# 5. Start
+docker compose up -d
+
+# 6. Open a shell (runs as chris, /workspace is writable)
+docker compose exec shelfbot bash
 ```
 
-### Real Robot Operation
-This single launch file brings up the entire navigation stack required to operate the physical robot. It starts the hardware drivers, camera processing, `robot_localization`, RTAB-Map, and Nav2.
+Inside the container:
 
 ```bash
-ros2 launch shelfbot nav2_real_robot.launch.py
+cd /workspace
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Debug
+source install/setup.bash
+ros2 pkg prefix shelfbot    # → /workspace/install/shelfbot
 ```
 
-### Visualization
-To visualize the robot's state, sensor data, and navigation costmaps, use RViz. The real robot launch files will start RViz automatically. If you need to launch it separately:
+---
+
+## System architecture
+
+```
+ESP32 firmware
+    │  serial/UDP (micro-ROS)
+    ▼
+micro_ros_agent  ──►  /shelfbot_firmware/motor_positions
+                       /shelfbot_firmware/set_speed
+                       /shelfbot_firmware/motor_command
+    │
+    ▼
+FourWheelDriveHardwareInterface  (ros2_control plugin)
+    │  hw_positions[]
+    ▼
+FourWheelDriveOdometry  ──►  /odom  +  TF: odom → base_footprint
+    │
+    ▼
+robot_localization (EKF)  ──►  TF: odom → base_footprint (fused)
+    │
+    ├──► RTAB-Map  ──►  /map  +  TF: map → odom  +  point cloud for costmaps
+    │    (or ORB-SLAM3)
+    │
+    ▼
+Nav2 stack
+    ├── planner_server    → /plan
+    ├── controller_server → /cmd_vel
+    ├── bt_navigator      → /navigate_to_pose action
+    └── costmap servers   ← RTAB-Map point cloud
+
+FourWheelDriveController  (ros2_control plugin)
+    ◄── /four_wheel_drive_controller/cmd_vel  (from Nav2 or manual)
+
+camera_publisher  ──►  /camera/image_raw  +  /camera/camera_info
+apriltag_detector ──►  /tag_poses  +  /apriltag_markers  +  TF: camera_link → tag_N
+```
+
+---
+
+## Launch options
+
+All commands run inside the container after `source install/setup.bash`.
+
+| Goal | Command |
+|---|---|
+| Full stack: Nav2 + RTAB-Map | `ros2 launch shelfbot nav2_bt_real_robot.launch.py` |
+| Nav2 + ORB-SLAM3 | `ros2 launch shelfbot nav2_orb_slam3.launch.py` |
+| Nav2, odometry only (no SLAM) | `ros2 launch shelfbot nav2_real_robot.launch.py` |
+| AprilTag detector only | `ros2 launch shelfbot apriltag_detector.launch.py tag_size:=0.16` |
+
+Three terminals are required — see [`INSTRUCTIONS.md § Launch`](INSTRUCTIONS.md#6-launching-the-robot).
+
+---
+
+## Key ROS 2 commands
+
 ```bash
-ros2 launch shelfbot rviz_launch.py
+# Manual velocity (robot will move — caution)
+ros2 topic pub --once /four_wheel_drive_controller/cmd_vel \
+  geometry_msgs/msg/Twist "{linear: {x: 0.1}}"
+
+# Navigation goal in odom frame
+ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
+  "{pose: {header: {frame_id: 'odom'}, \
+    pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}}"
+
+# Health checks
+ros2 control list_controllers
+ros2 topic hz /odom
+ros2 topic hz /shelfbot_firmware/motor_positions
+ros2 run tf2_tools view_frames
 ```
 
-## Node Communication
+---
 
-1.  The **Camera** (real) publishes images to `/camera/image_raw`.
-2.  **RTAB-Map** subscribes to `/camera/image_raw` and `/odom` to generate a corrected odometry estimate and an obstacle point cloud.
-3.  The **Nav2 Costmaps** subscribe to the obstacle point cloud from RTAB-Map to build their representation of the environment for planning.
-4.  When a goal is sent via the **Nav2 Action Server** (`/navigate_to_pose`), the **BT Navigator** orchestrates the navigation process.
-5.  The **Planner Server** creates a global plan within the `odom` frame.
-6.  The **Controller Server** follows the plan, publishing velocity commands to `/cmd_vel`.
-7.  The `/controller_manager` (`ros2_control`) receives these commands, sends them to the hardware interface, and reads wheel encoder data.
-8.  The hardware interface reads wheel encoder positions from the hardware and passes them to the odometry calculator. The odometry calculator then computes the robot's pose and twist and publishes it to `/odom`.
-9.  The `/robot_state_publisher` uses `/joint_states` to publish the robot's internal transforms (e.g., `base_link` -> `wheel_link`).
-10. The `/robot_localization` node fuses the wheel odometry and publishes the final `odom` -> `base_footprint` transform.
+## Known build warnings
 
-## Using ROS 2 Command Line Tools
-
-### Sending a Navigation Goal
-To command the robot to navigate to a specific pose (e.g., x=1.0, y=0.0) relative to its starting position, you must send the goal in the `odom` frame:
-```bash
-ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "pose: {header: {frame_id: 'odom'}, pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}"
-```
-
-### Driving the Robot Manually
-To drive the robot forward at 0.5 m/s, publish a `Twist` message to the controller's `cmd_vel` topic. This will override any active Nav2 goal.
-```bash
-ros2 topic pub /four_wheel_drive_controller/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.5, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" -1
-```
-
-### Monitoring State
-Receive state information by echoing the `joint_states` or `odom` topics:
-```bash
-ros2 topic echo /joint_states
-ros2 topic echo /odom
-```
+When compiling `shelfbot_slam_orb3_node`, GCC emits multiple
+`Eigen::AlignedBit is deprecated [-Wdeprecated-declarations]` warnings.
+These originate in ORB-SLAM3's bundled g2o third-party library (which targets
+Eigen 3.3) and are **harmless** — the build and resulting binary are correct.
+Ubuntu 22.04 ships Eigen 3.4, which deprecated `AlignedBit`.
+The warnings cannot be fixed without patching upstream g2o.
+They are suppressed in `src/nodes/CMakeLists.txt` via
+`target_compile_options(shelfbot_slam_orb3_node PRIVATE -Wno-deprecated-declarations)`.

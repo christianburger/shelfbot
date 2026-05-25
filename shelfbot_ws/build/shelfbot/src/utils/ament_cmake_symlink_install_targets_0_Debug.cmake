@@ -1,0 +1,1 @@
+ament_cmake_symlink_install_targets("TARGET_FILES" "/workspace/build/shelfbot/src/utils/libshelfbot_utils.so" "TARGETS" "shelfbot_utils" "ARCHIVE_DESTINATION" "lib" "LIBRARY_DESTINATION" "lib" "RUNTIME_DESTINATION" "bin")

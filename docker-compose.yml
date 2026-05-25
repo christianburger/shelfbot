@@ -1,16 +1,25 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Shelfbot — Docker Compose
 #
-# Key design decisions
-#   network_mode: host   — required for ROS 2 DDS (no NAT, no port mapping)
-#   bind-mount           — ./shelfbot_ws is shared two-ways with /workspace
-#   X11 pass-through     — allows RViz2 / GUI tools to appear on the host display
+# Host layout:
+#   /home/chris/shelfbot/shelfbot/            ← repo root (run docker compose from here)
+#   /home/chris/shelfbot/shelfbot/shelfbot_ws ← colcon workspace dirs (build/install/log)
 #
-# Usage (see INSTRUCTIONS.md for full workflow):
-#   docker compose build          # first build only
-#   docker compose up -d          # start detached
-#   docker compose exec shelfbot bash   # open a shell
-#   docker compose down           # stop
+# Volume strategy (two mounts, no symlink needed):
+#   ./shelfbot_ws  → /workspace                 colcon workspace root
+#   .              → /workspace/src/shelfbot     package source (repo root)
+#
+# The second mount shadows whatever shelfbot_ws/src/shelfbot contains on disk,
+# so the broken absolute symlink there is irrelevant.
+#
+# Usage:
+#   docker compose build
+#   xhost +local:docker
+#   docker compose up -d
+#   docker compose exec shelfbot bash
+#   docker compose down
+#
+# Note: UID is readonly in bash; DOCKER_UID/GID are read from .env automatically.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 services:
@@ -18,60 +27,50 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      # target: final   # uncomment to use the full multi-stage build
-      # If you want to skip the ORB-SLAM3 build during development,
-      # build only the 'base' stage:
+      # Uncomment to skip ORB-SLAM3 during development:
       # target: base
+      args:
+        USER_UID: "${DOCKER_UID:-1000}"
+        USER_GID: "${DOCKER_GID:-1000}"
 
     image: shelfbot:humble
 
     container_name: shelfbot
 
+    # Numeric UID:GID — avoids username-resolution ambiguity.
+    user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
+
     # ── Network ──────────────────────────────────────────────────────────────
-    # host networking is mandatory for ROS 2 DDS discovery to work without
-    # extra configuration. With host mode, all ROS 2 nodes on the host and
-    # inside the container share the same network interfaces automatically.
     network_mode: host
 
-    # ── Volumes (two-way bind mount) ──────────────────────────────────────────
+    # ── Volumes ───────────────────────────────────────────────────────────────
     volumes:
-      # Primary workspace — changes made inside the container are immediately
-      # visible on the host and vice versa.
+      # 1. Colcon workspace — build/, install/, log/ live here.
+      #    Host:      /home/chris/shelfbot/shelfbot/shelfbot_ws
+      #    Container: /workspace
       - ./shelfbot_ws:/workspace
+
+      # 2. Package source — the repo root mounted directly as the ROS package.
+      #    Host:      /home/chris/shelfbot/shelfbot
+      #    Container: /workspace/src/shelfbot
+      #    This shadows shelfbot_ws/src/shelfbot (broken symlink) in the container.
+      - .:/workspace/src/shelfbot
 
       # X11 socket for GUI applications (RViz2, rqt, etc.)
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
 
     # ── Environment ──────────────────────────────────────────────────────────
     environment:
-      # X11 display forwarding (host value propagated into container)
       - DISPLAY=${DISPLAY:-:0}
-      - QT_X11_NO_MITSHM=1           # prevents Qt shared-memory crash in Docker
-
-      # ROS 2 domain ID — change if you run multiple ROS 2 setups on the same
-      # machine to avoid topic cross-talk.
+      - QT_X11_NO_MITSHM=1
       - ROS_DOMAIN_ID=0
-
-      # Colcon build parallelism
-      - MAKEFLAGS=-j${NPROC:-$(nproc)}
+      - MAKEFLAGS=-j${NPROC:-4}
 
     # ── Hardware / privileges ─────────────────────────────────────────────────
-    # Needed to access physical devices (serial, USB) for micro-ROS bridge.
     privileged: true
     devices:
-      - /dev:/dev   # expose all host devices; narrow this down in production
+      - /dev:/dev
 
-    # ── Runtime behaviour ─────────────────────────────────────────────────────
-    stdin_open: true    # keep STDIN open for interactive shells
-    tty: true           # allocate a pseudo-TTY
-
-    # The default CMD in the Dockerfile is /bin/bash; override here if needed.
-    # command: ros2 launch shelfbot real_robot_microros.launch.py
-
-    # ── Resource hints (optional) ─────────────────────────────────────────────
-    # Uncomment to cap container resource usage.
-    # deploy:
-    #   resources:
-    #     limits:
-    #       cpus: "6"
-    #       memory: 8G
+    # ── Runtime ───────────────────────────────────────────────────────────────
+    stdin_open: true
+    tty: true

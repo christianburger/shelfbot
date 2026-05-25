@@ -1,6 +1,13 @@
-# Shelfbot — Environment Setup & Developer Guide
+# Shelfbot — Environment Setup & Developer Guide (Native / Bare-Metal)
 
-> **Platform:** Ubuntu 22.04 LTS (Jammy) · **ROS 2:** Humble Hawksbill · **Hardware:** 4-wheel skid-steer robot, ESP32-CAM, micro-ROS firmware
+> **Platform:** Ubuntu 22.04 LTS (Jammy) · **ROS 2:** Humble Hawksbill
+> **Hardware:** 4-wheel skid-steer robot · ESP32-CAM · micro-ROS firmware
+
+> ⚠️ **Docker is the recommended environment.**
+> See [`INSTRUCTIONS.md`](INSTRUCTIONS.md) for the Docker-based workflow, which
+> gives a fully reproducible build (including ORB-SLAM3 and Pangolin) without
+> modifying host packages.
+> This document covers native installation on a bare-metal Ubuntu 22.04 machine.
 
 ---
 
@@ -15,7 +22,7 @@
 7. [Build the Package](#7-build-the-package)
 8. [Launch the Robot](#8-launch-the-robot)
 9. [RViz2 Visualisation](#9-rviz2-visualisation)
-10. [Verifying Functionality with `ros2` Commands](#10-verifying-functionality-with-ros2-commands)
+10. [Verifying Functionality](#10-verifying-functionality)
 11. [Monitoring micro-ROS Activity](#11-monitoring-micro-ros-activity)
 12. [Utility Scripts](#12-utility-scripts)
 13. [Troubleshooting](#13-troubleshooting)
@@ -26,14 +33,13 @@
 
 | Component | Minimum | Recommended |
 |-----------|---------|-------------|
-| OS | Ubuntu 22.04 | Ubuntu 22.04 |
+| OS | Ubuntu 22.04 LTS | Ubuntu 22.04 LTS |
 | CPU | 4-core x86-64 | 8-core x86-64 |
 | RAM | 8 GB | 16 GB |
 | Disk | 20 GB free | 40 GB free |
-| GPU | — | Any (for ORB-SLAM3 viewer) |
+| GPU | — | Any (for ORB-SLAM3 Pangolin viewer) |
 | Python | 3.10 | 3.10 |
 
-**Check your Ubuntu version:**
 ```bash
 lsb_release -a
 uname -m    # must be x86_64 or aarch64
@@ -46,20 +52,15 @@ uname -m    # must be x86_64 or aarch64
 ```bash
 sudo apt update && sudo apt upgrade -y
 
-# Build essentials
 sudo apt install -y \
-  build-essential cmake git wget curl \
+  build-essential cmake git wget curl unzip ninja-build \
   python3-pip python3-dev python3-setuptools \
   libeigen3-dev libboost-all-dev \
   libopencv-dev libopencv-contrib-dev \
   libyaml-cpp-dev libgoogle-glog-dev \
-  libglew-dev libpangolin-dev \
-  libapriltag-dev
-
-# ROS 2 tool prerequisites
-sudo apt install -y \
-  software-properties-common \
-  apt-transport-https
+  libglew-dev libgl1-mesa-dev \
+  libapriltag-dev \
+  software-properties-common apt-transport-https
 ```
 
 ---
@@ -67,7 +68,7 @@ sudo apt install -y \
 ## 3. ROS 2 Humble Installation
 
 ```bash
-# Add ROS 2 apt repository
+# Add ROS 2 APT key and repository
 sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
   -o /usr/share/keyrings/ros-archive-keyring.gpg
 
@@ -78,10 +79,10 @@ echo "deb [arch=$(dpkg --print-architecture) \
 
 sudo apt update
 
-# Install desktop-full (includes RViz2, Gazebo, etc.)
+# Desktop-full (includes RViz2, rqt)
 sudo apt install -y ros-humble-desktop-full
 
-# Required ROS 2 packages for shelfbot
+# Shelfbot-specific ROS 2 packages
 sudo apt install -y \
   ros-humble-ros2-control \
   ros-humble-ros2-controllers \
@@ -116,23 +117,28 @@ sudo apt install -y \
   ros-humble-visualization-msgs \
   ros-humble-camera-info-manager \
   ros-humble-image-transport \
+  ros-humble-image-transport-plugins \
   ros-humble-cv-bridge \
   ros-humble-xacro \
   ros-humble-apriltag-ros \
   ros-humble-apriltag-msgs \
-  ros-humble-behaviortree-cpp-v3 \
+  ros-humble-rosidl-typesupport-c \
+  ros-humble-rosidl-typesupport-cpp \
+  ros-humble-rosidl-default-generators \
+  ros-humble-rosidl-default-runtime \
   python3-colcon-common-extensions \
   python3-rosdep \
   python3-vcstool
 
-# Source ROS 2 — add this to ~/.bashrc
+# Source ROS 2 in every new shell
 echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-**Initialise rosdep:**
+Initialise rosdep (skip if already done):
+
 ```bash
-sudo rosdep init   # skip if already done
+sudo rosdep init
 rosdep update
 ```
 
@@ -140,34 +146,43 @@ rosdep update
 
 ## 4. Workspace Setup
 
+The repo root acts as the ROS 2 package source. The colcon workspace lives
+inside the repo at `shelfbot_ws/`.
+
 ```bash
-# Create workspace
-mkdir -p ~/shelfbot_workspace/src
-cd ~/shelfbot_workspace/src
+cd /home/chris/shelfbot/shelfbot
 
-# Clone the package (adjust URL/path as needed)
-git clone <your-repo-url> shelfbot
-# — or if working from an existing checkout —
-# the package is already at ~/shelfbot_workspace/src/shelfbot
+# The colcon workspace sits inside the repo
+mkdir -p shelfbot_ws/src
 
-# Resolve any remaining ROS dependencies automatically
-cd ~/shelfbot_workspace
+# Symlink the package source into the workspace
+# Use an absolute path so the symlink works from both native and Docker contexts
+ln -sf "$(pwd)" shelfbot_ws/src/shelfbot
+
+# Resolve remaining ROS dependencies
+cd shelfbot_ws
 rosdep install --from-paths src --ignore-src -r -y
 ```
+
+> **Docker note:** The Docker setup uses a second bind-mount instead of a
+> symlink (absolute symlinks break inside containers). If you switch between
+> native and Docker workflows, the bind-mount shadows any symlink, so both
+> can coexist.
 
 ---
 
 ## 5. micro-ROS Setup
 
-The robot firmware communicates over micro-ROS topics
-(`/shelfbot_firmware/motor_command`, `/shelfbot_firmware/set_speed`,
-`/shelfbot_firmware/motor_positions`).  
-The micro-ROS agent bridges the ESP32 serial/WiFi connection to the ROS 2 DDS layer.
+The robot firmware communicates over micro-ROS topics:
+- `/shelfbot_firmware/motor_command`
+- `/shelfbot_firmware/set_speed`
+- `/shelfbot_firmware/motor_positions`
+
+The micro-ROS agent bridges the ESP32 serial/Wi-Fi connection to ROS 2 DDS.
 
 ### 5.1 Build the micro-ROS agent
 
 ```bash
-# Create a dedicated workspace so it doesn't pollute the main build
 mkdir -p ~/microros_ws/src
 cd ~/microros_ws
 
@@ -180,75 +195,85 @@ rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
 source install/local_setup.bash
 
-# Create, build and install the micro-ROS agent
 ros2 run micro_ros_setup create_agent_ws.sh
 ros2 run micro_ros_setup build_agent.sh
 source install/local_setup.bash
 ```
 
-### 5.2 Add micro-ROS to shell initialisation
+### 5.2 Add to shell initialisation
 
 ```bash
 echo "source ~/microros_ws/install/local_setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-### 5.3 Start the micro-ROS agent
+### 5.3 Start the agent
 
-The ESP32 connects via **serial USB** (most common):
+Serial (most common):
+
 ```bash
-# Find the correct port
-ls /dev/ttyUSB* /dev/ttyACM*
+ls /dev/ttyUSB* /dev/ttyACM*          # find the device
+sudo usermod -aG dialout $USER         # one-time; requires logout/login
 
-# Give your user access (log out/in required once)
-sudo usermod -aG dialout $USER
-
-# Launch agent (replace /dev/ttyUSB0 and 115200 with your values)
 ros2 run micro_ros_agent micro_ros_agent serial \
-  --dev /dev/ttyUSB0 \
-  --baudrate 115200
+  --dev /dev/ttyUSB0 --baudrate 115200
 ```
 
-Or over **UDP** (if the ESP32 is on WiFi):
+UDP (ESP32 on Wi-Fi):
+
 ```bash
 ros2 run micro_ros_agent micro_ros_agent udp4 --port 8888
 ```
 
-Keep this terminal open; the agent must be running before launching any shelfbot nodes.
+Keep this terminal open. The agent must be running before any shelfbot node
+that uses the hardware interface.
 
 ---
 
 ## 6. ORB-SLAM3 Setup (Optional)
 
-Required only when using `nav2_orb_slam3.launch.py`.  
-The installation path expected by the launch file is `~/ORB_SLAM3`.
+Required only for `nav2_orb_slam3.launch.py`.
+In the Docker image, ORB-SLAM3 is at `/opt/ORB_SLAM3`.
+For a native build, install it to a known path and export the variable.
+
+### 6.1 Build Pangolin
 
 ```bash
 cd ~
-git clone https://github.com/UZ-SLAMLab/ORB_SLAM3.git
-cd ORB_SLAM3
-
-# Install Pangolin (ORB-SLAM3 viewer dependency)
-cd ~ && git clone --recursive https://github.com/stevenlovegrove/Pangolin.git
+git clone --depth 1 --branch v0.6 \
+  https://github.com/stevenlovegrove/Pangolin.git
 cd Pangolin && mkdir build && cd build
-cmake .. && make -j$(nproc)
-sudo make install
-cd ~/ORB_SLAM3
+cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_PYPANGOLIN=OFF
+make -j$(nproc)
+sudo make install        # installs to /usr/local
+```
 
-# Patch build script for Ubuntu 22 / OpenCV 4
-sed -i 's/++11/++14/g' build.sh
+### 6.2 Build ORB-SLAM3
 
+```bash
+cd ~
+git clone --depth 1 https://github.com/UZ-SLAMLab/ORB_SLAM3.git
+cd ORB_SLAM3
 chmod +x build.sh
 ./build.sh
 
-# Verify the shared library was produced
+# Verify
 ls ~/ORB_SLAM3/lib/libORB_SLAM3.so
 ```
 
-**Runtime environment variable** (already set in the launch file, but useful to know):
+### 6.3 Export environment variable
+
 ```bash
-export LD_LIBRARY_PATH=~/ORB_SLAM3/lib:$LD_LIBRARY_PATH
+echo "export ORB_SLAM3_ROOT=~/ORB_SLAM3" >> ~/.bashrc
+echo "export LD_LIBRARY_PATH=\$ORB_SLAM3_ROOT/lib:\$ORB_SLAM3_ROOT/Thirdparty/DBoW2/lib:\$ORB_SLAM3_ROOT/Thirdparty/g2o/lib:\$LD_LIBRARY_PATH" >> ~/.bashrc
+source ~/.bashrc
 ```
+
+> `src/nodes/CMakeLists.txt` reads `$ENV{ORB_SLAM3_ROOT}` and falls back to
+> `/opt/ORB_SLAM3` if the variable is not set.
+> Pangolin is searched at `/opt/pangolin` first, then the CMake default paths.
+> For a native build where Pangolin is in `/usr/local`, you may need to set
+> `CMAKE_PREFIX_PATH=/usr/local` or adjust the `find_library` paths.
 
 ---
 
@@ -257,29 +282,24 @@ export LD_LIBRARY_PATH=~/ORB_SLAM3/lib:$LD_LIBRARY_PATH
 ### 7.1 Clean build (recommended after major changes)
 
 ```bash
-cd ~/shelfbot_workspace
+cd /home/chris/shelfbot/shelfbot/shelfbot_ws
 
-# Remove all previous build artefacts
 rm -rf build/ install/ log/
 
-# Source ROS 2 base (not install/setup.bash — nothing is installed yet)
 source /opt/ros/humble/setup.bash
 
-# Build everything
 colcon build --symlink-install \
   --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
-# Source the overlay
 source install/setup.bash
 ```
 
-### 7.2 Incremental build (normal day-to-day)
+### 7.2 Incremental build (day-to-day)
 
 ```bash
-cd ~/shelfbot_workspace
+cd /home/chris/shelfbot/shelfbot/shelfbot_ws
 source /opt/ros/humble/setup.bash
 
-# Build only the shelfbot package
 colcon build --symlink-install --packages-select shelfbot \
   --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
@@ -289,27 +309,36 @@ source install/setup.bash
 ### 7.3 Expected build output
 
 ```
-Starting >>> shelfbot_utils
-Starting >>> microros_communication
-Starting >>> four_wheel_drive_odometry
-Starting >>> four_wheel_drive_controller
-Starting >>> four_wheel_drive_hardware_interface
-Starting >>> camera_publisher
-Starting >>> apriltag_detector_node
-Starting >>> shelfbot_slam_orb3_node   # only if ORB-SLAM3 present
-Finished <<< shelfbot [XX.XXs]
-Summary: X packages finished
+Starting >>> shelfbot
+--- stderr: shelfbot
+[Eigen::AlignedBit deprecation warnings — see §13 → Known warnings]
+---
+Finished <<< shelfbot [~50s]
+
+Summary: 1 package finished [~50s]
+  1 package had stderr output: shelfbot
 ```
 
-No warnings about missing libraries should appear after a clean build. If ORB-SLAM3 is absent, `shelfbot_slam_orb3_node` will fail to build — this is acceptable; comment out that target in `src/nodes/CMakeLists.txt` if not needed.
+`Summary: 1 package finished` with no `Failed` line is a **successful build**.
+The stderr content is entirely harmless Eigen deprecation warnings produced
+by ORB-SLAM3's bundled g2o library — see [§13](#13-troubleshooting).
+
+If ORB-SLAM3 is not installed and `$ORB_SLAM3_ROOT` is not set, the
+`shelfbot_slam_orb3_node` target will fail. Disable it by commenting out its
+`add_executable` block and `install()` entry in `src/nodes/CMakeLists.txt`.
 
 ---
 
 ## 8. Launch the Robot
 
-Open **three terminals** before running any launch file.
+Open three terminals. Source the workspace in each:
+
+```bash
+source /home/chris/shelfbot/shelfbot/shelfbot_ws/install/setup.bash
+```
 
 ### Terminal 1 — micro-ROS agent
+
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/microros_ws/install/local_setup.bash
@@ -317,51 +346,36 @@ ros2 run micro_ros_agent micro_ros_agent serial \
   --dev /dev/ttyUSB0 --baudrate 115200
 ```
 
-### Terminal 2 — Robot drivers + Nav2
+### Terminal 2 — Robot stack
 
-**Option A — Nav2 with RTAB-Map (recommended for production):**
 ```bash
-cd ~/shelfbot_workspace
+cd /home/chris/shelfbot/shelfbot/shelfbot_ws
 source install/setup.bash
+
+# Option A — Nav2 + RTAB-Map SLAM (recommended)
 ros2 launch shelfbot nav2_bt_real_robot.launch.py
-```
 
-**Option B — Nav2 with ORB-SLAM3:**
-```bash
+# Option B — Nav2 + ORB-SLAM3
 ros2 launch shelfbot nav2_orb_slam3.launch.py
-```
 
-**Option C — Nav2 odom-only (no SLAM, fastest for testing):**
-```bash
-ros2 launch shelfbot nav2_real_robot.launch.py \
-  params_file:=install/shelfbot/share/shelfbot/config/nav2_odom_params.yaml
-```
+# Option C — Nav2, odometry only
+ros2 launch shelfbot nav2_real_robot.launch.py
 
-**Option D — AprilTag detector only:**
-```bash
+# Option D — AprilTag detector only
 ros2 launch shelfbot apriltag_detector.launch.py tag_size:=0.16
 ```
 
 ### Terminal 3 — RViz2
 
 ```bash
-source ~/shelfbot_workspace/install/setup.bash
+source /home/chris/shelfbot/shelfbot/shelfbot_ws/install/setup.bash
 
-# Full nav2 view
-rviz2 -d ~/shelfbot_workspace/install/shelfbot/share/shelfbot/config/shelfbot_successful.rviz
-
-# Odometry-only view
-rviz2 -d ~/shelfbot_workspace/install/shelfbot/share/shelfbot/config/shelfbot_odometry_config.rviz
-
-# AprilTag view
-rviz2 -d ~/shelfbot_workspace/install/shelfbot/share/shelfbot/config/apriltag.rviz
+rviz2 -d /home/chris/shelfbot/shelfbot/shelfbot_ws/install/shelfbot/share/shelfbot/config/shelfbot_successful.rviz
 ```
 
-### Sending a navigation goal from the command line
+### Send a navigation goal
 
 ```bash
-source ~/shelfbot_workspace/install/setup.bash
-
 ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
   "{pose: {header: {frame_id: 'odom'}, \
     pose: {position: {x: 1.0, y: 0.0, z: 0.0}, \
@@ -372,22 +386,16 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
 
 ## 9. RViz2 Visualisation
 
-### What each config shows
-
 | Config file | Key displays |
 |-------------|-------------|
 | `shelfbot_successful.rviz` | Robot model, TF tree, global/local costmap, planner path, goal pose, camera overlay, odometry arrows |
 | `shelfbot_odometry_config.rviz` | TF tree, robot model, odometry arrows only |
 | `apriltag.rviz` | Raw camera feed with overlaid detections |
 
-### Useful RViz2 panels
-
-- **Fixed Frame** — set to `odom` for nav testing, `map` when SLAM is running
-- **2D Goal Pose tool** — click on the map to send a navigation goal directly
-- **Odometry display** — set *Keep* to 200 arrows to trace the driven path
-- **Camera display** — toggle `Image Rendering: background and overlay` to see tags
-
-### Adding displays manually
+**Tips:**
+- Set Fixed Frame to `odom` for nav testing, `map` when SLAM is running
+- Use the **2D Goal Pose** tool to send nav goals by clicking the map
+- Set Odometry *Keep* to 200 to trace the driven path
 
 | Topic | Display type | Purpose |
 |-------|-------------|---------|
@@ -397,173 +405,114 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
 | `/plan` | Path | Computed nav path |
 | `/camera/image_raw` | Camera | ESP32-CAM live feed |
 | `/tag_poses` | PoseArray | Detected AprilTag poses |
-| `/apriltag_markers` | MarkerArray | 3D tag cubes |
+| `/apriltag_markers` | MarkerArray | 3D tag cubes in RViz |
 | `/tf` | TF | Full transform tree |
 
 ---
 
-## 10. Verifying Functionality with `ros2` Commands
+## 10. Verifying Functionality
 
-### 10.1 Node graph
+### Node graph
 
 ```bash
-# List all running nodes
 ros2 node list
-
-# Expected nodes (with full nav2 launch):
-#   /camera_info_publisher
-#   /controller_manager
+# With full nav2_bt_real_robot.launch.py:
 #   /four_wheel_drive_controller
 #   /joint_state_broadcaster
+#   /controller_manager
 #   /controller_server
 #   /planner_server
 #   /behavior_server
 #   /bt_navigator
 #   /waypoint_follower
 #   /rtabmap   (or /shelfbot_slam_orb3_node)
-#   /apriltag_detector
+#   /apriltag_detector_node
 ```
 
-### 10.2 Topic inspection
+### Topics
 
 ```bash
-# All active topics
 ros2 topic list
-
-# Verify odometry is being published (should print at ~2 Hz)
 ros2 topic echo /odom --once
-
-# Check wheel joint states
 ros2 topic echo /joint_states --once
-
-# Inspect camera feed (check timestamps are current)
 ros2 topic hz /camera/image_raw
-
-# Check camera info is publishing
-ros2 topic echo /camera/camera_info --once
-
-# Watch raw motor positions from firmware
 ros2 topic echo /shelfbot_firmware/motor_positions
-
-# Watch motor commands sent to firmware
 ros2 topic echo /shelfbot_firmware/set_speed
 ```
 
-### 10.3 TF tree
+### TF tree
 
 ```bash
-# Print the full transform tree to stdout
-ros2 run tf2_tools view_frames
+ros2 run tf2_tools view_frames    # generates frames.pdf
+# Chain: map → odom → base_footprint → base_link → wheels, camera_link
 
-# This generates frames.pdf in the current directory showing:
-# map -> odom -> base_footprint -> base_link -> [wheels, camera_link, us_*]
-
-# Live TF lookup between two frames
 ros2 run tf2_ros tf2_echo odom base_footprint
-
-# Check if map->odom is being published (only when SLAM is running)
-ros2 run tf2_ros tf2_echo map odom
+ros2 run tf2_ros tf2_echo map odom   # only when SLAM is active
 ```
 
-### 10.4 Controller manager
+### Controller manager
 
 ```bash
-# List all loaded controllers and their state
 ros2 control list_controllers
+# four_wheel_drive_controller  [active]
+# joint_state_broadcaster      [active]
 
-# Expected output:
-#   four_wheel_drive_controller  [active]
-#   joint_state_broadcaster      [active]
-
-# List hardware interfaces exported by the hardware plugin
 ros2 control list_hardware_interfaces
+# 4× velocity command, 4× position state, 4× velocity state
 
-# Expected: 4x velocity command, 4x position state, 4x velocity state
-```
-
-### 10.5 Hardware interface health
-
-```bash
-# Check hardware component state
 ros2 control list_hardware_components
-
-# Expected:
-#   FourWheelDriveSystem [active]
+# FourWheelDriveSystem [active]
 ```
 
-### 10.6 Send manual velocity commands
+### Manual velocity (robot will move — caution)
 
 ```bash
-# Forward at 0.1 m/s (CAUTION: robot will move)
+# Forward 0.1 m/s
 ros2 topic pub --once /four_wheel_drive_controller/cmd_vel \
-  geometry_msgs/msg/Twist \
-  "{linear: {x: 0.1}, angular: {z: 0.0}}"
+  geometry_msgs/msg/Twist "{linear: {x: 0.1}, angular: {z: 0.0}}"
 
-# Rotate in place at 0.3 rad/s
+# Rotate 0.3 rad/s
 ros2 topic pub --once /four_wheel_drive_controller/cmd_vel \
-  geometry_msgs/msg/Twist \
-  "{linear: {x: 0.0}, angular: {z: 0.3}}"
+  geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z: 0.3}}"
 
-# Emergency stop
+# Stop
 ros2 topic pub --once /four_wheel_drive_controller/cmd_vel \
   geometry_msgs/msg/Twist "{}"
 ```
 
-### 10.7 Nav2 health check
+### Nav2 health
 
 ```bash
-# Check lifecycle states of Nav2 nodes
-ros2 lifecycle get /controller_server
-ros2 lifecycle get /planner_server
-ros2 lifecycle get /bt_navigator
+ros2 lifecycle get /controller_server   # → active
+ros2 lifecycle get /planner_server      # → active
+ros2 lifecycle get /bt_navigator        # → active
 
-# All should return: active
-
-# Check action servers are ready
 ros2 action list
-# Expected:
-#   /navigate_to_pose
-#   /follow_path
-#   /compute_path_to_pose
-#   /spin
-#   /back_up
+# /navigate_to_pose  /follow_path  /compute_path_to_pose  /spin  /back_up
 ```
 
-### 10.8 AprilTag detection
+### AprilTag detection
 
 ```bash
-# Verify detections are being published
 ros2 topic echo /tag_poses
-
-# Watch TF for a specific tag (e.g., tag ID 0)
-ros2 run tf2_ros tf2_echo camera_link tag_0
-
-# Count detection rate
 ros2 topic hz /tag_poses
+ros2 run tf2_ros tf2_echo camera_link tag_0
 ```
 
-### 10.9 RTAB-Map / SLAM
+### RTAB-Map / SLAM
 
 ```bash
-# Check map is being built
-ros2 topic echo /map --once      # occupancy grid
-
-# Verify map->odom TF is being published (SLAM is working)
+ros2 topic echo /map --once
 ros2 run tf2_ros tf2_echo map odom
-
-# RTAB-Map statistics
 ros2 topic echo /rtabmap/info --once
 ```
 
-### 10.10 Parameter inspection
+### Parameter inspection
 
 ```bash
-# Dump all controller parameters
 ros2 param list /four_wheel_drive_controller
 ros2 param get /four_wheel_drive_controller wheel_separation
 ros2 param get /four_wheel_drive_controller wheel_radius
-
-# Live-tune cmd_vel timeout (useful during debugging)
 ros2 param set /four_wheel_drive_controller cmd_vel_timeout 10.0
 ```
 
@@ -571,61 +520,39 @@ ros2 param set /four_wheel_drive_controller cmd_vel_timeout 10.0
 
 ## 11. Monitoring micro-ROS Activity
 
-### 11.1 Confirm firmware topics appear
+### Confirm firmware topics appear
 
-After starting the agent and powering the robot, these topics should appear
-within ~5 seconds:
+Within ~5 seconds of powering the robot and starting the agent:
 
 ```bash
 ros2 topic list | grep shelfbot_firmware
-# Expected:
-#   /shelfbot_firmware/motor_command
-#   /shelfbot_firmware/motor_positions
-#   /shelfbot_firmware/set_speed
-
-# If topics are absent, the ESP32 has not connected to the agent.
-# Check: correct port, correct baud rate, firmware flashed with micro-ROS.
+# /shelfbot_firmware/motor_command
+# /shelfbot_firmware/motor_positions
+# /shelfbot_firmware/set_speed
 ```
 
-### 11.2 Monitor connection health in real time
+If topics are absent: check the port, baud rate, and that the firmware is
+flashed with micro-ROS.
+
+### Real-time monitoring
 
 ```bash
-# Watch motor position feedback (should update at firmware control rate)
 watch -n 0.5 'ros2 topic hz /shelfbot_firmware/motor_positions'
 
-# Echo raw position values
 ros2 topic echo /shelfbot_firmware/motor_positions
-# data: [pos_fl, pos_fr, pos_bl, pos_br]  (float32 array, units: encoder ticks or radians)
+# data: [pos_fl, pos_fr, pos_bl, pos_br]
 
-# Echo speed commands going to firmware
 ros2 topic echo /shelfbot_firmware/set_speed
 # data: [vel_fl, vel_fr, vel_bl, vel_br]
 ```
 
-### 11.3 Check communication health via logs
-
-The `MicroRosCommunication` class logs a warning if no message has been
-received for > 1 second.  Monitor this in the terminal running the driver launch:
+### Diagnose firmware silence
 
 ```bash
-# Filter relevant log lines from the launch output
-ros2 launch shelfbot nav2_bt_real_robot.launch.py 2>&1 | grep -E "MicroRos|hw_positions|Communication"
-```
-
-### 11.4 Diagnose firmware silence
-
-If `/shelfbot_firmware/motor_positions` stops publishing:
-
-```bash
-# 1. Check the agent is still running (Terminal 1)
-# 2. Verify the serial device is still present
 ls -la /dev/ttyUSB*
-
-# 3. Check for permission errors
 dmesg | tail -20
 
-# 4. Restart the agent (safe to do without killing the robot)
-# Ctrl-C the agent, then restart it — micro-ROS will auto-reconnect
+# Restart agent (micro-ROS auto-reconnects)
 ros2 run micro_ros_agent micro_ros_agent serial \
   --dev /dev/ttyUSB0 --baudrate 115200
 ```
@@ -634,20 +561,17 @@ ros2 run micro_ros_agent micro_ros_agent serial \
 
 ## 12. Utility Scripts
 
-Two helper scripts are installed to `lib/shelfbot/`:
-
-### 12.1 `mission_starter.py` — send a sequence of waypoints
+### `mission_starter.py` — send a sequence of waypoints
 
 ```bash
-# After sourcing the workspace:
 ros2 run shelfbot mission_starter.py
 ```
 
-### 12.2 `topic_logger.py` — record key topics to a CSV
+### `topic_logger.py` — record key topics to CSV
 
 ```bash
 ros2 run shelfbot topic_logger.py
-# Logs: /odom, /joint_states, /shelfbot_firmware/motor_positions
+# Logs /odom, /joint_states, /shelfbot_firmware/motor_positions
 # Output: ~/shelfbot_logs/YYYY-MM-DD_HH-MM-SS.csv
 ```
 
@@ -655,74 +579,81 @@ ros2 run shelfbot topic_logger.py
 
 ## 13. Troubleshooting
 
+### Known build warnings: `Eigen::AlignedBit` is deprecated
+
+```
+warning: 'Eigen::AlignedBit' is deprecated [-Wdeprecated-declarations]
+  typedef Eigen::Map<..., AlignedBit ? Aligned : Unaligned> HessianBlockType;
+```
+
+**These are harmless.** Source: ORB-SLAM3's bundled g2o library, written
+against Eigen 3.3. Ubuntu 22.04 ships Eigen 3.4 which deprecated `AlignedBit`.
+The compiled binary is correct. They are suppressed by adding to
+`src/nodes/CMakeLists.txt`:
+
+```cmake
+target_compile_options(shelfbot_slam_orb3_node PRIVATE
+  -Wno-deprecated-declarations
+)
+```
+
+Cannot be fixed without patching upstream g2o.
+
 ### Controller not activating
 
 ```bash
-ros2 control list_controllers
-# If state is "inactive" or "unconfigured":
-
-# Manually activate
+ros2 control list_controllers   # check state
 ros2 control set_controller_state four_wheel_drive_controller active
 ros2 control set_controller_state joint_state_broadcaster active
 ```
 
 ### `No motor position data received from firmware yet`
 
-This warning means the hardware interface is alive but the firmware has not
-sent a single `/shelfbot_firmware/motor_positions` message.
+1. Confirm micro-ROS agent shows `[1] New Client connected`
+2. Power-cycle the ESP32
+3. Verify firmware is compiled with the correct micro-ROS topic names
 
-1. Confirm the micro-ROS agent is running and shows `[1] New Client connected`.
-2. Power-cycle the ESP32/robot.
-3. Verify the firmware was compiled with the correct micro-ROS topic names.
-
-### TF tree is broken / `odom` frame missing
+### TF tree broken / `odom` frame missing
 
 ```bash
-# Check who is broadcasting odom->base_footprint
-ros2 run tf2_tools view_frames
-# Open frames.pdf and look for disconnected subtrees
-
-# If odom is missing, the odometry node in FourWheelDriveOdometry may not
-# have received valid wheel positions yet.
+ros2 run tf2_tools view_frames   # open frames.pdf for disconnected subtrees
 ros2 topic echo /shelfbot_firmware/motor_positions   # must be receiving
 ```
 
 ### Nav2 nodes stuck in `configuring`
 
-The lifecycle manager waits for all listed nodes to be available.
-If one node crashes on startup, the entire stack stalls.
+One node crashed on startup — the lifecycle manager waits for it.
 
 ```bash
-ros2 node list          # identify which node is missing
-ros2 lifecycle get /planner_server   # check its state
-# Review that node's stdout for error messages
+ros2 node list                      # identify the missing node
+ros2 lifecycle get /planner_server  # check its state
 ```
 
-### RTAB-Map `tf_delay` warning
-
-If RTAB-Map logs repeated `TF Delay` warnings, the delay between odometry and
-image timestamps is too large. Increase `tf_delay` in the launch file:
+### RTAB-Map `TF Delay` warning
 
 ```python
-'tf_delay': 1.2,   # seconds — raise until warnings stop
+# In the launch file, increase:
+'tf_delay': 1.2,   # seconds
 ```
 
-### Build failure: `ORB_SLAM3/lib/libORB_SLAM3.so` not found
+### Build failure: `libORB_SLAM3.so` not found
 
-```bash
-# Either build ORB-SLAM3 (Section 6) or disable the node:
-# In src/nodes/CMakeLists.txt, comment out the shelfbot_slam_orb3_node target
-# and its install() entry, then rebuild.
+Either build ORB-SLAM3 (§6), set `ORB_SLAM3_ROOT`, or disable the node:
+
+```cmake
+# In src/nodes/CMakeLists.txt — comment out:
+# add_executable(shelfbot_slam_orb3_node ...)
+# target_include_directories(shelfbot_slam_orb3_node ...)
+# target_link_libraries(shelfbot_slam_orb3_node ...)
+# ament_target_dependencies(shelfbot_slam_orb3_node ...)
+# install(TARGETS shelfbot_slam_orb3_node ...)
 ```
 
 ### `pluginlib` cannot find controller/hardware plugin
 
 ```bash
-# Verify the plugin XML files were installed
-ls ~/shelfbot_workspace/install/shelfbot/share/shelfbot/*.xml
-
-# Re-index the plugin cache
-ros2 pkg list | grep shelfbot    # package must appear
+ls /home/chris/shelfbot/shelfbot/shelfbot_ws/install/shelfbot/share/shelfbot/*.xml
+ros2 pkg list | grep shelfbot   # package must appear
 ```
 
 ---
@@ -730,11 +661,23 @@ ros2 pkg list | grep shelfbot    # package must appear
 ## Quick-Reference Cheat Sheet
 
 ```bash
-# ── Build ────────────────────────────────────────────────────────────────────
-cd ~/shelfbot_workspace && source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-select shelfbot && source install/setup.bash
+# ── Docker workflow (recommended) ─────────────────────────────────────────────
+cd /home/chris/shelfbot/shelfbot
+docker compose up -d
+docker compose exec shelfbot bash
+# Inside container:
+cd /workspace
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Debug
+source install/setup.bash
 
-# ── Run (3 terminals) ────────────────────────────────────────────────────────
+# ── Native workflow ───────────────────────────────────────────────────────────
+cd /home/chris/shelfbot/shelfbot/shelfbot_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select shelfbot \
+  --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
+source install/setup.bash
+
+# ── Launch (3 terminals) ──────────────────────────────────────────────────────
 # T1: micro-ROS agent
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 --baudrate 115200
 
@@ -742,15 +685,15 @@ ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 --baudrate 11
 ros2 launch shelfbot nav2_bt_real_robot.launch.py
 
 # T3: RViz2
-rviz2 -d ~/shelfbot_workspace/install/shelfbot/share/shelfbot/config/shelfbot_successful.rviz
+rviz2 -d $(ros2 pkg prefix shelfbot)/share/shelfbot/config/shelfbot_successful.rviz
 
-# ── Health checks ────────────────────────────────────────────────────────────
+# ── Health checks ─────────────────────────────────────────────────────────────
 ros2 control list_controllers
 ros2 topic hz /odom
 ros2 topic hz /shelfbot_firmware/motor_positions
-ros2 run tf2_tools view_frames && evince frames.pdf
+ros2 run tf2_tools view_frames
 
-# ── Drive test ───────────────────────────────────────────────────────────────
+# ── Drive test ────────────────────────────────────────────────────────────────
 ros2 topic pub --once /four_wheel_drive_controller/cmd_vel \
   geometry_msgs/msg/Twist "{linear: {x: 0.1}}"
 ```

@@ -1,7 +1,21 @@
-# Stage 1: base
+# ─────────────────────────────────────────────────────────────────────────────
+# Shelfbot Docker image — ROS 2 Humble
+#
+# User model
+#   • Build stages (pangolin, orbslam3) run as root; artefacts land in /opt.
+#   • The final stage creates user 'chris' (UID/GID 1000, matching the host).
+#   • docker-entrypoint.sh runs as chris on every start and uses NOPASSWD sudo
+#     to repair /workspace ownership if Docker created it as root.
+#
+# Host repo:  /home/chris/shelfbot/shelfbot/
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Stage 1: base ─────────────────────────────────────────────────────────────
 FROM osrf/ros:humble-desktop AS base
 
 ARG DEBIAN_FRONTEND=noninteractive
+ARG USER_UID=1000
+ARG USER_GID=1000
 
 # Locale
 RUN apt-get update && apt-get install -y locales \
@@ -10,9 +24,10 @@ RUN apt-get update && apt-get install -y locales \
     && rm -rf /var/lib/apt/lists/*
 ENV LANG=en_US.UTF-8
 
-# System utilities & build tools (corrected package names)
+# System utilities & build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake git wget curl unzip ninja-build \
+    sudo \
     python3-pip \
     python3-colcon-common-extensions \
     python3-colcon-mixin \
@@ -26,7 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nano vim bash-completion \
     && rm -rf /var/lib/apt/lists/*
 
-# ROS 2 Humble packages (full, with all type support)
+# ROS 2 Humble packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-humble-rclcpp \
     ros-humble-rclcpp-lifecycle \
@@ -87,14 +102,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN rosdep update
-
-# Ensure ament_package Python module
 RUN apt-get update && apt-get install -y --no-install-recommends python3-ament-package \
     && rm -rf /var/lib/apt/lists/*
 
-# Stage 2: Pangolin
+RUN rosdep update
+
+# ── Create user 'chris' matching host UID/GID ─────────────────────────────────
+RUN groupadd --gid ${USER_GID} chris \
+    && useradd \
+        --uid ${USER_UID} \
+        --gid ${USER_GID} \
+        --create-home \
+        --shell /bin/bash \
+        chris \
+    && echo "chris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/chris \
+    && chmod 0440 /etc/sudoers.d/chris
+
+
+# ── Stage 2: Pangolin ─────────────────────────────────────────────────────────
 FROM base AS pangolin
+
 WORKDIR /opt/deps
 RUN git clone --depth 1 --branch v0.6 https://github.com/stevenlovegrove/Pangolin.git pangolin_src \
     && mkdir pangolin_src/build \
@@ -105,8 +132,10 @@ RUN git clone --depth 1 --branch v0.6 https://github.com/stevenlovegrove/Pangoli
     && cmake --install pangolin_src/build \
     && rm -rf pangolin_src
 
-# Stage 3: ORB-SLAM3
+
+# ── Stage 3: ORB-SLAM3 ────────────────────────────────────────────────────────
 FROM pangolin AS orbslam3
+
 WORKDIR /opt/deps
 ENV ORB_SLAM3_ROOT=/opt/ORB_SLAM3
 RUN git clone --depth 1 https://github.com/UZ-SLAMLab/ORB_SLAM3.git ${ORB_SLAM3_ROOT}
@@ -114,29 +143,55 @@ RUN sed -i 's/make -j4/make -j$(nproc)/g' ${ORB_SLAM3_ROOT}/build.sh || true
 RUN cd ${ORB_SLAM3_ROOT} && chmod +x build.sh \
     && CMAKE_PREFIX_PATH=/opt/pangolin:${CMAKE_PREFIX_PATH:-} ./build.sh
 
-# Stage 4: Final
+
+# ── Stage 4: final ────────────────────────────────────────────────────────────
 FROM base AS final
+
 COPY --from=pangolin /opt/pangolin /opt/pangolin
+
 ENV ORB_SLAM3_ROOT=/opt/ORB_SLAM3
 COPY --from=orbslam3 ${ORB_SLAM3_ROOT} ${ORB_SLAM3_ROOT}
 
-RUN echo "/opt/pangolin/lib" > /etc/ld.so.conf.d/pangolin.conf \
-    && echo "${ORB_SLAM3_ROOT}/lib" > /etc/ld.so.conf.d/orbslam3.conf \
-    && echo "${ORB_SLAM3_ROOT}/Thirdparty/DBoW2/lib" >> /etc/ld.so.conf.d/orbslam3.conf \
-    && echo "${ORB_SLAM3_ROOT}/Thirdparty/g2o/lib" >> /etc/ld.so.conf.d/orbslam3.conf \
+RUN echo "/opt/pangolin/lib"                          >  /etc/ld.so.conf.d/pangolin.conf \
+    && echo "${ORB_SLAM3_ROOT}/lib"                   >  /etc/ld.so.conf.d/orbslam3.conf \
+    && echo "${ORB_SLAM3_ROOT}/Thirdparty/DBoW2/lib"  >> /etc/ld.so.conf.d/orbslam3.conf \
+    && echo "${ORB_SLAM3_ROOT}/Thirdparty/g2o/lib"    >> /etc/ld.so.conf.d/orbslam3.conf \
     && ldconfig
 
-RUN echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc \
-    && echo "source /workspace/install/setup.bash 2>/dev/null || true" >> /etc/bash.bashrc \
-    && echo "export ORB_SLAM3_ROOT=${ORB_SLAM3_ROOT}" >> /etc/bash.bashrc \
-    && echo "export CMAKE_PREFIX_PATH=/opt/pangolin:\${CMAKE_PREFIX_PATH}" >> /etc/bash.bashrc \
-    && echo "export LD_LIBRARY_PATH=${ORB_SLAM3_ROOT}/lib:${ORB_SLAM3_ROOT}/Thirdparty/DBoW2/lib:${ORB_SLAM3_ROOT}/Thirdparty/g2o/lib:/opt/pangolin/lib:\${LD_LIBRARY_PATH}" >> /etc/bash.bashrc
-
+# System-wide environment
 ENV ORB_SLAM3_ROOT=${ORB_SLAM3_ROOT}
 ENV CMAKE_PREFIX_PATH=/opt/pangolin
 ENV LD_LIBRARY_PATH=${ORB_SLAM3_ROOT}/lib:${ORB_SLAM3_ROOT}/Thirdparty/DBoW2/lib:${ORB_SLAM3_ROOT}/Thirdparty/g2o/lib:/opt/pangolin/lib
 
-RUN mkdir -p /workspace/src
+RUN echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc \
+    && echo "source /workspace/install/setup.bash 2>/dev/null || true" >> /etc/bash.bashrc
+
+# ── Install entrypoint (still root here) ─────────────────────────────────────
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Pre-create workspace with correct ownership so the image layer has it right.
+# The bind-mount overlays this at runtime, but if /workspace somehow persists
+# from the image layer, it will be chris-owned.
+RUN mkdir -p /workspace/src \
+    && chown -R chris:chris /workspace
+
+# ── Switch to chris ───────────────────────────────────────────────────────────
+USER chris
+
+RUN colcon mixin add default \
+      https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml \
+    && colcon mixin update default || true
+
+RUN echo "" >> /home/chris/.bashrc \
+    && echo "# ── ROS 2 / Shelfbot ──────────────────────────────────────────" >> /home/chris/.bashrc \
+    && echo "source /opt/ros/humble/setup.bash"                                 >> /home/chris/.bashrc \
+    && echo "source /workspace/install/setup.bash 2>/dev/null || true"          >> /home/chris/.bashrc \
+    && echo "export ORB_SLAM3_ROOT=${ORB_SLAM3_ROOT}"                           >> /home/chris/.bashrc \
+    && echo "export CMAKE_PREFIX_PATH=/opt/pangolin:\${CMAKE_PREFIX_PATH:-}"    >> /home/chris/.bashrc \
+    && echo "export LD_LIBRARY_PATH=${ORB_SLAM3_ROOT}/lib:${ORB_SLAM3_ROOT}/Thirdparty/DBoW2/lib:${ORB_SLAM3_ROOT}/Thirdparty/g2o/lib:/opt/pangolin/lib:\${LD_LIBRARY_PATH:-}" >> /home/chris/.bashrc \
+    && echo "export ROS_DOMAIN_ID=0"                                            >> /home/chris/.bashrc
+
 WORKDIR /workspace
-SHELL ["/bin/bash", "-c"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["/bin/bash"]

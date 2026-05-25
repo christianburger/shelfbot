@@ -1,0 +1,238 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1,
+						2,
+						3,
+						4,
+						5,
+						6
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-95bfa606b09ec32c7dc7.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.12"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						3,
+						7,
+						9
+					]
+				},
+				{
+					"build" : "src/utils",
+					"jsonFile" : "directory-src.utils-Debug-3e06762d87894fb62125.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.12"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "src/utils",
+					"targetIndexes" : 
+					[
+						8
+					]
+				},
+				{
+					"build" : "src/hardware",
+					"jsonFile" : "directory-src.hardware-Debug-a1670266b7ddea1d7b64.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.12"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "src/hardware",
+					"targetIndexes" : 
+					[
+						5
+					]
+				},
+				{
+					"build" : "src/navigation",
+					"jsonFile" : "directory-src.navigation-Debug-c98cf796498a5d0559bf.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.12"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "src/navigation",
+					"targetIndexes" : 
+					[
+						4
+					]
+				},
+				{
+					"build" : "src/control",
+					"jsonFile" : "directory-src.control-Debug-e23a250daf7dfc7fb5db.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.12"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "src/control",
+					"targetIndexes" : 
+					[
+						2
+					]
+				},
+				{
+					"build" : "src/perception",
+					"jsonFile" : "directory-src.perception-Debug-9000fe363d8079d2bbdc.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.12"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "src/perception"
+				},
+				{
+					"build" : "src/nodes",
+					"jsonFile" : "directory-src.nodes-Debug-62460492aa3ba2ade482.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.12"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "src/nodes",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						6
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6
+					],
+					"name" : "shelfbot",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 6,
+					"id" : "apriltag_detector_node::@f5d15e7778159c56dcdb",
+					"jsonFile" : "target-apriltag_detector_node-Debug-5725d72176d887ff10f9.json",
+					"name" : "apriltag_detector_node",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 6,
+					"id" : "camera_publisher::@f5d15e7778159c56dcdb",
+					"jsonFile" : "target-camera_publisher-Debug-a5ed50ad3a5a23e4d1ad.json",
+					"name" : "camera_publisher",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 4,
+					"id" : "four_wheel_drive_controller::@55c7869fca2c028a7ab9",
+					"jsonFile" : "target-four_wheel_drive_controller-Debug-63ac1a692592328e7a68.json",
+					"name" : "four_wheel_drive_controller",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "four_wheel_drive_hardware_interface::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-four_wheel_drive_hardware_interface-Debug-20277d3f8b3cf59b8f50.json",
+					"name" : "four_wheel_drive_hardware_interface",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 3,
+					"id" : "four_wheel_drive_odometry::@fbba1c12acbecc2ff3d2",
+					"jsonFile" : "target-four_wheel_drive_odometry-Debug-755c7e4462a9ade4d342.json",
+					"name" : "four_wheel_drive_odometry",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 2,
+					"id" : "microros_communication::@6e18b93f3ba6f3602792",
+					"jsonFile" : "target-microros_communication-Debug-5c70df3ac3fadd01cc16.json",
+					"name" : "microros_communication",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 6,
+					"id" : "shelfbot_slam_orb3_node::@f5d15e7778159c56dcdb",
+					"jsonFile" : "target-shelfbot_slam_orb3_node-Debug-e7f25187c8c7f386b11f.json",
+					"name" : "shelfbot_slam_orb3_node",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "shelfbot_uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-shelfbot_uninstall-Debug-b2ea47f32453dd32c00b.json",
+					"name" : "shelfbot_uninstall",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 1,
+					"id" : "shelfbot_utils::@f1b38b22aeb65474a6c5",
+					"jsonFile" : "target-shelfbot_utils-Debug-916e31a099800285959b.json",
+					"name" : "shelfbot_utils",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-uninstall-Debug-ebbc5cef592d118040cf.json",
+					"name" : "uninstall",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/workspace/build/shelfbot",
+		"source" : "/workspace/src/shelfbot"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 3
+	}
+}
