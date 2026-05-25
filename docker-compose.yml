@@ -3,14 +3,12 @@
 #
 # Host layout:
 #   /home/chris/shelfbot/shelfbot/            ← repo root (run docker compose from here)
-#   /home/chris/shelfbot/shelfbot/shelfbot_ws ← colcon workspace dirs (build/install/log)
 #
-# Volume strategy (two mounts, no symlink needed):
-#   ./shelfbot_ws  → /workspace                 colcon workspace root
-#   .              → /workspace/src/shelfbot     package source (repo root)
+# Volume strategy:
+#   workspace_vol (named volume) → /home/chris/shelfbot_ws   colcon workspace (persistent)
+#   . (bind mount)               → /home/chris/shelfbot_ws/src/shelfbot   package source
 #
-# The second mount shadows whatever shelfbot_ws/src/shelfbot contains on disk,
-# so the broken absolute symlink there is irrelevant.
+# IDE settings stored in named volumes → survive container rebuilds/reboots.
 #
 # Usage:
 #   docker compose build
@@ -18,8 +16,6 @@
 #   docker compose up -d
 #   docker compose exec shelfbot bash
 #   docker compose down
-#
-# Note: UID is readonly in bash; DOCKER_UID/GID are read from .env automatically.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 services:
@@ -27,50 +23,47 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      # Uncomment to skip ORB-SLAM3 during development:
-      # target: base
       args:
         USER_UID: "${DOCKER_UID:-1000}"
         USER_GID: "${DOCKER_GID:-1000}"
 
     image: shelfbot:humble
-
     container_name: shelfbot
 
-    # Numeric UID:GID — avoids username-resolution ambiguity.
     user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
 
-    # ── Network ──────────────────────────────────────────────────────────────
     network_mode: host
 
-    # ── Volumes ───────────────────────────────────────────────────────────────
     volumes:
-      # 1. Colcon workspace — build/, install/, log/ live here.
-      #    Host:      /home/chris/shelfbot/shelfbot/shelfbot_ws
-      #    Container: /workspace
-      - ./shelfbot_ws:/workspace
+      # 1. Colcon workspace — persistent named volume
+      - workspace_vol:/home/chris/shelfbot_ws
 
-      # 2. Package source — the repo root mounted directly as the ROS package.
-      #    Host:      /home/chris/shelfbot/shelfbot
-      #    Container: /workspace/src/shelfbot
-      #    This shadows shelfbot_ws/src/shelfbot (broken symlink) in the container.
-      - .:/workspace/src/shelfbot
+      # 2. Package source — the repo root mounted directly as the ROS package
+      - .:/home/chris/shelfbot_ws/src/shelfbot
 
-      # X11 socket for GUI applications (RViz2, rqt, etc.)
+      # X11 socket
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
 
-    # ── Environment ──────────────────────────────────────────────────────────
+      # Persistent IDE configuration (CLion Gateway / JetBrains)
+      - clion_cache:/home/chris/.cache/JetBrains
+      - clion_config:/home/chris/.config/JetBrains
+      - clion_local:/home/chris/.local/share/JetBrains
+
     environment:
       - DISPLAY=${DISPLAY:-:0}
       - QT_X11_NO_MITSHM=1
       - ROS_DOMAIN_ID=0
       - MAKEFLAGS=-j${NPROC:-4}
 
-    # ── Hardware / privileges ─────────────────────────────────────────────────
     privileged: true
     devices:
       - /dev:/dev
 
-    # ── Runtime ───────────────────────────────────────────────────────────────
     stdin_open: true
     tty: true
+
+volumes:
+  workspace_vol:
+  clion_cache:
+  clion_config:
+  clion_local:

@@ -2,40 +2,25 @@
   "name": "Shelfbot ROS 2 Dev Container",
   "dockerComposeFile": "../docker-compose.yml",
   "service": "shelfbot",
-
-  // CLion Gateway and VS Code both use workspaceFolder as the project root.
-  // Must point at the package source (where CMakeLists.txt lives),
-  // NOT the colcon workspace root (/workspace).
-  //
-  // Container path map:
-  //   /workspace                    ← colcon workspace  (./shelfbot_ws bind-mounted by docker-compose)
-  //   /workspace/src/shelfbot       ← package source    (symlink → repo root on host)
-  //   /workspace/install            ← colcon install tree (created after first build)
-  "workspaceFolder": "/workspace/src/shelfbot",
-
-  // Run IDE-injected processes as chris, matching the container and host user.
+  "workspaceFolder": "/home/chris/shelfbot_ws/src/shelfbot",
   "remoteUser": "chris",
   "containerUser": "chris",
-
-  // Forward the host X11 socket for GUI apps (RViz2, rqt)
   "containerEnv": {
-    "DISPLAY":           "${localEnv:DISPLAY}",
-    "QT_X11_NO_MITSHM":  "1"
+    "DISPLAY": "${localEnv:DISPLAY}",
+    "QT_X11_NO_MITSHM": "1"
   },
-
   "runArgs": [
     "--network=host",
     "--privileged",
     "-v", "/tmp/.X11-unix:/tmp/.X11-unix:rw"
   ],
-
-  // No extra mounts block: docker-compose.yml already binds
-  // ./shelfbot_ws → /workspace. Adding it here again causes
-  // CLion RemoteDev to see the repo root at /workspace instead of
-  // the colcon workspace.
-
-  "shutdownAction": "stopCompose",
-
+  "shutdownAction": "stopContainer",
+  "mounts": [
+    "source=clion_cache,target=/home/chris/.cache/JetBrains,type=volume",
+    "source=clion_config,target=/home/chris/.config/JetBrains,type=volume",
+    "source=clion_local,target=/home/chris/.local/share/JetBrains,type=volume"
+  ],
+  "postCreateCommand": "sudo chown -R chris:chris /home/chris/.cache/JetBrains /home/chris/.config/JetBrains /home/chris/.local/share/JetBrains",
   "customizations": {
     "vscode": {
       "extensions": []

@@ -5,7 +5,7 @@
 #   • Build stages (pangolin, orbslam3) run as root; artefacts land in /opt.
 #   • The final stage creates user 'chris' (UID/GID 1000, matching the host).
 #   • docker-entrypoint.sh runs as chris on every start and uses NOPASSWD sudo
-#     to repair /workspace ownership if Docker created it as root.
+#     to repair ownership of persistent volumes.
 #
 # Host repo:  /home/chris/shelfbot/shelfbot/
 # ─────────────────────────────────────────────────────────────────────────────
@@ -158,23 +158,22 @@ RUN echo "/opt/pangolin/lib"                          >  /etc/ld.so.conf.d/pango
     && echo "${ORB_SLAM3_ROOT}/Thirdparty/g2o/lib"    >> /etc/ld.so.conf.d/orbslam3.conf \
     && ldconfig
 
-# System-wide environment
 ENV ORB_SLAM3_ROOT=${ORB_SLAM3_ROOT}
 ENV CMAKE_PREFIX_PATH=/opt/pangolin
 ENV LD_LIBRARY_PATH=${ORB_SLAM3_ROOT}/lib:${ORB_SLAM3_ROOT}/Thirdparty/DBoW2/lib:${ORB_SLAM3_ROOT}/Thirdparty/g2o/lib:/opt/pangolin/lib
 
 RUN echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc \
-    && echo "source /workspace/install/setup.bash 2>/dev/null || true" >> /etc/bash.bashrc
+    && echo "source /home/chris/shelfbot_ws/install/setup.bash 2>/dev/null || true" >> /etc/bash.bashrc
 
-# ── Install entrypoint (still root here) ─────────────────────────────────────
+# ── Install entrypoint ─────────────────────────────────────────────────────
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Pre-create workspace with correct ownership so the image layer has it right.
-# The bind-mount overlays this at runtime, but if /workspace somehow persists
-# from the image layer, it will be chris-owned.
-RUN mkdir -p /workspace/src \
-    && chown -R chris:chris /workspace
+# Pre-create workspace and IDE config parent directories with correct ownership
+RUN mkdir -p /home/chris/shelfbot_ws/src \
+    && chown -R chris:chris /home/chris/shelfbot_ws \
+    && mkdir -p /home/chris/.cache /home/chris/.config /home/chris/.local \
+    && chown -R chris:chris /home/chris/.cache /home/chris/.config /home/chris/.local
 
 # ── Switch to chris ───────────────────────────────────────────────────────────
 USER chris
@@ -186,12 +185,13 @@ RUN colcon mixin add default \
 RUN echo "" >> /home/chris/.bashrc \
     && echo "# ── ROS 2 / Shelfbot ──────────────────────────────────────────" >> /home/chris/.bashrc \
     && echo "source /opt/ros/humble/setup.bash"                                 >> /home/chris/.bashrc \
-    && echo "source /workspace/install/setup.bash 2>/dev/null || true"          >> /home/chris/.bashrc \
+    && echo "source /home/chris/shelfbot_ws/install/setup.bash 2>/dev/null || true" >> /home/chris/.bashrc \
     && echo "export ORB_SLAM3_ROOT=${ORB_SLAM3_ROOT}"                           >> /home/chris/.bashrc \
     && echo "export CMAKE_PREFIX_PATH=/opt/pangolin:\${CMAKE_PREFIX_PATH:-}"    >> /home/chris/.bashrc \
     && echo "export LD_LIBRARY_PATH=${ORB_SLAM3_ROOT}/lib:${ORB_SLAM3_ROOT}/Thirdparty/DBoW2/lib:${ORB_SLAM3_ROOT}/Thirdparty/g2o/lib:/opt/pangolin/lib:\${LD_LIBRARY_PATH:-}" >> /home/chris/.bashrc \
     && echo "export ROS_DOMAIN_ID=0"                                            >> /home/chris/.bashrc
 
-WORKDIR /workspace
+WORKDIR /home/chris/shelfbot_ws
+
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["/bin/bash"]
+CMD ["bash"]

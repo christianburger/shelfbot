@@ -9,41 +9,41 @@
     {
       "name": "ros2-humble-debug",
       "displayName": "ROS 2 Humble — Debug",
-      "description": "CLion direct-CMake build. Run 'colcon build' first so /workspace/install exists.",
+      "description": "CLion direct-CMake build. Run 'colcon build' first so /home/chris/shelfbot_ws/install exists.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/cmake-build-debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE":             "Debug",
-        "CMAKE_PREFIX_PATH":            "/workspace/install;/opt/ros/humble",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_PREFIX_PATH": "/home/chris/shelfbot_ws/install;/opt/ros/humble",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
       "environment": {
-        "AMENT_PREFIX_PATH": "/workspace/install:/opt/ros/humble",
-        "ROS_DISTRO":        "humble",
-        "ROS_VERSION":       "2",
+        "AMENT_PREFIX_PATH": "/home/chris/shelfbot_ws/install:/opt/ros/humble",
+        "ROS_DISTRO": "humble",
+        "ROS_VERSION": "2",
         "ROS_PYTHON_VERSION": "3",
-        "COLCON_PREFIX_PATH": "/workspace/install",
-        "LD_LIBRARY_PATH":   "/workspace/install/lib:/opt/ros/humble/lib:/opt/pangolin/lib:/opt/ORB_SLAM3/lib:/opt/ORB_SLAM3/Thirdparty/DBoW2/lib:/opt/ORB_SLAM3/Thirdparty/g2o/lib"
+        "COLCON_PREFIX_PATH": "/home/chris/shelfbot_ws/install",
+        "LD_LIBRARY_PATH": "/home/chris/shelfbot_ws/install/lib:/opt/ros/humble/lib:/opt/pangolin/lib:/opt/ORB_SLAM3/lib:/opt/ORB_SLAM3/Thirdparty/DBoW2/lib:/opt/ORB_SLAM3/Thirdparty/g2o/lib"
       }
     },
     {
       "name": "ros2-humble-release",
       "displayName": "ROS 2 Humble — Release",
-      "description": "CLion direct-CMake build. Run 'colcon build' first so /workspace/install exists.",
+      "description": "CLion direct-CMake build. Run 'colcon build' first so /home/chris/shelfbot_ws/install exists.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/cmake-build-release",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE":             "RelWithDebInfo",
-        "CMAKE_PREFIX_PATH":            "/workspace/install;/opt/ros/humble",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_PREFIX_PATH": "/home/chris/shelfbot_ws/install;/opt/ros/humble",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
       "environment": {
-        "AMENT_PREFIX_PATH": "/workspace/install:/opt/ros/humble",
-        "ROS_DISTRO":        "humble",
-        "ROS_VERSION":       "2",
+        "AMENT_PREFIX_PATH": "/home/chris/shelfbot_ws/install:/opt/ros/humble",
+        "ROS_DISTRO": "humble",
+        "ROS_VERSION": "2",
         "ROS_PYTHON_VERSION": "3",
-        "COLCON_PREFIX_PATH": "/workspace/install",
-        "LD_LIBRARY_PATH":   "/workspace/install/lib:/opt/ros/humble/lib:/opt/pangolin/lib:/opt/ORB_SLAM3/lib:/opt/ORB_SLAM3/Thirdparty/DBoW2/lib:/opt/ORB_SLAM3/Thirdparty/g2o/lib"
+        "COLCON_PREFIX_PATH": "/home/chris/shelfbot_ws/install",
+        "LD_LIBRARY_PATH": "/home/chris/shelfbot_ws/install/lib:/opt/ros/humble/lib:/opt/pangolin/lib:/opt/ORB_SLAM3/lib:/opt/ORB_SLAM3/Thirdparty/DBoW2/lib:/opt/ORB_SLAM3/Thirdparty/g2o/lib"
       }
     },
     {
@@ -53,16 +53,16 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/cmake-build-debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE":             "Debug",
-        "CMAKE_PREFIX_PATH":            "/opt/ros/humble",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_PREFIX_PATH": "/opt/ros/humble",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
       "environment": {
         "AMENT_PREFIX_PATH": "/opt/ros/humble",
-        "ROS_DISTRO":        "humble",
-        "ROS_VERSION":       "2",
+        "ROS_DISTRO": "humble",
+        "ROS_VERSION": "2",
         "ROS_PYTHON_VERSION": "3",
-        "LD_LIBRARY_PATH":   "/opt/ros/humble/lib:/opt/pangolin/lib:/opt/ORB_SLAM3/lib:/opt/ORB_SLAM3/Thirdparty/DBoW2/lib:/opt/ORB_SLAM3/Thirdparty/g2o/lib"
+        "LD_LIBRARY_PATH": "/opt/ros/humble/lib:/opt/pangolin/lib:/opt/ORB_SLAM3/lib:/opt/ORB_SLAM3/Thirdparty/DBoW2/lib:/opt/ORB_SLAM3/Thirdparty/g2o/lib"
       }
     }
   ],
