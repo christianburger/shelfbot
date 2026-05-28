@@ -19,10 +19,6 @@ find_package(GLEW REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 # ── ORB-SLAM3 paths ───────────────────────────────────────────────────────────
-# Installed to /opt/ORB_SLAM3 inside the Docker image (see Dockerfile stage 3).
-# Fall back to $ORB_SLAM3_ROOT env var so non-Docker native builds still work
-# (the Dockerfile exports ENV ORB_SLAM3_ROOT=/opt/ORB_SLAM3, so both paths
-#  resolve to the same location inside the container).
 if(DEFINED ENV{ORB_SLAM3_ROOT})
     set(ORB_SLAM3_ROOT_DIR "$ENV{ORB_SLAM3_ROOT}")
 else()
@@ -55,7 +51,6 @@ find_library(g2o_LIBRARIES
 )
 
 # ── Pangolin paths ────────────────────────────────────────────────────────────
-# Installed to /opt/pangolin inside the Docker image (see Dockerfile stage 2).
 find_library(Pangolin_LIBRARIES
         NAMES pangolin
         PATHS /opt/pangolin/lib
@@ -154,11 +149,24 @@ ament_target_dependencies(shelfbot_slam_orb3_node
         message_filters
 )
 
-# ── Install ───────────────────────────────────────────────────────────────────
+# ── Lidar Relay Node ──────────────────────────────────────────────────────────
+# Converts /shelfbot_firmware/lidar_scan (Float32MultiArray, 30 floats)
+# into /scan (sensor_msgs/LaserScan) for Nav2, RViz2, and rtabmap.
+add_executable(lidar_relay_node
+        lidar_relay_node.cpp
+)
+
+ament_target_dependencies(lidar_relay_node
+        rclcpp
+        std_msgs
+        sensor_msgs
+)
+
+# ── Install all executables ───────────────────────────────────────────────────
 install(TARGETS
         camera_publisher
         apriltag_detector_node
         shelfbot_slam_orb3_node
+        lidar_relay_node
         DESTINATION lib/${PROJECT_NAME}
 )
-

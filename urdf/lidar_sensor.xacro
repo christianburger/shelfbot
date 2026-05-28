@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!--
+    Minimal laser_link for the LYDSTO LDS02RR lidar.
+    Mounted flat on top of base_link, centred, facing up.
+    Adjust xyz/rpy to match physical placement.
+  -->
+  <xacro:macro name="lidar_sensor" params="name">
+    <link name="${name}">
+      <visual>
+        <geometry>
+          <cylinder radius="0.035" length="0.025"/>
+        </geometry>
+        <origin xyz="0 0 0.0125" rpy="0 0 0"/>
+        <material name="metallic_dark_lead"/>
+      </visual>
+      <collision>
+        <geometry>
+          <cylinder radius="0.035" length="0.025"/>
+        </geometry>
+        <origin xyz="0 0 0.0125" rpy="0 0 0"/>
+      </collision>
+      <inertial>
+        <mass value="0.100"/>
+        <origin xyz="0 0 0.0125" rpy="0 0 0"/>
+        <inertia ixx="0.000030" ixy="0" ixz="0"
+                 iyy="0.000030" iyz="0"
+                 izz="0.000061"/>
+      </inertial>
+    </link>
+  </xacro:macro>
+</robot>
