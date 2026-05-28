@@ -162,6 +162,10 @@ ament_target_dependencies(lidar_relay_node
         sensor_msgs
 )
 
+target_link_libraries(lidar_relay_node
+        shelfbot_utils
+)
+
 # ── Install all executables ───────────────────────────────────────────────────
 install(TARGETS
         camera_publisher

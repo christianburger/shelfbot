@@ -53,8 +53,18 @@ def generate_launch_description():
         arguments=['four_wheel_drive_controller', '--controller-manager', '/controller_manager'],
     )
 
+    # ── Static transform: base_link -> lidar_frame ───────────────────────────
+    # Adjust x, y, z, roll, pitch, yaw to your actual lidar mounting position.
+    static_tf_lidar = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_lidar',
+        arguments=['0', '0', '0.2', '0', '0', '0', 'base_link', 'lidar_frame'],
+        parameters=[{'use_sim_time': False}],
+    )
+
     # ── Lidar relay node ─────────────────────────────────────────────────────
-    # Subscribes to /shelfbot_firmware/lidar_scan (Float32MultiArray, 30 floats)
+    # Subscribes to /shelfbot_firmware/laser_scan (sensor_msgs/LaserScan)
     # Publishes    /scan (sensor_msgs/LaserScan) at 5 Hz for Nav2 / RViz2 / rtabmap
     lidar_relay_node = Node(
         package='shelfbot',
@@ -62,9 +72,8 @@ def generate_launch_description():
         name='lidar_relay_node',
         output='screen',
         parameters=[{
-            'frame_id':       'laser_link',
-            'publish_hz':     5.0,
-            'min_confidence': 10,
+            'frame_id': 'lidar_frame',   # must match firmware frame
+            'publish_hz': 5.0,
         }],
         arguments=['--ros-args', '--log-level', 'warn'],
     )
@@ -92,6 +101,7 @@ def generate_launch_description():
         control_node,
         joint_state_broadcaster_spawner,
         robot_controller_spawner,
+        static_tf_lidar,
         lidar_relay_node,
         delay_rviz,
     ])
