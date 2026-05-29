@@ -125,7 +125,7 @@ private:
   }
 
   // ── Default camera info (used when no calibration file is loaded) ──
-  sensor_msgs::msg::CameraInfo createDefaultCameraInfo() {
+  sensor_msgs::msg::CameraInfo createDefaultCameraInfo() const {
     sensor_msgs::msg::CameraInfo ci;
     ci.height             = static_cast<uint32_t>(image_height_);
     ci.width              = static_cast<uint32_t>(image_width_);

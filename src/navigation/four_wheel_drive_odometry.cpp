@@ -1,5 +1,3 @@
-// four_wheel_drive_odometry.cpp
-
 #include "shelfbot/four_wheel_drive_odometry.hpp"
 #include "shelfbot/shelfbot_utils.hpp"
 #include <tf2/LinearMath/Quaternion.h>
