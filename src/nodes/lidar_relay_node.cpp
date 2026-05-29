@@ -10,24 +10,24 @@
 #include <vector>
 #include <chrono>
 
-static constexpr const char* LOG_TAG = "LidarRelay";
-static constexpr int    BUCKET_COUNT  = 360;
-static constexpr double DEFAULT_HZ    = 10.0;
-static constexpr float  TWO_PI        = 2.0f * static_cast<float>(M_PI);
-static constexpr float  DEG_TO_RAD    = static_cast<float>(M_PI) / 180.0f;
+static constexpr const char* LOG_TAG     = "LidarRelay";
+static constexpr int         BUCKET_COUNT = 360;
+static constexpr double      DEFAULT_HZ   = 10.0;
+static constexpr float       TWO_PI       = 2.0f * static_cast<float>(M_PI);
+static constexpr float       DEG_TO_RAD   = static_cast<float>(M_PI) / 180.0f;
 
 class LidarRelayNode : public rclcpp::Node {
 public:
     LidarRelayNode() : Node("lidar_relay_node") {
 
-        declare_parameter<std::string>("input_topic",  "/shelfbot_firmware/laser_scan");
-        declare_parameter<std::string>("output_topic", "/scan");
-        declare_parameter<std::string>("frame_id",     "lidar_frame");
-        declare_parameter<double>     ("publish_hz",    DEFAULT_HZ);
-        declare_parameter<double>     ("range_min_override", -1.0);
-        declare_parameter<double>     ("range_max_override", -1.0);
-        declare_parameter<double>     ("expiry_periods", 3.0);
-        declare_parameter<std::string>("qos_reliability", "reliable");
+        declare_parameter<std::string>("input_topic",          "/shelfbot_firmware/laser_scan");
+        declare_parameter<std::string>("output_topic",         "/scan");
+        declare_parameter<std::string>("frame_id",             "lidar_frame");
+        declare_parameter<double>     ("publish_hz",            DEFAULT_HZ);
+        declare_parameter<double>     ("range_min_override",   -1.0);
+        declare_parameter<double>     ("range_max_override",   -1.0);
+        declare_parameter<double>     ("expiry_periods",        3.0);
+        declare_parameter<std::string>("qos_reliability",      "reliable");
 
         input_topic_        = get_parameter("input_topic").as_string();
         output_topic_       = get_parameter("output_topic").as_string();
@@ -44,8 +44,10 @@ public:
             publish_hz_ = DEFAULT_HZ;
         }
 
+        // FIX 1: initialise all three bucket vectors as class members (not locals)
         bucket_ranges_.assign(BUCKET_COUNT, std::numeric_limits<float>::infinity());
         bucket_stamps_.assign(BUCKET_COUNT, rclcpp::Time(0, 0, RCL_ROS_TIME));
+        bucket_intensities_.assign(BUCKET_COUNT, 0.0f);
 
         rclcpp::QoS qos_profile(rclcpp::KeepLast(10));
         if (qos_reliability_ == "best_effort") {
@@ -71,35 +73,40 @@ public:
             std::chrono::seconds(5),
             std::bind(&LidarRelayNode::print_diagnostics, this));
 
-        RCLCPP_INFO(get_logger(), "[%s] Initialised. Subscribing to '%s', publishing to '%s' (frame_id=%s, %.1f Hz, expiry=%.1f periods)",
-                    LOG_TAG, input_topic_.c_str(), output_topic_.c_str(), frame_id_.c_str(), publish_hz_, expiry_periods_);
+        RCLCPP_INFO(get_logger(),
+            "[%s] Initialised. in='%s' out='%s' frame='%s' %.1f Hz expiry=%.1f periods",
+            LOG_TAG, input_topic_.c_str(), output_topic_.c_str(),
+            frame_id_.c_str(), publish_hz_, expiry_periods_);
     }
 
 private:
     using LaserScan = sensor_msgs::msg::LaserScan;
 
-    void on_scan(const LaserScan::SharedPtr msg) {
+    void on_scan(const LaserScan::SharedPtr msg)
+    {
         if (total_packets_ == 0) {
-            RCLCPP_INFO(get_logger(), "[%s] First packet: %zu ranges | angle_min=%.3f rad (%.1f°) angle_max=%.3f rad (%.1f°) | inc=%.4f | range_min=%.3f range_max=%.3f | frame='%s'",
-                        LOG_TAG,
-                        msg->ranges.size(),
-                        msg->angle_min, msg->angle_min * 180.0 / M_PI,
-                        msg->angle_max, msg->angle_max * 180.0 / M_PI,
-                        msg->angle_increment,
-                        msg->range_min, msg->range_max,
-                        msg->header.frame_id.c_str());
+            RCLCPP_INFO(get_logger(),
+                "[%s] First packet: %zu ranges | angle_min=%.3f rad (%.1f°)"
+                " angle_max=%.3f rad (%.1f°) | inc=%.4f"
+                " | range_min=%.3f range_max=%.3f | frame='%s'",
+                LOG_TAG,
+                msg->ranges.size(),
+                msg->angle_min, msg->angle_min * 180.0 / M_PI,
+                msg->angle_max, msg->angle_max * 180.0 / M_PI,
+                msg->angle_increment,
+                msg->range_min, msg->range_max,
+                msg->header.frame_id.c_str());
         }
 
         if (msg->ranges.empty()) {
             RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                        "[%s] Received packet with empty ranges – skipping", LOG_TAG);
+                "[%s] Received packet with empty ranges – skipping", LOG_TAG);
             return;
         }
 
-        // Only reject if increment is exactly zero (no sensible scan possible)
         if (msg->angle_increment == 0.0f) {
             RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                        "[%s] Zero angle_increment – skipping packet", LOG_TAG);
+                "[%s] Zero angle_increment – skipping packet", LOG_TAG);
             return;
         }
 
@@ -107,32 +114,27 @@ private:
             firmware_range_min_ = msg->range_min;
             firmware_range_max_ = msg->range_max;
             firmware_limits_latched_ = true;
-            RCLCPP_INFO(get_logger(), "[%s] Firmware range limits latched: min=%.3f m, max=%.3f m",
-                        LOG_TAG, firmware_range_min_, firmware_range_max_);
+            RCLCPP_INFO(get_logger(),
+                "[%s] Firmware range limits latched: min=%.3f m, max=%.3f m",
+                LOG_TAG, firmware_range_min_, firmware_range_max_);
         }
 
-        const float r_min = msg->range_min;
-        const float r_max = msg->range_max;
-        const rclcpp::Time stamp = this->now();
+        const float        r_min  = msg->range_min;
+        const float        r_max  = msg->range_max;
+        const rclcpp::Time stamp  = this->now();
 
-        int inserted = 0;
-        int discarded_range = 0;
+        int inserted            = 0;
+        int discarded_range     = 0;
         int discarded_nonfinite = 0;
         int not_inserted_closer = 0;
 
         for (size_t i = 0; i < msg->ranges.size(); ++i) {
             const float r = msg->ranges[i];
 
-            if (!std::isfinite(r)) {
-                ++discarded_nonfinite;
-                continue;
-            }
-            if (r < r_min || r > r_max) {
-                ++discarded_range;
-                continue;
-            }
+            if (!std::isfinite(r)) { ++discarded_nonfinite; continue; }
+            if (r < r_min || r > r_max) { ++discarded_range; continue; }
 
-            // Angle calculation works for both positive and negative increment
+            // FIX 2: compute bucket BEFORE using it, and only insert once
             float angle = msg->angle_min + static_cast<float>(i) * msg->angle_increment;
             angle = std::fmod(angle, TWO_PI);
             if (angle < 0.0f) angle += TWO_PI;
@@ -144,40 +146,45 @@ private:
             if (r < bucket_ranges_[bucket]) {
                 bucket_ranges_[bucket] = r;
                 bucket_stamps_[bucket] = stamp;
+                // FIX 3: bucket_intensities_ is now a real class member
+                if (i < msg->intensities.size()) {
+                    bucket_intensities_[bucket] = msg->intensities[i];
+                }
                 ++inserted;
             } else {
                 ++not_inserted_closer;
             }
         }
 
-        total_packets_++;
-        packets_this_cycle_++;
+        ++total_packets_;
+        ++packets_this_cycle_;
 
         RCLCPP_DEBUG(get_logger(),
-            "[%s] Packet %lu: %zu ranges → %d inserted, %d not closer, %d non‑finite, %d out‑of‑range | sector (%.1f°–%.1f°)",
+            "[%s] Pkt %lu: %zu ranges → %d ins, %d not-closer,"
+            " %d non-fin, %d oor | sector (%.1f°–%.1f°)",
             LOG_TAG, total_packets_, msg->ranges.size(),
             inserted, not_inserted_closer, discarded_nonfinite, discarded_range,
             msg->angle_min * 180.0 / M_PI, msg->angle_max * 180.0 / M_PI);
 
         if (inserted == 0) {
             RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
-                "[%s] Packet %lu: No new insertions (all ranges were either invalid or not closer). "
-                "Valid but not closer: %d, non‑finite: %d, out‑of‑range: %d",
-                LOG_TAG, total_packets_, not_inserted_closer, discarded_nonfinite, discarded_range);
+                "[%s] Pkt %lu: No insertions. not-closer=%d non-fin=%d oor=%d",
+                LOG_TAG, total_packets_,
+                not_inserted_closer, discarded_nonfinite, discarded_range);
         }
     }
 
-    void publish_scan() {
-        const rclcpp::Time now = this->now();
-        const double max_age_s = expiry_periods_ / publish_hz_;
+    void publish_scan()
+    {
+        const rclcpp::Time now       = this->now();
+        const double       max_age_s = expiry_periods_ / publish_hz_;
 
         const float r_min = (range_min_override_ > 0.0f) ? range_min_override_ : firmware_range_min_;
         const float r_max = (range_max_override_ > 0.0f) ? range_max_override_ : firmware_range_max_;
 
         LaserScan out;
-        out.header.stamp = now;
+        out.header.stamp    = now;
         out.header.frame_id = frame_id_;
-
         out.angle_min       = 0.0f;
         out.angle_max       = static_cast<float>(BUCKET_COUNT - 1) * DEG_TO_RAD;
         out.angle_increment = DEG_TO_RAD;
@@ -186,18 +193,22 @@ private:
         out.range_min       = r_min;
         out.range_max       = r_max;
         out.ranges.resize(BUCKET_COUNT);
+        out.intensities.resize(BUCKET_COUNT, 0.0f);
 
         int populated = 0;
         for (int b = 0; b < BUCKET_COUNT; ++b) {
-            const float r = bucket_ranges_[b];
-            bool valid = std::isfinite(r) && r >= r_min && r <= r_max;
+            const float r   = bucket_ranges_[b];
+            bool        valid = std::isfinite(r) && r >= r_min && r <= r_max;
+
             if (valid && bucket_stamps_[b].nanoseconds() > 0) {
                 if ((now - bucket_stamps_[b]).seconds() > max_age_s) {
-                    bucket_ranges_[b] = std::numeric_limits<float>::infinity();
+                    bucket_ranges_[b]      = std::numeric_limits<float>::infinity();
+                    bucket_intensities_[b] = 0.0f;
                     valid = false;
                 }
             }
-            out.ranges[b] = valid ? r : std::numeric_limits<float>::infinity();
+            out.ranges[b]      = valid ? r                    : std::numeric_limits<float>::infinity();
+            out.intensities[b] = valid ? bucket_intensities_[b] : 0.0f;
             if (valid) ++populated;
         }
 
@@ -205,10 +216,9 @@ private:
 
         if (packets_this_cycle_ == 0) {
             RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                "[%s] PUBLISH: No packets received in this cycle! QoS=%s, total packets ever=%lu",
+                "[%s] PUBLISH: No packets this cycle! QoS=%s total_pkts=%lu",
                 LOG_TAG, qos_reliability_.c_str(), total_packets_);
         }
-
         RCLCPP_DEBUG(get_logger(),
             "[%s] PUBLISH: %d/360 buckets populated (%d packets this cycle)",
             LOG_TAG, populated, packets_this_cycle_);
@@ -216,16 +226,19 @@ private:
         packets_this_cycle_ = 0;
     }
 
-    void print_diagnostics() {
-        const rclcpp::Time now = this->now();
-        int populated = 0;
-        int first_bucket = -1, last_bucket = -1;
-        const double max_age_s = expiry_periods_ / publish_hz_;
+    void print_diagnostics()
+    {
+        const rclcpp::Time now       = this->now();
+        const double       max_age_s = expiry_periods_ / publish_hz_;
+        int populated    = 0;
+        int first_bucket = -1;
+        int last_bucket  = -1;
 
         for (int b = 0; b < BUCKET_COUNT; ++b) {
             if (std::isfinite(bucket_ranges_[b]) &&
                 bucket_stamps_[b].nanoseconds() > 0 &&
-                (now - bucket_stamps_[b]).seconds() <= max_age_s) {
+                (now - bucket_stamps_[b]).seconds() <= max_age_s)
+            {
                 ++populated;
                 if (first_bucket < 0) first_bucket = b;
                 last_bucket = b;
@@ -234,23 +247,24 @@ private:
 
         if (populated > 0) {
             RCLCPP_INFO(get_logger(),
-                "[%s] DIAG: %d/360 buckets populated (%d°–%d°), total received packets: %lu",
-                LOG_TAG, populated,
-                static_cast<int>(first_bucket * DEG_TO_RAD * 180.0 / M_PI),
-                static_cast<int>(last_bucket * DEG_TO_RAD * 180.0 / M_PI),
-                total_packets_);
+                "[%s] DIAG: %d/360 buckets populated (%d°–%d°),"
+                " total received packets: %lu",
+                LOG_TAG, populated, first_bucket, last_bucket, total_packets_);
         } else {
             RCLCPP_WARN(get_logger(),
-                "[%s] DIAG: 0 buckets populated. Total received packets: %lu. Check firmware or QoS (current=%s).",
+                "[%s] DIAG: 0 buckets populated."
+                " total_pkts=%lu QoS=%s",
                 LOG_TAG, total_packets_, qos_reliability_.c_str());
         }
     }
 
+    // ── ROS handles ───────────────────────────────────────────────────────────
     rclcpp::Subscription<LaserScan>::SharedPtr sub_;
     rclcpp::Publisher<LaserScan>::SharedPtr    pub_;
     rclcpp::TimerBase::SharedPtr               publish_timer_;
     rclcpp::TimerBase::SharedPtr               diag_timer_;
 
+    // ── Parameters ────────────────────────────────────────────────────────────
     std::string input_topic_;
     std::string output_topic_;
     std::string frame_id_;
@@ -260,15 +274,19 @@ private:
     double      expiry_periods_     {3.0};
     std::string qos_reliability_    {"reliable"};
 
+    // ── Bucket state ──────────────────────────────────────────────────────────
     std::vector<float>        bucket_ranges_;
     std::vector<rclcpp::Time> bucket_stamps_;
+    std::vector<float>        bucket_intensities_;   // FIX: class member, not local
 
+    // ── Firmware limits (latched from first packet) ───────────────────────────
     bool  firmware_limits_latched_ {false};
     float firmware_range_min_      {0.02f};
     float firmware_range_max_      {12.0f};
 
-    uint64_t total_packets_          {0};
-    int      packets_this_cycle_     {0};
+    // ── Diagnostics counters ──────────────────────────────────────────────────
+    uint64_t total_packets_      {0};
+    int      packets_this_cycle_ {0};
 };
 
 int main(int argc, char** argv) {

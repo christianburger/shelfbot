@@ -1,7 +1,7 @@
 import os
 from launch import LaunchDescription
-from launch.actions import TimerAction, RegisterEventHandler
-from launch.event_handlers import OnProcessExit
+from launch.actions import TimerAction, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import xacro
@@ -9,25 +9,28 @@ import xacro
 
 def generate_launch_description():
 
-    # ── Paths ─────────────────────────────────────────────────────────────────
-    pkg_share = get_package_share_directory('shelfbot')
-    xacro_file = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
+    # ── Paths ──────────────────────────────────────────────────────────────────
+    pkg_share        = get_package_share_directory('shelfbot')
+    nav2_bringup_dir = get_package_share_directory('nav2_bringup')
+
+    xacro_file        = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
     controller_config = os.path.join(pkg_share, 'config', 'four_wheel_drive_controller.yaml')
-    rviz_config = os.path.join(pkg_share, 'config', 'nav2_troubleshoot.rviz')
+    nav2_params       = os.path.join(pkg_share, 'config', 'nav2_camera_params.yaml')
+    rviz_config       = os.path.join(pkg_share, 'config', 'nav2_troubleshoot.rviz')
 
-    # ── Lidar mount position (adjust to your actual setup) ────────────────────
-    lidar_x = '0.0'
-    lidar_y = '0.0'
-    lidar_z = '0.2'
-    lidar_roll = '0.0'
-    lidar_pitch = '0.0'
-    lidar_yaw = '0.0'
+    # ── Lidar mount (tweak to match your physical setup) ───────────────────────
+    lidar_x, lidar_y, lidar_z         = '0.0', '0.0', '0.2'
+    lidar_roll, lidar_pitch, lidar_yaw = '0.0', '0.0', '0.0'
 
-    # ── Robot description ─────────────────────────────────────────────────────
+    # ── Robot description ──────────────────────────────────────────────────────
     doc = xacro.process_file(xacro_file, mappings={'communication_type': 'microros'})
     robot_description = {'robot_description': doc.toxml()}
 
-    # ── Core nodes ────────────────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════════
+    # TIER 1  (t=0 s) – hardware layer
+    # Must be up before anything else tries to read /tf or /odom.
+    # ══════════════════════════════════════════════════════════════════════════
+
     robot_state_pub = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -36,7 +39,6 @@ def generate_launch_description():
         arguments=['--ros-args', '--log-level', 'warn'],
     )
 
-    # ros2_control
     control_node = Node(
         package='controller_manager',
         executable='ros2_control_node',
@@ -44,12 +46,48 @@ def generate_launch_description():
         output='both',
         remappings=[
             ('~/robot_description', '/robot_description'),
+            # Nav2 sends goals to /cmd_vel; the controller listens on ~/cmd_vel.
+            # This remap makes them meet in the middle.
             ('/four_wheel_drive_controller/cmd_vel', '/cmd_vel'),
         ],
         arguments=['--ros-args', '--log-level', 'info'],
     )
 
-    # Controller spawners
+    # Static TF: base_link → lidar_frame
+    # The costmap obstacle_layer needs this to project /scan into the odom frame.
+    static_tf_lidar = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_lidar',
+        arguments=[
+            lidar_x, lidar_y, lidar_z,
+            lidar_roll, lidar_pitch, lidar_yaw,
+            'base_link', 'lidar_frame',
+        ],
+        parameters=[{'use_sim_time': False}],
+    )
+
+    # Lidar relay: /shelfbot_firmware/laser_scan → /scan (360° accumulator)
+    lidar_relay = Node(
+        package='shelfbot',
+        executable='lidar_relay_node',
+        name='lidar_relay_node',
+        output='screen',
+        parameters=[{
+            'frame_id':   'lidar_frame',
+            'publish_hz': 5.0,
+        }],
+        arguments=['--ros-args', '--log-level', 'warn'],
+        respawn=True,
+        respawn_delay=2.0,
+    )
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # TIER 2  (t=3 s) – ros2_control spawners
+    # controller_manager needs a few seconds to finish loading the hardware
+    # interface plugin before the spawners can handshake with it.
+    # ══════════════════════════════════════════════════════════════════════════
+
     joint_broadcaster_spawner = Node(
         package='controller_manager',
         executable='spawner',
@@ -61,38 +99,41 @@ def generate_launch_description():
         arguments=['four_wheel_drive_controller', '--controller-manager', '/controller_manager'],
     )
 
-    # Static transform base_link → lidar_frame
-    static_tf_lidar = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_tf_lidar',
-        arguments=[
-            lidar_x, lidar_y, lidar_z,
-            lidar_roll, lidar_pitch, lidar_yaw,
-            'base_link', 'lidar_frame'
-        ],
-        parameters=[{'use_sim_time': False}],
+    delay_controllers = TimerAction(
+        period=3.0,
+        actions=[joint_broadcaster_spawner, drive_controller_spawner],
     )
 
-    # Lidar relay node – respawned if it crashes
-    lidar_relay = Node(
-        package='shelfbot',
-        executable='lidar_relay_node',
-        name='lidar_relay_node',
-        output='screen',
-        parameters=[{
-            'frame_id': 'lidar_frame',        # must match firmware frame
-            'publish_hz': 5.0,
-            # optionally override input topic:
-            # 'input_topic': '/shelfbot_firmware/laser_scan',
-        }],
-        arguments=['--ros-args', '--log-level', 'warn'],
-        # Restart automatically if the node dies (e.g., due to a momentary network issue)
-        respawn=True,
-        respawn_delay=2.0,
+    # ══════════════════════════════════════════════════════════════════════════
+    # TIER 3  (t=8 s) – Nav2
+    # Needs /odom and the full TF chain (map→odom→base_footprint→…) to be
+    # stable before the costmaps can activate.
+    #
+    # Option A config (nav2_camera_params.yaml):
+    #   • No map_server, no static_layer, no AMCL
+    #   • Both costmaps use obstacle_layer fed by /scan
+    #   • global_frame: odom  (robot navigates in odom space)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    nav2 = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(nav2_bringup_dir, 'launch', 'navigation_launch.py')
+        ),
+        launch_arguments={
+            'params_file':  nav2_params,
+            'use_sim_time': 'False',
+            'autostart':    'True',
+        }.items(),
     )
 
-    # RViz (delayed so everything is up first)
+    delay_nav2 = TimerAction(period=8.0, actions=[nav2])
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # TIER 4  (t=15 s) – RViz
+    # Last so it connects to already-active topics and shows real data
+    # immediately rather than showing everything grey/unknown.
+    # ══════════════════════════════════════════════════════════════════════════
+
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
@@ -101,15 +142,22 @@ def generate_launch_description():
         parameters=[{'use_sim_time': False}, robot_description],
         output='screen',
     )
-    delay_rviz = TimerAction(period=5.0, actions=[rviz_node])
 
-    # ── Launch sequence ───────────────────────────────────────────────────────
+    delay_rviz = TimerAction(period=15.0, actions=[rviz_node])
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # All actions must be listed here — anything omitted simply does not launch.
+    # ══════════════════════════════════════════════════════════════════════════
     return LaunchDescription([
+        # Tier 1 – hardware (immediate)
         robot_state_pub,
         control_node,
-        joint_broadcaster_spawner,
-        drive_controller_spawner,
         static_tf_lidar,
         lidar_relay,
+        # Tier 2 – controllers (t=3 s)
+        delay_controllers,
+        # Tier 3 – Nav2 (t=8 s)
+        delay_nav2,
+        # Tier 4 – RViz (t=15 s)
         delay_rviz,
     ])
