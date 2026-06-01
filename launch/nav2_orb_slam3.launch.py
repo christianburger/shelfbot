@@ -32,7 +32,7 @@ def generate_launch_description():
         parameters=[{
             'camera_info_url': os.path.join(shelfbot_share_dir, 'config', 'package://shelfbot/config/camera_info.yaml'),
             'camera_name': 'esp32_cam',
-            'frame_id': 'camera_link',
+            'frame_id': 'camera_link_optical_frame',
             'image_width': 800,
             'image_height': 600,
             'focal_length': 600.0,   # unified intrinsics: match the working AprilTag setup
@@ -76,7 +76,7 @@ def generate_launch_description():
             'settings_file': os.path.join(shelfbot_share_dir, 'config', 'orb_slam3_monocular.yaml'),
             'camera_topic': '/camera/image_raw',
             'camera_info_topic': '/camera/camera_info',
-            'camera_frame': 'camera_link',
+            'camera_frame': 'camera_link_optical_frame',
             'map_frame': 'map',
             'odom_frame': 'odom',
             'base_link_frame': 'base_link',

@@ -22,10 +22,6 @@ def generate_launch_description():
     lidar_x, lidar_y, lidar_z         = '0.0', '0.0', '0.2'
     lidar_roll, lidar_pitch, lidar_yaw = '0.0', '0.0', '0.0'
 
-    # ── Camera mount (tweak to match your physical setup) ──────────────────────
-    camera_x, camera_y, camera_z         = '0.1', '0.0', '0.15'
-    camera_roll, camera_pitch, camera_yaw = '0.0', '0.0', '0.0'
-
     # ── Robot description ──────────────────────────────────────────────────────
     doc = xacro.process_file(xacro_file, mappings={'communication_type': 'microros'})
     robot_description = {'robot_description': doc.toxml()}
@@ -71,20 +67,6 @@ def generate_launch_description():
         parameters=[{'use_sim_time': False}],
     )
 
-    # Static TF: base_link → camera_frame
-    # Required so RViz and Nav2 can project the image into the robot frame.
-    static_tf_camera = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_tf_camera',
-        arguments=[
-            camera_x, camera_y, camera_z,
-            camera_roll, camera_pitch, camera_yaw,
-            'base_link', 'camera_frame',
-        ],
-        parameters=[{'use_sim_time': False}],
-    )
-
     # Lidar relay: /shelfbot_firmware/laser_scan → /scan (360° accumulator)
     lidar_relay = Node(
         package='shelfbot',
@@ -100,20 +82,26 @@ def generate_launch_description():
         respawn_delay=2.0,
     )
 
-    # Camera republisher: /camera/compressed (CompressedImage) → /camera/raw (Image)
-    # RViz's Image display requires a raw sensor_msgs/Image topic; it cannot
-    # decode CompressedImage natively. image_transport's republish node does
-    # the JPEG decompression so RViz gets a plain RGB frame.
-    camera_republisher = Node(
-        package='image_transport',
-        executable='republish',
-        name='camera_republisher',
-        arguments=['compressed', 'raw'],
-        remappings=[
-            ('in/compressed', '/camera/compressed'),
-            ('out',           '/camera/raw'),
-        ],
-        parameters=[{'use_sim_time': False}],
+    # Camera bridge: /camera/compressed (CompressedImage) → /camera/image_raw
+    # (Image) + /camera/camera_info.  It also overwrites the firmware-provided
+    # camera_frame header with the URDF optical frame so TF, RViz, AprilTag, and
+    # visual odometry all use the same camera frame.
+    camera_publisher = Node(
+        package='shelfbot',
+        executable='camera_publisher',
+        name='camera_publisher',
+        output='screen',
+        parameters=[{
+            'camera_info_url': 'package://shelfbot/config/camera_info.yaml',
+            'camera_name': 'esp32_cam',
+            'frame_id': 'camera_link_optical_frame',
+            'compressed_image_topic': '/camera/compressed',
+            'image_topic': '/camera/image_raw',
+            'camera_info_topic': '/camera/camera_info',
+            'image_width': 800,
+            'image_height': 600,
+            'use_sim_time': False,
+        }],
         respawn=True,
         respawn_delay=2.0,
     )
@@ -170,7 +158,7 @@ def generate_launch_description():
     # immediately rather than showing everything grey/unknown.
     #
     # In RViz add:
-    #   • Image display  → topic: /camera/raw
+    #   • Image display  → topic: /camera/image_raw
     #   • LaserScan      → topic: /scan
     # ══════════════════════════════════════════════════════════════════════════
 
@@ -193,9 +181,8 @@ def generate_launch_description():
         robot_state_pub,
         control_node,
         static_tf_lidar,
-        static_tf_camera,
         lidar_relay,
-        camera_republisher,
+        camera_publisher,
         # Tier 2 – controllers (t=3 s)
         delay_controllers,
         # Tier 3 – Nav2 (t=8 s)

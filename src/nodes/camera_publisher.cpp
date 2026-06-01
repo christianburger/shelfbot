@@ -18,30 +18,39 @@ public:
     this->declare_parameter<int>   ("image_width",    800);
     this->declare_parameter<int>   ("image_height",   600);
     this->declare_parameter<double>("focal_length",   800.0);
+    this->declare_parameter<std::string>("compressed_image_topic",
+                                         "/camera/compressed");
+    this->declare_parameter<std::string>("image_topic",
+                                         "/camera/image_raw");
+    this->declare_parameter<std::string>("camera_info_topic",
+                                         "/camera/camera_info");
 
     std::string camera_info_url;
-    this->get_parameter("camera_info_url", camera_info_url);
-    this->get_parameter("camera_name",     camera_name_);
-    this->get_parameter("frame_id",        frame_id_);
-    this->get_parameter("image_width",     image_width_);
-    this->get_parameter("image_height",    image_height_);
-    this->get_parameter("focal_length",    focal_length_);
+    this->get_parameter("camera_info_url",       camera_info_url);
+    this->get_parameter("camera_name",           camera_name_);
+    this->get_parameter("frame_id",              frame_id_);
+    this->get_parameter("image_width",           image_width_);
+    this->get_parameter("image_height",          image_height_);
+    this->get_parameter("focal_length",          focal_length_);
+    this->get_parameter("compressed_image_topic", compressed_image_topic_);
+    this->get_parameter("image_topic",           image_topic_);
+    this->get_parameter("camera_info_topic",     camera_info_topic_);
 
     info_manager_ = std::make_shared<camera_info_manager::CameraInfoManager>(
         this, camera_name_, camera_info_url);
 
     image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(
-        "camera/image_raw",
-        rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
+        image_topic_,
+        rclcpp::SensorDataQoS());
 
     info_publisher_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
-        "camera/camera_info",
-        rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
+        camera_info_topic_,
+        rclcpp::SensorDataQoS());
 
-    // Subscribe to compressed images from micro-ROS / ESP32-CAM
+    // Subscribe to compressed images from micro-ROS / ESP32-CAM.
     compressed_image_sub_ =
         this->create_subscription<sensor_msgs::msg::CompressedImage>(
-            "/esp32_cam/image_raw/compressed",
+            compressed_image_topic_,
             rclcpp::SensorDataQoS(),
             std::bind(&CameraPublisher::image_callback, this,
                       std::placeholders::_1));
@@ -51,9 +60,10 @@ public:
                 image_width_, image_height_);
     RCLCPP_INFO(this->get_logger(), "  Frame ID   : %s", frame_id_.c_str());
     RCLCPP_INFO(this->get_logger(),
-                "  Subscribing: /esp32_cam/image_raw/compressed");
+                "  Subscribing: %s", compressed_image_topic_.c_str());
     RCLCPP_INFO(this->get_logger(),
-                "  Publishing : camera/image_raw, camera/camera_info");
+                "  Publishing : %s, %s", image_topic_.c_str(),
+                camera_info_topic_.c_str());
   }
 
 private:
@@ -165,6 +175,9 @@ private:
 
   std::string camera_name_;
   std::string frame_id_;
+  std::string compressed_image_topic_;
+  std::string image_topic_;
+  std::string camera_info_topic_;
   int         image_width_;
   int         image_height_;
   double      focal_length_;
