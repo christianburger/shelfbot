@@ -46,7 +46,7 @@ def generate_launch_description():
         parameters=[{
             'camera_info_url': 'package://shelfbot/config/camera_info.yaml',
             'camera_name': 'camera',
-            'frame_id': 'camera_link',
+            'frame_id': 'camera_link_optical_frame',
             'use_sim_time': False
         }],
         output='screen'
