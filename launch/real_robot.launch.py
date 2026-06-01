@@ -51,6 +51,27 @@ def generate_launch_description():
         arguments=["four_wheel_drive_controller", "--controller-manager", "/controller_manager"],
     )
 
+
+    camera_publisher_node = Node(
+        package="shelfbot",
+        executable="camera_publisher",
+        name="camera_publisher",
+        output="screen",
+        parameters=[{
+            "camera_info_url": "package://shelfbot/config/camera_info.yaml",
+            "camera_name": "esp32_cam",
+            "frame_id": "camera_link_optical_frame",
+            "compressed_image_topic": "/camera/compressed",
+            "image_topic": "/camera/image_raw",
+            "camera_info_topic": "/camera/camera_info",
+            "image_width": 800,
+            "image_height": 600,
+            "use_sim_time": False,
+        }],
+        respawn=True,
+        respawn_delay=2.0,
+    )
+
     rviz_config_file = PathJoinSubstitution([FindPackageShare('shelfbot'), 'config', 'shelfbot.rviz'])
 
     rviz_node = Node(
@@ -75,6 +96,7 @@ def generate_launch_description():
         control_node,
         joint_state_broadcaster_spawner,
         robot_controller_spawner,
+        camera_publisher_node,
         delay_rviz_after_joint_state_broadcaster_spawner,
     ]
     return LaunchDescription(nodes)

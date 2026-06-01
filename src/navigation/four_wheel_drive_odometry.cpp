@@ -155,7 +155,7 @@ geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
       std::sin(final_theta / 2.0),
       std::cos(final_theta / 2.0)));
 
-  log_info(
+  log_debug(
     "FourWheelDriveOdometry",
     "CalculatePose",
     "X: " + std::to_string(x_) +

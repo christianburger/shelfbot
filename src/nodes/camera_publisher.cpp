@@ -39,13 +39,16 @@ public:
     info_manager_ = std::make_shared<camera_info_manager::CameraInfoManager>(
         this, camera_name_, camera_info_url);
 
+    // Publish decoded outputs reliably so `ros2 topic echo --once`, RViz, and
+    // perception nodes with default subscription QoS can all connect.  The
+    // firmware-facing compressed subscription remains SensorDataQoS below.
     image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(
         image_topic_,
-        rclcpp::SensorDataQoS());
+        rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
 
     info_publisher_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
         camera_info_topic_,
-        rclcpp::SensorDataQoS());
+        rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
 
     // Subscribe to compressed images from micro-ROS / ESP32-CAM.
     compressed_image_sub_ =
