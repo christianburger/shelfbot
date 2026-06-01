@@ -20,7 +20,7 @@ def generate_launch_description():
                 'image_width': 800,
                 'image_height': 600,
                 'focal_length': 600.0,
-                'frame_id': 'camera_link'
+                'frame_id': 'camera_link_optical_frame'
             }],
             output='screen'
         ),
