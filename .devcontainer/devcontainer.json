@@ -1,26 +1,49 @@
 {
   "name": "Shelfbot ROS 2 Dev Container",
+
+  // ── Compose wiring ──────────────────────────────────────────────────────────
   "dockerComposeFile": "../docker-compose.yml",
   "service": "shelfbot",
   "workspaceFolder": "/home/chris/shelfbot_ws/src/shelfbot",
+
+  // ── User ────────────────────────────────────────────────────────────────────
   "remoteUser": "chris",
   "containerUser": "chris",
+
+  // ── Lifecycle ───────────────────────────────────────────────────────────────
+  // Start the already-built container before CLion attaches.
+  // 'start' (not 'up') avoids triggering a rebuild.
+  "initializeCommand": "docker compose start",
+  "shutdownAction": "stopContainer",
+
+  // postCreateCommand runs only the very first time the container is created,
+  // so it won't re-run on every CLion open.
+  "postCreateCommand": "sudo chown -R chris:chris /home/chris/.cache/JetBrains /home/chris/.config/JetBrains /home/chris/.local/share/JetBrains",
+
+  // ── Environment ─────────────────────────────────────────────────────────────
   "containerEnv": {
     "DISPLAY": "${localEnv:DISPLAY}",
     "QT_X11_NO_MITSHM": "1"
   },
+
+  // ── Extra run args ──────────────────────────────────────────────────────────
+  // NOTE: --network=host and --privileged are already set in docker-compose.yml.
+  // runArgs here are additive; duplicates are harmless but kept minimal.
+  // The X11 socket volume is also declared in docker-compose.yml, so it is
+  // omitted here to avoid a duplicate-mount error from the container runtime.
   "runArgs": [
     "--network=host",
-    "--privileged",
-    "-v", "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+    "--privileged"
   ],
-  "shutdownAction": "stopContainer",
+
+  // ── Named volume mounts (JetBrains IDE state) ───────────────────────────────
   "mounts": [
     "source=clion_cache,target=/home/chris/.cache/JetBrains,type=volume",
     "source=clion_config,target=/home/chris/.config/JetBrains,type=volume",
     "source=clion_local,target=/home/chris/.local/share/JetBrains,type=volume"
   ],
-  "postCreateCommand": "sudo chown -R chris:chris /home/chris/.cache/JetBrains /home/chris/.config/JetBrains /home/chris/.local/share/JetBrains",
+
+  // ── Editor customisations ───────────────────────────────────────────────────
   "customizations": {
     "vscode": {
       "extensions": []
