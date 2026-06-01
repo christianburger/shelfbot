@@ -141,7 +141,14 @@ hardware_interface::return_type FourWheelDriveHardwareInterface::read(const rclc
             // Only log as warning if we thought communication was healthy
             log_warn("FourWheelDriveHardwareInterface", "read", "Failed to read from hardware despite healthy communication check");
         }
-        // If communication was already unhealthy, failure is expected - don't log repeatedly
+        // Keep publishing odom -> base_footprint with the last known wheel
+        // positions even when the firmware has not delivered fresh encoder data.
+        // Nav2 and RViz both need this TF before they can transform /scan or
+        // camera images into the fixed frame; without the heartbeat, the odom
+        // frame never exists while the robot is otherwise stationary.
+        if (odometry_) {
+            odometry_->update(hw_positions_, period);
+        }
         return hardware_interface::return_type::OK; // Keep controller running with last known values
     }
 

@@ -98,6 +98,11 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        camera_link_optical_frame:
+          Alpha: 1
+          Show Axes: true
+          Show Trail: false
+          Value: true
         motor_back_left:
           Alpha: 1
           Show Axes: false
@@ -294,6 +299,8 @@ Visualization Manager:
           Value: true
         camera_link:
           Value: true
+        camera_link_optical_frame:
+          Value: true
         map:
           Value: true
         motor_back_left:
@@ -361,7 +368,8 @@ Visualization Manager:
             base_footprint:
               base_link:
                 camera_link:
-                  {}
+                  camera_link_optical_frame:
+                    {}
                 motor_back_left:
                   base_axis_back_left:
                     wheel_back_left:
@@ -536,7 +544,7 @@ Visualization Manager:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /camera/image_raw
       Value: true
       Visibility:

@@ -61,10 +61,13 @@ void FourWheelDriveOdometry::update(
         prev_wheel_positions_ = wheel_positions;
         initialized_ = true;
         log_info("FourWheelDriveOdometry", "update", "Odometry initialized with first wheel positions");
-        return;
+        // Continue through the publish path with zero deltas so /odom and the
+        // odom -> base_footprint TF exist immediately on startup.  Nav2 and
+        // RViz require the frame even before the firmware sends changing
+        // encoder values.
     }
 
-    // Rest of the existing update method remains exactly the same...
+    // Integrate wheel deltas and publish the current odom state.
     double front_pos = (wheel_positions[0] + wheel_positions[1]) * 0.5;
     double back_pos  = (wheel_positions[2] + wheel_positions[3]) * 0.5;
 
@@ -84,6 +87,7 @@ void FourWheelDriveOdometry::update(
     x_     += forward_distance * std::cos(theta_);
     y_     += forward_distance * std::sin(theta_);
 
+    auto twist = calculate_twist(wheel_positions, period);
     prev_wheel_positions_ = wheel_positions;
 
     auto stamp = clock_->now();
@@ -96,7 +100,7 @@ void FourWheelDriveOdometry::update(
     odom_msg->pose.pose       = calculate_pose();
     odom_msg->pose.covariance = calculate_pose_covariance();
 
-    odom_msg->twist.twist      = calculate_twist(wheel_positions, period);
+    odom_msg->twist.twist      = twist;
     odom_msg->twist.covariance = calculate_twist_covariance();
 
     odom_pub_->publish(std::move(odom_msg));
@@ -151,7 +155,7 @@ geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
       std::sin(final_theta / 2.0),
       std::cos(final_theta / 2.0)));
 
-  log_info(
+  log_debug(
     "FourWheelDriveOdometry",
     "CalculatePose",
     "X: " + std::to_string(x_) +

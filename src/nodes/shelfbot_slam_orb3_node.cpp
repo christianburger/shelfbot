@@ -7,7 +7,7 @@ ShelfbotORB3Node::ShelfbotORB3Node(const rclcpp::NodeOptions & opts) : Node("she
   declare_parameter<std::string>("settings_file", "/home/chris/shelfbot_workspace/src/shelfbot/config/orb_slam3_monocular.yaml");
   declare_parameter<std::string>("camera_topic", "/camera/image_raw");
   declare_parameter<std::string>("camera_info_topic", "/camera/camera_info");
-  declare_parameter<std::string>("camera_frame", "camera_link");
+  declare_parameter<std::string>("camera_frame", "camera_link_optical_frame");
   declare_parameter<std::string>("map_frame", "map");
   declare_parameter<std::string>("odom_frame", "odom");
   declare_parameter<std::string>("base_link_frame", "base_link");
