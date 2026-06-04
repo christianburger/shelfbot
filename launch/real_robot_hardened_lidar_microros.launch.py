@@ -18,7 +18,9 @@ def generate_launch_description():
     nav2_params       = os.path.join(pkg_share, 'config', 'nav2_camera_params.yaml')
     rviz_config       = os.path.join(pkg_share, 'config', 'nav2_troubleshoot.rviz')
 
-    # ── Lidar mount (tweak to match your physical setup) ───────────────────────
+    camera_info_url   = 'file://' + os.path.join(pkg_share, 'config', 'esp32_cam_calibration.yaml')
+
+    # ── Lidar mount ────────────────────────────────────────────────────────────
     lidar_x, lidar_y, lidar_z         = '0.0', '0.0', '0.2'
     lidar_roll, lidar_pitch, lidar_yaw = '0.0', '0.0', '0.0'
 
@@ -27,8 +29,7 @@ def generate_launch_description():
     robot_description = {'robot_description': doc.toxml()}
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TIER 1  (t=0 s) – hardware layer
-    # Must be up before anything else tries to read /tf or /odom.
+    # TIER 1  (t=0 s) – hardware + camera pipeline
     # ══════════════════════════════════════════════════════════════════════════
 
     robot_state_pub = Node(
@@ -46,15 +47,11 @@ def generate_launch_description():
         output='both',
         remappings=[
             ('~/robot_description', '/robot_description'),
-            # Nav2 sends goals to /cmd_vel; the controller listens on ~/cmd_vel.
-            # This remap makes them meet in the middle.
             ('/four_wheel_drive_controller/cmd_vel', '/cmd_vel'),
         ],
         arguments=['--ros-args', '--log-level', 'info'],
     )
 
-    # Static TF: base_link → lidar_frame
-    # The costmap obstacle_layer needs this to project /scan into the odom frame.
     static_tf_lidar = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -67,25 +64,41 @@ def generate_launch_description():
         parameters=[{'use_sim_time': False}],
     )
 
-    # Lidar relay: /shelfbot_firmware/laser_scan → /scan (360° accumulator)
     lidar_relay = Node(
         package='shelfbot',
         executable='lidar_relay_node',
         name='lidar_relay_node',
         output='screen',
-        parameters=[{
-            'frame_id':   'lidar_frame',
-            'publish_hz': 5.0,
-        }],
+        parameters=[{'frame_id': 'lidar_frame', 'publish_hz': 5.0}],
         arguments=['--ros-args', '--log-level', 'warn'],
         respawn=True,
         respawn_delay=2.0,
     )
 
+    # ── Camera pipeline ────────────────────────────────────────────────────────
+    # Subscribes /camera/compressed  (RELIABLE, VOLATILE)  from ESP32 micro-ROS
+    # Publishes  /camera/image_raw   (RELIABLE, VOLATILE)
+    #            /camera/camera_info (RELIABLE, VOLATILE)
+    camera_publisher = Node(
+        package='shelfbot',
+        executable='camera_publisher',
+        name='camera_publisher',
+        output='screen',
+        parameters=[{
+            'camera_info_url': camera_info_url,
+            'camera_name':     'esp32_cam',
+            'frame_id':        'camera_link_optical_frame',
+            'image_width':     800,
+            'image_height':    600,
+            'focal_length':    800.0,
+        }],
+        arguments=['--ros-args', '--log-level', 'info'],
+        respawn=True,
+        respawn_delay=3.0,
+    )
+
     # ══════════════════════════════════════════════════════════════════════════
     # TIER 2  (t=3 s) – ros2_control spawners
-    # controller_manager needs a few seconds to finish loading the hardware
-    # interface plugin before the spawners can handshake with it.
     # ══════════════════════════════════════════════════════════════════════════
 
     joint_broadcaster_spawner = Node(
@@ -105,14 +118,69 @@ def generate_launch_description():
     )
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TIER 3  (t=8 s) – Nav2
-    # Needs /odom and the full TF chain (map→odom→base_footprint→…) to be
-    # stable before the costmaps can activate.
+    # TIER 3  (t=6 s) – perception nodes
+    # Needs camera_publisher to be publishing before these subscribe.
     #
-    # Option A config (nav2_camera_params.yaml):
-    #   • No map_server, no static_layer, no AMCL
-    #   • Both costmaps use obstacle_layer fed by /scan
-    #   • global_frame: odom  (robot navigates in odom space)
+    # apriltag_detector:
+    #   Subscribes  /camera/image_raw   (RELIABLE, VOLATILE)
+    #               /camera/camera_info (RELIABLE, VOLATILE)
+    #   Publishes   /tag_poses          (RELIABLE, VOLATILE)
+    #               /apriltag_markers   (RELIABLE, VOLATILE)
+    #               TF: camera_link_optical_frame → tag_N
+    #
+    # shelfbot_slam_orb3_node:
+    #   Subscribes  /camera/image_raw   (RELIABLE, VOLATILE)
+    #               /camera/camera_info (RELIABLE, VOLATILE)  [synced, slop=0.1s]
+    #   Publishes   /slam_odom          (RELIABLE, VOLATILE, depth=10)
+    #               /initialpose        (RELIABLE, VOLATILE, depth=1)
+    #               TF: map → odom
+    # ══════════════════════════════════════════════════════════════════════════
+
+    apriltag_detector = Node(
+        package='shelfbot',
+        executable='apriltag_detector_node',
+        name='apriltag_detector_node',
+        output='screen',
+        parameters=[{
+            'tag_size':             0.16,
+            'pose_error_threshold': 100.0,
+        }],
+        arguments=['--ros-args', '--log-level', 'info'],
+        respawn=True,
+        respawn_delay=3.0,
+    )
+
+    slam_node = Node(
+        package='shelfbot',
+        executable='shelfbot_slam_orb3_node',
+        name='shelfbot_slam_orb3_node',
+        output='screen',
+        parameters=[{
+            'camera_topic':      '/camera/image_raw',
+            'camera_info_topic': '/camera/camera_info',
+            'camera_frame':      'camera_link',
+            'map_frame':         'map',
+            'odom_frame':        'odom',
+            'base_link_frame':   'base_link',
+            'publish_tf':        True,
+            'publish_odom':      True,
+        }],
+        arguments=['--ros-args', '--log-level', 'info'],
+        respawn=True,
+        respawn_delay=5.0,
+    )
+
+    delay_perception = TimerAction(
+        period=6.0,
+        actions=[apriltag_detector, slam_node],
+    )
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # TIER 4  (t=10 s) – Nav2
+    # Needs /odom and the full TF chain stable before costmaps activate.
+    # nav2_camera_params.yaml must set:
+    #   global_frame: odom    (navigates in odom space until AMCL provides map)
+    #   obstacle_layer source: /scan
     # ══════════════════════════════════════════════════════════════════════════
 
     nav2 = IncludeLaunchDescription(
@@ -126,12 +194,10 @@ def generate_launch_description():
         }.items(),
     )
 
-    delay_nav2 = TimerAction(period=8.0, actions=[nav2])
+    delay_nav2 = TimerAction(period=10.0, actions=[nav2])
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TIER 4  (t=15 s) – RViz
-    # Last so it connects to already-active topics and shows real data
-    # immediately rather than showing everything grey/unknown.
+    # TIER 5  (t=18 s) – RViz
     # ══════════════════════════════════════════════════════════════════════════
 
     rviz_node = Node(
@@ -143,21 +209,21 @@ def generate_launch_description():
         output='screen',
     )
 
-    delay_rviz = TimerAction(period=15.0, actions=[rviz_node])
+    delay_rviz = TimerAction(period=18.0, actions=[rviz_node])
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # All actions must be listed here — anything omitted simply does not launch.
-    # ══════════════════════════════════════════════════════════════════════════
     return LaunchDescription([
-        # Tier 1 – hardware (immediate)
+        # Tier 1 – hardware + camera pipeline (immediate)
         robot_state_pub,
         control_node,
         static_tf_lidar,
         lidar_relay,
+        camera_publisher,
         # Tier 2 – controllers (t=3 s)
         delay_controllers,
-        # Tier 3 – Nav2 (t=8 s)
+        # Tier 3 – perception (t=6 s)
+        delay_perception,
+        # Tier 4 – Nav2 (t=10 s)
         delay_nav2,
-        # Tier 4 – RViz (t=15 s)
+        # Tier 5 – RViz (t=18 s)
         delay_rviz,
     ])
