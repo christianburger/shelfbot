@@ -127,13 +127,6 @@ def generate_launch_description():
     #   Publishes   /tag_poses          (RELIABLE, VOLATILE)
     #               /apriltag_markers   (RELIABLE, VOLATILE)
     #               TF: camera_link_optical_frame → tag_N
-    #
-    # shelfbot_slam_orb3_node:
-    #   Subscribes  /camera/image_raw   (RELIABLE, VOLATILE)
-    #               /camera/camera_info (RELIABLE, VOLATILE)  [synced, slop=0.1s]
-    #   Publishes   /slam_odom          (RELIABLE, VOLATILE, depth=10)
-    #               /initialpose        (RELIABLE, VOLATILE, depth=1)
-    #               TF: map → odom
     # ══════════════════════════════════════════════════════════════════════════
 
     apriltag_detector = Node(
@@ -150,29 +143,9 @@ def generate_launch_description():
         respawn_delay=3.0,
     )
 
-    slam_node = Node(
-        package='shelfbot',
-        executable='shelfbot_slam_orb3_node',
-        name='shelfbot_slam_orb3_node',
-        output='screen',
-        parameters=[{
-            'camera_topic':      '/camera/image_raw',
-            'camera_info_topic': '/camera/camera_info',
-            'camera_frame':      'camera_link',
-            'map_frame':         'map',
-            'odom_frame':        'odom',
-            'base_link_frame':   'base_link',
-            'publish_tf':        True,
-            'publish_odom':      True,
-        }],
-        arguments=['--ros-args', '--log-level', 'info'],
-        respawn=True,
-        respawn_delay=5.0,
-    )
-
     delay_perception = TimerAction(
         period=6.0,
-        actions=[apriltag_detector, slam_node],
+        actions=[apriltag_detector],
     )
 
     # ══════════════════════════════════════════════════════════════════════════
