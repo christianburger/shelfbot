@@ -292,6 +292,8 @@ test_heartbeat_increments() {
 
 # ---------------------------------------------------------------------------
 # 5. motor_positions payload
+# FIX: gawk now resets state on "---" and stops after the first complete
+#      message, preventing double-accumulation when two messages arrive.
 # ---------------------------------------------------------------------------
 test_motor_positions() {
     section "5. motor_positions payload"
@@ -309,6 +311,13 @@ test_motor_positions() {
 
     local result
     result=$(gawk '
+        /^---$/ {
+            # End of one message — if we already collected data, stop here
+            if (n > 0) { done = 1 }
+            in_data = 0
+            next
+        }
+        done { next }
         /^data:/ { in_data=1; next }
         in_data && /^- / { vals[n++] = $2+0 }
         in_data && !/^- / && NF>0 { in_data=0 }
@@ -337,6 +346,7 @@ test_motor_positions() {
 
 # ---------------------------------------------------------------------------
 # 6. distance_sensors payload
+# FIX: same gawk reset-on-separator fix as motor_positions above.
 # ---------------------------------------------------------------------------
 test_distance_sensors() {
     section "6. distance_sensors payload"
@@ -354,6 +364,12 @@ test_distance_sensors() {
 
     local result
     result=$(gawk '
+        /^---$/ {
+            if (n > 0) { done = 1 }
+            in_data = 0
+            next
+        }
+        done { next }
         /^data:/ { in_data=1; next }
         in_data && /^- / { vals[n++] = $2+0 }
         in_data && !/^- / && NF>0 { in_data=0 }
@@ -409,7 +425,10 @@ test_tof_distance() {
 }
 
 # ---------------------------------------------------------------------------
-# 8. laser_scan payload and timestamp (FIXED extraction)
+# 8. laser_scan payload and timestamp
+# FIX: gawk now resets in_ranges on "---" and stops after the first complete
+#      message, preventing range point double-accumulation (24 instead of 12)
+#      when two messages arrive in the collection window.
 # ---------------------------------------------------------------------------
 test_laser_scan() {
     section "8. laser_scan payload and timestamp"
@@ -428,7 +447,6 @@ test_laser_scan() {
     local host_epoch
     host_epoch=$(date +%s)
 
-    # Use gawk with flexible field extraction
     local result
     result=$(gawk -v epoch_min="$EPOCH_MIN" -v host_epoch="$host_epoch" \
                   -v pts_expected="$LASER_POINTS_EXPECTED" '
@@ -437,9 +455,16 @@ test_laser_scan() {
                 return arr[1]
             return ""
         }
-        /frame_id:/  { frame_id = $2 }
-        /range_min:/ { range_min = $2+0 }
-        /range_max:/ { range_max = $2+0 }
+        /^---$/ {
+            # End of one message — if we already have ranges, stop processing
+            if (nr > 0) { done = 1 }
+            in_ranges = 0
+            next
+        }
+        done { next }
+        /frame_id:/  { if (!frame_id)  frame_id  = $2 }
+        /range_min:/ { if (!range_min) range_min = $2+0 }
+        /range_max:/ { if (!range_max) range_max = $2+0 }
         {
             sec_val = extract_value($0, "sec")
             if (sec_val != "" && !stamp_sec_done) { stamp_sec = sec_val+0; stamp_sec_done=1 }
@@ -483,7 +508,7 @@ test_laser_scan() {
 }
 
 # ---------------------------------------------------------------------------
-# 9. LED round-trip (FIXED: more reliable collection)
+# 9. LED round-trip (publish led → receive led_state)
 # ---------------------------------------------------------------------------
 test_led_round_trip() {
     section "9. LED command round-trip (publish led → receive led_state)"
@@ -498,7 +523,6 @@ test_led_round_trip() {
         vlog "led" "Publishing LED ${label} to ${led_topic}"
         ros2 topic pub --once "$led_topic" std_msgs/msg/Bool "{data: ${state}}" >/dev/null 2>&1
 
-        # Wait for the state to appear (poll manually)
         local found=0
         for i in {1..20}; do
             local val
@@ -560,7 +584,10 @@ test_qos_compatibility() {
 }
 
 # ---------------------------------------------------------------------------
-# 11. Node lifecycle — full graph (FIXED state checking)
+# 11. Node lifecycle — full graph
+# FIX: lifecycle state check now matches only the word "active" preceded by
+#      a space or start-of-string, preventing "inactive" from falsely passing.
+#      Also accepts state [3] which is the numeric form of "active" in Humble.
 # ---------------------------------------------------------------------------
 test_node_lifecycle() {
     section "11. Node lifecycle — full graph"
@@ -609,11 +636,17 @@ test_node_lifecycle() {
         if echo "$lifecycle_list" | grep -qxF "/${node}"; then
             local state_raw
             state_raw=$(ros2 lifecycle get "/${node}" 2>/dev/null || echo "unknown")
-            # state_raw can be "active", "inactive", "unconfigured", or "state = [3]"
+
+            # FIX: match " active" (space-prefixed) or "^active" to exclude
+            # "inactive" which contains "active" as a substring.
+            # Also accept numeric [3] which ros2 lifecycle get returns in Humble
+            # when the node reports active state.
             local active=0
-            if [[ "$state_raw" =~ active ]] || [[ "$state_raw" =~ \[3\] ]]; then
+            if [[ "$state_raw" =~ (^|[[:space:]])active([[:space:]]|$) ]] || \
+               [[ "$state_raw" =~ \[3\] ]]; then
                 active=1
             fi
+
             vlog "lifecycle" "/${node} state_raw = $state_raw"
             record "  /${node} lifecycle == active" "$active" "raw: $state_raw"
         fi
