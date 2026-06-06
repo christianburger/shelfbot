@@ -7,10 +7,7 @@ using std::vector;
 
 namespace shelfbot {
 
-FourWheelDriveController::FourWheelDriveController()
-: controller_interface::ControllerInterface(),
-  cmd_vel_timeout_(0, 0)
-{
+FourWheelDriveController::FourWheelDriveController() : controller_interface::ControllerInterface(), cmd_vel_timeout_(0, 0) {
 }
 
 CallbackReturn FourWheelDriveController::on_init() {
@@ -31,9 +28,7 @@ CallbackReturn FourWheelDriveController::on_init() {
   return CallbackReturn::SUCCESS;
 }
 
-CallbackReturn FourWheelDriveController::on_configure(
-    const rclcpp_lifecycle::State& previous_state)
-{
+CallbackReturn FourWheelDriveController::on_configure(const rclcpp_lifecycle::State& previous_state) {
   joint_names_              = get_node()->get_parameter("joint_names").as_string_array();
   front_left_joint_names_   = get_node()->get_parameter("front_left_joint_names").as_string_array();
   back_left_joint_names_    = get_node()->get_parameter("back_left_joint_names").as_string_array();
@@ -73,9 +68,7 @@ CallbackReturn FourWheelDriveController::on_configure(
   return CallbackReturn::SUCCESS;
 }
 
-void FourWheelDriveController::cmd_vel_callback(
-    const std::shared_ptr<geometry_msgs::msg::Twist> msg)
-{
+void FourWheelDriveController::cmd_vel_callback( const std::shared_ptr<geometry_msgs::msg::Twist> msg) {
   last_cmd_vel_      = msg;
   last_cmd_vel_time_ = get_node()->now();
 }
