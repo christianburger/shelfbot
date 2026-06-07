@@ -11,6 +11,11 @@ void log_warn(const std::string& logger_name, const std::string& tag, const std:
 void log_error(const std::string& logger_name, const std::string& tag, const std::string& message);
 void log_debug(const std::string& logger_name, const std::string& tag, const std::string& message);
 void log_trace(const std::string& logger_name, const std::string& tag, const std::string& message);
-}
+
+} // namespace shelfbot
+
+// log_zip is header-only; include here so every TU that includes shelfbot_utils
+// gets it for free.
+#include "shelfbot/log_zip.hpp"
 
 #endif

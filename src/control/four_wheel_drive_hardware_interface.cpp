@@ -1,222 +1,233 @@
 #include "shelfbot/four_wheel_drive_hardware_interface.hpp"
 #include "shelfbot/microros_communication.hpp"
+#include "shelfbot/shelfbot_utils.hpp"  // pulls in log_zip.hpp
 #include <sstream>
 
 namespace shelfbot {
 
 FourWheelDriveHardwareInterface::FourWheelDriveHardwareInterface() {
-    log_info("FourWheelDriveHardwareInterface", "Constructor", "Hardware interface constructor called.");
+    log_info("FourWheelDriveHardwareInterface", "Constructor",
+             "Hardware interface constructor called.");
 }
 
-hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_init(const hardware_interface::HardwareInfo& info) {
-    log_info("FourWheelDriveHardwareInterface", "on_init", "--- Starting on_init ---");
-    
-    if (hardware_interface::SystemInterface::on_init(info) != hardware_interface::CallbackReturn::SUCCESS) {
+hardware_interface::CallbackReturn
+FourWheelDriveHardwareInterface::on_init(const hardware_interface::HardwareInfo& info)
+{
+    log_zip_s("HW", "INIT", {{"st", "begin"}});
+
+    if (hardware_interface::SystemInterface::on_init(info)
+            != hardware_interface::CallbackReturn::SUCCESS) {
+        log_zip_s("HW", "INIT", {{"st", "base_fail"}});
         log_error("FourWheelDriveHardwareInterface", "on_init", "Base class on_init failed.");
         return hardware_interface::CallbackReturn::ERROR;
     }
 
-    log_info("FourWheelDriveHardwareInterface", "on_init", "Initializing storage vectors.");
     hw_positions_.resize(info_.joints.size(), 0.0);
     hw_velocities_.resize(info_.joints.size(), 0.0);
     hw_velocity_commands_.resize(info_.joints.size(), 0.0);
     hw_max_speeds_.resize(info_.joints.size(), 10.0);
-    log_info("FourWheelDriveHardwareInterface", "on_init", "Storage vectors initialized for " + std::to_string(info_.joints.size()) + " joints.");
 
-    log_info("FourWheelDriveHardwareInterface", "on_init", "Reading hardware parameters.");
     std::string comm_type = info_.hardware_parameters.at("communication_type");
-    log_info("FourWheelDriveHardwareInterface", "on_init", "Communication type parameter found: " + comm_type);
 
-    log_info("FourWheelDriveHardwareInterface", "on_init", "Real robot mode selected. Initializing ROS node for odometry.");
-    node_ = std::make_shared<rclcpp::Node>("shelfbot_odometry_node");
+    node_       = std::make_shared<rclcpp::Node>("shelfbot_odometry_node");
     node_spinner_ = std::thread([this]() { rclcpp::spin(node_); });
-    log_info("FourWheelDriveHardwareInterface", "on_init", "ROS node and spinner created.");
 
     if (comm_type == "microros") {
-        log_info("FourWheelDriveHardwareInterface", "on_init", "Creating micro-ROS communication interface.");
         comm_ = std::make_unique<MicroRosCommunication>();
-        if (!comm_->open("")) { 
-            log_error("FourWheelDriveHardwareInterface", "on_init", "Failed to open micro-ROS communication.");
+        if (!comm_->open("")) {
+            log_zip_s("HW", "INIT", {{"st", "comm_fail"}, {"type", "uros"}});
+            log_error("FourWheelDriveHardwareInterface", "on_init",
+                      "Failed to open micro-ROS communication.");
             return hardware_interface::CallbackReturn::ERROR;
         }
-        log_info("FourWheelDriveHardwareInterface", "on_init", "micro-ROS communication opened successfully.");
     } else {
-        log_error("FourWheelDriveHardwareInterface", "on_init", "Unsupported communication type: " + comm_type);
+        log_zip_s("HW", "INIT", {{"st", "bad_comm"}, {"type", comm_type}});
+        log_error("FourWheelDriveHardwareInterface", "on_init",
+                  "Unsupported communication type: " + comm_type);
         return hardware_interface::CallbackReturn::ERROR;
     }
 
-    log_info("FourWheelDriveHardwareInterface", "on_init", "Initializing odometry with node clock.");
     odometry_ = std::make_unique<FourWheelDriveOdometry>(
-        node_, 
-        node_->get_clock(),  // Use node's clock instead of creating new one
-        std::stod(info_.hardware_parameters.at("wheel_separation")), 
+        node_, node_->get_clock(),
+        std::stod(info_.hardware_parameters.at("wheel_separation")),
         std::stod(info_.hardware_parameters.at("wheel_radius")));
-    log_info("FourWheelDriveHardwareInterface", "on_init", "Odometry initialized successfully.");
-    log_info("FourWheelDriveHardwareInterface", "on_init", "--- on_init successful (Real Robot) ---");
+
+    // ── log_zip: init complete ────────────────────────────────────────────
+    log_zip("HW", "INIT", {
+        {"joints", (double)info_.joints.size()},
+        {"sep",    std::stod(info_.hardware_parameters.at("wheel_separation"))},
+        {"rad",    std::stod(info_.hardware_parameters.at("wheel_radius"))}
+    });
+    log_info("FourWheelDriveHardwareInterface", "on_init", "--- on_init successful ---");
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_configure(const rclcpp_lifecycle::State& previous_state) {
-    log_info("FourWheelDriveHardwareInterface", "on_configure", "--- Starting on_configure from state: " + std::string(previous_state.label()) + " ---");
-    // Nothing to configure here, just logging
+hardware_interface::CallbackReturn
+FourWheelDriveHardwareInterface::on_configure(const rclcpp_lifecycle::State& previous_state)
+{
+    log_zip_s("HW", "CFG", {{"from", previous_state.label()}});
     log_info("FourWheelDriveHardwareInterface", "on_configure", "--- on_configure successful ---");
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-std::vector<hardware_interface::StateInterface> FourWheelDriveHardwareInterface::export_state_interfaces() {
-    log_info("FourWheelDriveHardwareInterface", "export_state_interfaces", "--- Exporting state interfaces ---");
+std::vector<hardware_interface::StateInterface>
+FourWheelDriveHardwareInterface::export_state_interfaces()
+{
     std::vector<hardware_interface::StateInterface> state_interfaces;
     for (size_t i = 0; i < info_.joints.size(); i++) {
-        state_interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_positions_[i]);
-        state_interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &hw_velocities_[i]);
-        
-        std::stringstream ss;
-        ss << "[hw_positions] Exporting state interface for " << info_.joints[i].name << " with initial value: " << hw_positions_[i];
-        log_info("FourWheelDriveHardwareInterface", "export_state_interfaces", ss.str());
+        state_interfaces.emplace_back(
+            info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_positions_[i]);
+        state_interfaces.emplace_back(
+            info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &hw_velocities_[i]);
     }
-    log_info("FourWheelDriveHardwareInterface", "export_state_interfaces", "--- State interfaces exported successfully ---");
+    log_zip("HW", "EXPO", {{"cnt", (double)state_interfaces.size()}});
     return state_interfaces;
 }
 
-std::vector<hardware_interface::CommandInterface> FourWheelDriveHardwareInterface::export_command_interfaces() {
-    log_info("FourWheelDriveHardwareInterface", "export_command_interfaces", "--- Exporting command interfaces ---");
+std::vector<hardware_interface::CommandInterface>
+FourWheelDriveHardwareInterface::export_command_interfaces()
+{
     std::vector<hardware_interface::CommandInterface> command_interfaces;
     for (size_t i = 0; i < info_.joints.size(); i++) {
-        command_interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &hw_velocity_commands_[i]);
-        command_interfaces.emplace_back(info_.joints[i].name, "max_speed", &hw_max_speeds_[i]);
-        log_info("FourWheelDriveHardwareInterface", "export_command_interfaces", "Exported command interfaces for joint: " + info_.joints[i].name);
+        command_interfaces.emplace_back(
+            info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &hw_velocity_commands_[i]);
+        command_interfaces.emplace_back(
+            info_.joints[i].name, "max_speed", &hw_max_speeds_[i]);
     }
-    log_info("FourWheelDriveHardwareInterface", "export_command_interfaces", "--- Command interfaces exported successfully ---");
+    log_zip("HW", "EXPC", {{"cnt", (double)command_interfaces.size()}});
     return command_interfaces;
 }
 
-hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_activate(const rclcpp_lifecycle::State& previous_state) {
-    log_info("FourWheelDriveHardwareInterface", "on_activate", "--- Starting on_activate from state: " + std::string(previous_state.label()) + " ---");
-    log_info("FourWheelDriveHardwareInterface", "on_activate", "Resetting command and state vectors to zero.");
+hardware_interface::CallbackReturn
+FourWheelDriveHardwareInterface::on_activate(const rclcpp_lifecycle::State& previous_state)
+{
     std::fill(hw_velocity_commands_.begin(), hw_velocity_commands_.end(), 0.0);
-    std::fill(hw_positions_.begin(), hw_positions_.end(), 0.0);
-    std::fill(hw_velocities_.begin(), hw_velocities_.end(), 0.0);
-    
-    if (comm_) {
-        log_info("FourWheelDriveHardwareInterface", "on_activate", "Writing zero velocity to hardware on activation.");
-        comm_->writeSpeedsToHardware(hw_velocity_commands_);
-    }
+    std::fill(hw_positions_.begin(),         hw_positions_.end(),         0.0);
+    std::fill(hw_velocities_.begin(),        hw_velocities_.end(),        0.0);
+
+    if (comm_) comm_->writeSpeedsToHardware(hw_velocity_commands_);
+
+    // ── log_zip: activated ────────────────────────────────────────────────
+    log_zip_s("HW", "ACT", {{"from", previous_state.label()}, {"st", "ok"}});
     log_info("FourWheelDriveHardwareInterface", "on_activate", "--- on_activate successful ---");
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& previous_state) {
-    log_info("FourWheelDriveHardwareInterface", "on_deactivate", "--- Starting on_deactivate from state: " + std::string(previous_state.label()) + " ---");
-    if (comm_) {
-        log_info("FourWheelDriveHardwareInterface", "on_deactivate", "Closing hardware communication.");
-        comm_->close();
-    }
-    log_info("FourWheelDriveHardwareInterface", "on_deactivate", "--- on_deactivate successful ---");
+hardware_interface::CallbackReturn
+FourWheelDriveHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& previous_state)
+{
+    if (comm_) comm_->close();
+    log_zip_s("HW", "DEACT", {{"from", previous_state.label()}, {"st", "ok"}});
+    log_info("FourWheelDriveHardwareInterface", "on_deactivate",
+             "--- on_deactivate successful ---");
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::return_type FourWheelDriveHardwareInterface::read(const rclcpp::Time& time, const rclcpp::Duration& period) {
+hardware_interface::return_type
+FourWheelDriveHardwareInterface::read(const rclcpp::Time& time,
+                                      const rclcpp::Duration& period)
+{
     if (!comm_) {
-        log_warn("FourWheelDriveHardwareInterface", "read", "Communication interface not available.");
+        log_warn("FourWheelDriveHardwareInterface", "read",
+                 "Communication interface not available.");
         return hardware_interface::return_type::OK;
     }
 
-    // Always try to read regardless of communication health
-    // But use health check to determine if we should expect success
-    bool communication_healthy = comm_->is_communication_healthy();
-    
-    if (!communication_healthy) {
+    bool healthy = comm_->is_communication_healthy();
+
+    if (!healthy) {
         static auto last_warn_time = time;
         if ((time - last_warn_time).seconds() > 5.0) {
-            log_warn("FourWheelDriveHardwareInterface", "read", 
+            log_zip("HW", "RD", {{"hlth", 0}, {"skip", 0}});
+            log_warn("FourWheelDriveHardwareInterface", "read",
                     "Micro-ROS communication unhealthy - attempting read anyway");
             last_warn_time = time;
         }
     }
 
-    // Always attempt to read from hardware, even if communication appears unhealthy
-    // This gives the system a chance to recover
     if (!comm_->readStateFromHardware(hw_positions_)) {
-        if (communication_healthy) {
-            // Only log as warning if we thought communication was healthy
-            log_warn("FourWheelDriveHardwareInterface", "read", "Failed to read from hardware despite healthy communication check");
+        if (healthy) {
+            log_zip("HW", "RD", {{"hlth", 1}, {"ok", 0}});
+            log_warn("FourWheelDriveHardwareInterface", "read",
+                     "Failed to read from hardware despite healthy communication check");
         }
-        // If communication was already unhealthy, failure is expected - don't log repeatedly
-        return hardware_interface::return_type::OK; // Keep controller running with last known values
+        return hardware_interface::return_type::OK;
     }
 
-    // If we successfully read, log the positions for debugging
-    std::stringstream ss;
-    ss << "[hw_positions] FourWheelDriveHardwareInterface::read: Successfully read positions: [";
-    for (size_t i = 0; i < hw_positions_.size(); ++i) {
-        ss << hw_positions_[i] << (i < hw_positions_.size() - 1 ? ", " : "");
-    }
-    ss << "] - Communication health: " << (communication_healthy ? "healthy" : "unhealthy");
-    log_info("FourWheelDriveHardwareInterface", "read", ss.str());
+    // ── READ‑SIDE FLIP: Negate left‑side positions for real robot ─────────
+    // This makes the odometry see increasing left positions when moving forward.
+    hw_positions_[0] = -hw_positions_[0];  // front left
+    hw_positions_[2] = -hw_positions_[2];  // back left
+    // ─────────────────────────────────────────────────────────────────────
 
-    // Update odometry with the new positions if we successfully read them
-    if (odometry_) {
-        odometry_->update(hw_positions_, period);
-    }
+    // ── log_zip: successful read with raw positions ───────────────────────
+    log_zip("HW", "RD", {
+        {"hlth", healthy ? 1.0 : 0.0},
+        {"p0",   hw_positions_[0]},
+        {"p1",   hw_positions_[1]},
+        {"p2",   hw_positions_[2]},
+        {"p3",   hw_positions_[3]}
+    });
+
+    if (odometry_) odometry_->update(hw_positions_, period);
 
     return hardware_interface::return_type::OK;
 }
 
-hardware_interface::return_type FourWheelDriveHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& period) {
+hardware_interface::return_type
+FourWheelDriveHardwareInterface::write(const rclcpp::Time& time,
+                                       const rclcpp::Duration& /*period*/)
+{
     if (!comm_) {
-        log_error("FourWheelDriveHardwareInterface", "write", "Communication interface not available.");
+        log_error("FourWheelDriveHardwareInterface", "write",
+                  "Communication interface not available.");
         return hardware_interface::return_type::ERROR;
     }
 
-    // Always try to write regardless of communication health
-    // But use health check to determine if we should expect success
-    bool communication_healthy = comm_->is_communication_healthy();
-    
-    if (!communication_healthy) {
+    bool healthy = comm_->is_communication_healthy();
+
+    if (!healthy) {
         static auto last_warn_time = time;
         if ((time - last_warn_time).seconds() > 5.0) {
-            log_warn("FourWheelDriveHardwareInterface", "write", 
+            log_zip("HW", "WR", {{"hlth", 0}, {"skip", 0}});
+            log_warn("FourWheelDriveHardwareInterface", "write",
                     "Micro-ROS communication unhealthy - attempting write anyway");
             last_warn_time = time;
         }
     }
 
-    // Log the commands being written for debugging
-    std::stringstream ss;
-    ss << "Writing to hardware: Commands = [";
-    for (size_t i = 0; i < hw_velocity_commands_.size(); ++i) {
-        ss << hw_velocity_commands_[i] << (i < hw_velocity_commands_.size() - 1 ? ", " : "");
-    }
-    ss << "] - Communication health: " << (communication_healthy ? "healthy" : "unhealthy");
-    log_info("FourWheelDriveHardwareInterface", "write", ss.str());
+    // ── COMMAND‑SIDE FLIP: Negate left‑side commands for real robot ───────
+    // This makes left motors receive negative velocities (CCW) for forward motion.
+    hw_velocity_commands_[0] = -hw_velocity_commands_[0];  // front left
+    hw_velocity_commands_[2] = -hw_velocity_commands_[2];  // back left
+    // ─────────────────────────────────────────────────────────────────────
 
-    // Always attempt to write to hardware, even if communication appears unhealthy
-    // This gives the system a chance to recover
     if (!comm_->writeSpeedsToHardware(hw_velocity_commands_)) {
-        if (communication_healthy) {
-            // Only log as error if we thought communication was healthy
-            log_error("FourWheelDriveHardwareInterface", "write", 
+        if (healthy) {
+            log_zip("HW", "WR", {{"hlth", 1}, {"ok", 0}});
+            log_error("FourWheelDriveHardwareInterface", "write",
                      "Failed to write speeds to hardware despite healthy communication check");
             return hardware_interface::return_type::ERROR;
-        } else {
-            // If communication was already unhealthy, failure is expected - don't return error
-            log_warn("FourWheelDriveHardwareInterface", "write", 
-                    "Write failed as expected due to unhealthy communication");
-            return hardware_interface::return_type::OK; // Don't treat as fatal error
         }
+        log_zip("HW", "WR", {{"hlth", 0}, {"ok", 0}});
+        return hardware_interface::return_type::OK;
     }
-    
-    // If we get here, write was successful
-    if (!communication_healthy) {
-        log_info("FourWheelDriveHardwareInterface", "write", 
-                "Write succeeded despite previous communication issues - communication may be recovering");
-    }
-    
+
+    // ── log_zip: write succeeded with velocity commands ───────────────────
+    log_zip("HW", "WR", {
+        {"hlth", healthy ? 1.0 : 0.0},
+        {"c0",   hw_velocity_commands_[0]},
+        {"c1",   hw_velocity_commands_[1]},
+        {"c2",   hw_velocity_commands_[2]},
+        {"c3",   hw_velocity_commands_[3]}
+    });
+
     return hardware_interface::return_type::OK;
 }
 
-
-}
+} // namespace shelfbot
 
 #include "pluginlib/class_list_macros.hpp"
-PLUGINLIB_EXPORT_CLASS(shelfbot::FourWheelDriveHardwareInterface, hardware_interface::SystemInterface)
+PLUGINLIB_EXPORT_CLASS(
+    shelfbot::FourWheelDriveHardwareInterface,
+    hardware_interface::SystemInterface)
