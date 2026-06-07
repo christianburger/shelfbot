@@ -170,7 +170,6 @@ geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
   double dt = period.seconds();
   if (dt < 1e-9) { dt = 1e-9; }
 
-  // Use left/right differencing for velocity estimation
   double left_pos  = (wheel_positions[0] + wheel_positions[2]) * 0.5;
   double right_pos = (wheel_positions[1] + wheel_positions[3]) * 0.5;
 

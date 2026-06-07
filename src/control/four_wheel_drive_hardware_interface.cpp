@@ -147,13 +147,18 @@ FourWheelDriveHardwareInterface::read(const rclcpp::Time& time,
 
     if (!comm_->readStateFromHardware(hw_positions_)) {
         if (healthy) {
-            // ── log_zip: unexpected read failure ─────────────────────────
             log_zip("HW", "RD", {{"hlth", 1}, {"ok", 0}});
             log_warn("FourWheelDriveHardwareInterface", "read",
                      "Failed to read from hardware despite healthy communication check");
         }
         return hardware_interface::return_type::OK;
     }
+
+    // ── READ‑SIDE FLIP: Negate left‑side positions for real robot ─────────
+    // This makes the odometry see increasing left positions when moving forward.
+    hw_positions_[0] = -hw_positions_[0];  // front left
+    hw_positions_[2] = -hw_positions_[2];  // back left
+    // ─────────────────────────────────────────────────────────────────────
 
     // ── log_zip: successful read with raw positions ───────────────────────
     log_zip("HW", "RD", {
@@ -190,6 +195,12 @@ FourWheelDriveHardwareInterface::write(const rclcpp::Time& time,
             last_warn_time = time;
         }
     }
+
+    // ── COMMAND‑SIDE FLIP: Negate left‑side commands for real robot ───────
+    // This makes left motors receive negative velocities (CCW) for forward motion.
+    hw_velocity_commands_[0] = -hw_velocity_commands_[0];  // front left
+    hw_velocity_commands_[2] = -hw_velocity_commands_[2];  // back left
+    // ─────────────────────────────────────────────────────────────────────
 
     if (!comm_->writeSpeedsToHardware(hw_velocity_commands_)) {
         if (healthy) {
