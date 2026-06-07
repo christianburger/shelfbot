@@ -5,7 +5,7 @@
 #include <vector>
 #include <array>
 #include "rclcpp/rclcpp.hpp"
-#include "rclcpp/duration.hpp"  // ADD THIS LINE
+#include "rclcpp/duration.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "tf2_ros/transform_broadcaster.h"
@@ -49,7 +49,9 @@ private:
   double wheel_radius_;
   bool initialized_{false};
 
-  std::vector<double> prev_wheel_positions_;
+  // Changed from prev_wheel_positions_ to left/right previous values
+  double prev_left_pos_{0.0};
+  double prev_right_pos_{0.0};
   double x_{0.0}, y_{0.0}, theta_{0.0};
   std::array<double, 36> pose_covariance_;
   std::array<double, 36> twist_covariance_;

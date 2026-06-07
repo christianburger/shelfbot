@@ -1,13 +1,11 @@
 #include "shelfbot/four_wheel_drive_odometry.hpp"
-#include "shelfbot/shelfbot_utils.hpp"
+#include "shelfbot/shelfbot_utils.hpp"  // pulls in log_zip.hpp
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <cmath>
 
 namespace shelfbot {
 
-// Constructor matches header:
-//   FourWheelDriveOdometry(std::shared_ptr<rclcpp::Node>, const rclcpp::Clock::SharedPtr&, double, double)
 FourWheelDriveOdometry::FourWheelDriveOdometry(
     std::shared_ptr<rclcpp::Node> node,
     const rclcpp::Clock::SharedPtr& clock,
@@ -16,95 +14,99 @@ FourWheelDriveOdometry::FourWheelDriveOdometry(
   : node_(node),
     clock_(clock),
     wheel_separation_(wheel_separation),
-    wheel_radius_(wheel_radius),
-    prev_wheel_positions_(4, 0.0)
+    wheel_radius_(wheel_radius)
 {
-  odom_pub_ = node_->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
+  odom_pub_     = node_->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(node_);
   pose_covariance_.fill(0.0);
   twist_covariance_.fill(0.0);
 
-  log_info(
-    "FourWheelDriveOdometry",
-    "Constructor",
-    "Initialized with separation: " + std::to_string(wheel_separation_) +
-    ", radius: " + std::to_string(wheel_radius_));
+  // ── log_zip: odometry initialised ────────────────────────────────────────
+  log_zip("ODO", "INIT", {{"sep", wheel_separation_}, {"rad", wheel_radius_}});
+
+  log_info("FourWheelDriveOdometry", "Constructor",
+           "Initialized with separation: " + std::to_string(wheel_separation_) +
+           ", radius: " + std::to_string(wheel_radius_));
 }
 
-// update(const std::vector<double>&, const rclcpp::Duration&)
 void FourWheelDriveOdometry::update(
     const std::vector<double>& wheel_positions,
     const rclcpp::Duration& period)
 {
-    // Validate period is reasonable with better error handling
     double period_sec = period.seconds();
+
     if (period_sec <= 0.0) {
-        log_warn("FourWheelDriveOdometry", "update", 
+        log_zip("ODO", "ERR", {{"dt", period_sec}, {"code", -1}});
+        log_warn("FourWheelDriveOdometry", "update",
                 "Invalid period (<= 0): " + std::to_string(period_sec) + "s - skipping update");
         return;
     }
-    
     if (period_sec > 1.0) {
-        log_warn("FourWheelDriveOdometry", "update", 
-                "Unusually long period: " + std::to_string(period_sec) + "s - system may be overloaded");
-        // Continue processing but log warning
+        log_zip("ODO", "WARN", {{"dt", period_sec}, {"overload", 1}});
+        log_warn("FourWheelDriveOdometry", "update",
+                "Unusually long period: " + std::to_string(period_sec) + "s");
     }
-
     if (wheel_positions.size() < 4) {
-        log_error("FourWheelDriveOdometry", "update", 
-                "Insufficient wheel positions: " + std::to_string(wheel_positions.size()) + " (expected 4)");
+        log_zip("ODO", "ERR", {{"wct", (double)wheel_positions.size()}, {"code", -2}});
+        log_error("FourWheelDriveOdometry", "update",
+                "Insufficient wheel positions: " + std::to_string(wheel_positions.size()));
         return;
     }
 
-    if (!initialized_)
-    {
-        prev_wheel_positions_ = wheel_positions;
+    // Indices: 0=FL, 1=FR, 2=BL, 3=BR
+    double left_pos  = (wheel_positions[0] + wheel_positions[2]) * 0.5;   // FL + BL
+    double right_pos = (wheel_positions[1] + wheel_positions[3]) * 0.5;   // FR + BR
+
+    if (!initialized_) {
+        prev_left_pos_  = left_pos;
+        prev_right_pos_ = right_pos;
         initialized_ = true;
-        log_info("FourWheelDriveOdometry", "update", "Odometry initialized with first wheel positions");
+        // ── log_zip: first reading latched ───────────────────────────────────
+        log_zip("ODO", "LATCH", {
+            {"left", left_pos}, {"right", right_pos}
+        });
+        log_info("FourWheelDriveOdometry", "update",
+                 "Odometry initialized with left/right wheel positions");
         return;
     }
 
-    // Rest of the existing update method remains exactly the same...
-    double front_pos = (wheel_positions[0] + wheel_positions[1]) * 0.5;
-    double back_pos  = (wheel_positions[2] + wheel_positions[3]) * 0.5;
+    double left_diff  = (left_pos  - prev_left_pos_)  * wheel_radius_;
+    double right_diff = (right_pos - prev_right_pos_) * wheel_radius_;
 
-    double prev_front = (prev_wheel_positions_[0] + prev_wheel_positions_[1]) * 0.5;
-    double prev_back  = (prev_wheel_positions_[2] + prev_wheel_positions_[3]) * 0.5;
-
-    double front_diff = front_pos - prev_front;
-    double back_diff  = back_pos  - prev_back;
-
-    double front_linear = front_diff * wheel_radius_;
-    double back_linear  = back_diff  * wheel_radius_;
-
-    double forward_distance = (front_linear - back_linear) * 0.5;
-    double rotation         = (front_linear + back_linear) * 0.5;
+    // Forward displacement = average of left and right motion
+    double fwd_dist = (left_diff + right_diff) * 0.5;
+    // Rotational displacement = (right - left) / wheel_separation
+    double rotation = (right_diff - left_diff) / wheel_separation_;
 
     theta_ += rotation;
-    x_     += forward_distance * std::cos(theta_);
-    y_     += forward_distance * std::sin(theta_);
+    x_     += fwd_dist * std::cos(theta_);
+    y_     += fwd_dist * std::sin(theta_);
 
-    prev_wheel_positions_ = wheel_positions;
+    // ── log_zip: pose update (core odometry line) ────────────────────────────
+    log_zip("ODO", "UPD", {
+        {"x",  x_}, {"y", y_}, {"th", theta_},
+        {"df", fwd_dist}, {"dr", rotation}, {"dt", period_sec}
+    });
+
+    prev_left_pos_  = left_pos;
+    prev_right_pos_ = right_pos;
 
     auto stamp = clock_->now();
 
-    auto odom_msg = std::make_unique<nav_msgs::msg::Odometry>();
+    auto odom_msg           = std::make_unique<nav_msgs::msg::Odometry>();
     odom_msg->header.stamp    = stamp;
     odom_msg->header.frame_id = "odom";
     odom_msg->child_frame_id  = "base_footprint";
-
     odom_msg->pose.pose       = calculate_pose();
     odom_msg->pose.covariance = calculate_pose_covariance();
-
-    odom_msg->twist.twist      = calculate_twist(wheel_positions, period);
+    odom_msg->twist.twist     = calculate_twist(wheel_positions, period);
     odom_msg->twist.covariance = calculate_twist_covariance();
 
     odom_pub_->publish(std::move(odom_msg));
     broadcast_tf(stamp);
 }
 
-// broadcast_tf(const rclcpp::Time&)
-void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time & stamp)
+void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time& stamp)
 {
   geometry_msgs::msg::TransformStamped odom_tf;
   odom_tf.header.stamp    = stamp;
@@ -115,7 +117,7 @@ void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time & stamp)
   odom_tf.transform.translation.y = y_;
   odom_tf.transform.translation.z = 0.0;
 
-  double final_theta = theta_ - 1.57079632679;  // adjust if needed
+  double final_theta = theta_ - 1.57079632679;
   odom_tf.transform.rotation =
       tf2::toMsg(tf2::Quaternion(
         0, 0,
@@ -123,9 +125,13 @@ void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time & stamp)
         std::cos(final_theta / 2.0)));
 
   tf_broadcaster_->sendTransform(odom_tf);
+
+  // ── log_zip: TF broadcast (sampled — every call but cheap) ───────────────
+  log_zip("ODO", "TF", {
+      {"x", x_}, {"y", y_}, {"th_adj", final_theta}
+  });
 }
 
-// get_odometry() const
 nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const
 {
   nav_msgs::msg::Odometry odom;
@@ -136,7 +142,6 @@ nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const
   return odom;
 }
 
-// calculate_pose() const
 geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
 {
   geometry_msgs::msg::Pose pose;
@@ -151,18 +156,13 @@ geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
       std::sin(final_theta / 2.0),
       std::cos(final_theta / 2.0)));
 
-  log_info(
-    "FourWheelDriveOdometry",
-    "CalculatePose",
-    "X: " + std::to_string(x_) +
-    " Y: " + std::to_string(y_) +
-    " Theta: " + std::to_string(theta_) +
-    " Final Theta: " + std::to_string(final_theta));
-
+  log_info("FourWheelDriveOdometry", "CalculatePose",
+           "X: " + std::to_string(x_) +
+           " Y: " + std::to_string(y_) +
+           " Theta: " + std::to_string(theta_));
   return pose;
 }
 
-// calculate_twist(...)
 geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
     const std::vector<double>& wheel_positions,
     const rclcpp::Duration& period)
@@ -170,26 +170,23 @@ geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
   double dt = period.seconds();
   if (dt < 1e-9) { dt = 1e-9; }
 
-  double prev_front = (prev_wheel_positions_[0] + prev_wheel_positions_[1]) * 0.5;
-  double prev_back  = (prev_wheel_positions_[2] + prev_wheel_positions_[3]) * 0.5;
+  // Use left/right differencing for velocity estimation
+  double left_pos  = (wheel_positions[0] + wheel_positions[2]) * 0.5;
+  double right_pos = (wheel_positions[1] + wheel_positions[3]) * 0.5;
 
-  double front_pos = (wheel_positions[0] + wheel_positions[1]) * 0.5;
-  double back_pos  = (wheel_positions[2] + wheel_positions[3]) * 0.5;
-
-  double front_vel = (front_pos - prev_front) / dt;
-  double back_vel  = (back_pos  - prev_back) / dt;
+  double left_vel  = (left_pos  - prev_left_pos_)  * wheel_radius_ / dt;
+  double right_vel = (right_pos - prev_right_pos_) * wheel_radius_ / dt;
 
   geometry_msgs::msg::Twist twist;
-  twist.linear.x  = (front_vel - back_vel) * wheel_radius_ * 0.5;
-  twist.linear.y  = 0.0;
-  twist.linear.z  = 0.0;
-  twist.angular.x = 0.0;
-  twist.angular.y = 0.0;
-  twist.angular.z = (front_vel + back_vel) * wheel_radius_ * 0.5;
+  twist.linear.x  = (left_vel + right_vel) * 0.5;
+  twist.angular.z = (right_vel - left_vel) / wheel_separation_;
+
+  // ── log_zip: twist (linear + angular) ────────────────────────────────────
+  log_zip("ODO", "TWS", {{"vx", twist.linear.x}, {"wz", twist.angular.z}});
+
   return twist;
 }
 
-// calculate_pose_covariance()
 std::array<double, 36> FourWheelDriveOdometry::calculate_pose_covariance()
 {
   pose_covariance_.fill(0.0);
@@ -199,7 +196,6 @@ std::array<double, 36> FourWheelDriveOdometry::calculate_pose_covariance()
   return pose_covariance_;
 }
 
-// calculate_twist_covariance()
 std::array<double, 36> FourWheelDriveOdometry::calculate_twist_covariance()
 {
   twist_covariance_.fill(0.0);
