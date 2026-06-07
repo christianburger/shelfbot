@@ -21,7 +21,6 @@ FourWheelDriveOdometry::FourWheelDriveOdometry(
   pose_covariance_.fill(0.0);
   twist_covariance_.fill(0.0);
 
-  // ── log_zip: odometry initialised ────────────────────────────────────────
   log_zip("ODO", "INIT", {{"sep", wheel_separation_}, {"rad", wheel_radius_}});
 
   log_info("FourWheelDriveOdometry", "Constructor",
@@ -53,7 +52,38 @@ void FourWheelDriveOdometry::update(
         return;
     }
 
-    // Indices: 0=FL, 1=FR, 2=BL, 3=BR
+    // ── LEFT/RIGHT SIDE AVERAGING ─────────────────────────────────────────────
+    //
+    // This is a differential-drive (skid-steer) odometry model. The robot has
+    // four wheels but only two independent velocity degrees of freedom: left side
+    // and right side. We reduce each side to a single representative position by
+    // averaging the front and rear wheels on that side.
+    //
+    // JOINT INDEX MAP (matches YAML joint_names / hw_positions_ order set in
+    // FourWheelDriveHardwareInterface::export_state_interfaces()):
+    //   [0] front_left   — already sign-corrected by read() to forward-positive
+    //   [1] front_right  — forward-positive as received from firmware
+    //   [2] back_left    — already sign-corrected by read() to forward-positive
+    //   [3] back_right   — forward-positive as received from firmware
+    //
+    // WHY AVERAGE LEFT+RIGHT FRONTS vs LEFT+RIGHT REARS WOULD BE WRONG:
+    // The previous (buggy) implementation treated [0]+[1] as one axis and
+    // [2]+[3] as the other axis, meaning it was computing "front axle average"
+    // and "rear axle average". For a skid-steer robot driving straight, those
+    // two quantities are equal — the difference (which drives the rotation
+    // estimate) is always ~0, while the sum (which drives the translation
+    // estimate) doubled the actual displacement. This caused Nav2 to see near-
+    // zero forward progress and infinite spin, making the robot spin in place.
+    //
+    // CORRECT MODEL:
+    //   left_pos  = average of FL and BL  (both forward-positive after read() flip)
+    //   right_pos = average of FR and BR
+    //   fwd_dist  = (left_diff + right_diff) / 2   ← translation
+    //   rotation  = (right_diff - left_diff) / wheel_separation_  ← yaw
+    //
+    // !! DO NOT CHANGE THESE INDEX GROUPINGS !!
+    // Swapping to [0]+[1] and [2]+[3] restores the original bug.
+    // ─────────────────────────────────────────────────────────────────────────
     double left_pos  = (wheel_positions[0] + wheel_positions[2]) * 0.5;   // FL + BL
     double right_pos = (wheel_positions[1] + wheel_positions[3]) * 0.5;   // FR + BR
 
@@ -61,7 +91,6 @@ void FourWheelDriveOdometry::update(
         prev_left_pos_  = left_pos;
         prev_right_pos_ = right_pos;
         initialized_ = true;
-        // ── log_zip: first reading latched ───────────────────────────────────
         log_zip("ODO", "LATCH", {
             {"left", left_pos}, {"right", right_pos}
         });
@@ -73,23 +102,30 @@ void FourWheelDriveOdometry::update(
     double left_diff  = (left_pos  - prev_left_pos_)  * wheel_radius_;
     double right_diff = (right_pos - prev_right_pos_) * wheel_radius_;
 
-    // Forward displacement = average of left and right motion
+    // ── UPDATE prev_* IMMEDIATELY AFTER COMPUTING THE DIFFS ──────────────────
+    // prev_left_pos_ and prev_right_pos_ are updated here, right after the diffs
+    // are computed and before anything else. calculate_twist() no longer reads
+    // these fields at all — it receives left_diff and right_diff directly — so
+    // there is no longer any call-order constraint between prev_* assignment and
+    // the rest of update(). This replaces the previous arrangement where prev_*
+    // had to stay at the very end of the function to avoid corrupting twist.
+    // ─────────────────────────────────────────────────────────────────────────
+    prev_left_pos_  = left_pos;
+    prev_right_pos_ = right_pos;
+
+    // Forward displacement = average of left and right arc lengths
     double fwd_dist = (left_diff + right_diff) * 0.5;
-    // Rotational displacement = (right - left) / wheel_separation
+    // Rotational displacement = (right - left) / wheel_separation (positive = CCW / turning left)
     double rotation = (right_diff - left_diff) / wheel_separation_;
 
     theta_ += rotation;
     x_     += fwd_dist * std::cos(theta_);
     y_     += fwd_dist * std::sin(theta_);
 
-    // ── log_zip: pose update (core odometry line) ────────────────────────────
     log_zip("ODO", "UPD", {
         {"x",  x_}, {"y", y_}, {"th", theta_},
         {"df", fwd_dist}, {"dr", rotation}, {"dt", period_sec}
     });
-
-    prev_left_pos_  = left_pos;
-    prev_right_pos_ = right_pos;
 
     auto stamp = clock_->now();
 
@@ -99,7 +135,7 @@ void FourWheelDriveOdometry::update(
     odom_msg->child_frame_id  = "base_footprint";
     odom_msg->pose.pose       = calculate_pose();
     odom_msg->pose.covariance = calculate_pose_covariance();
-    odom_msg->twist.twist     = calculate_twist(wheel_positions, period);
+    odom_msg->twist.twist     = calculate_twist(left_diff, right_diff, period_sec);
     odom_msg->twist.covariance = calculate_twist_covariance();
 
     odom_pub_->publish(std::move(odom_msg));
@@ -117,7 +153,22 @@ void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time& stamp)
   odom_tf.transform.translation.y = y_;
   odom_tf.transform.translation.z = 0.0;
 
-  double final_theta = theta_ - 1.57079632679;
+  // ── TF YAW OFFSET ────────────────────────────────────────────────────────
+  // The TF broadcast applies a fixed −90° (−π/2) offset to theta_ before
+  // converting to a quaternion. This corrects a fixed orientation error between
+  // the robot's physical "forward" direction and the coordinate frame reported
+  // by the firmware's encoder convention.
+  //
+  // The offset is applied HERE in broadcast_tf but NOT in calculate_pose().
+  // This is intentional: the nav_msgs/Odometry pose field (used by Nav2's EKF
+  // and costmap) uses the uncorrected theta_ so that sensor fusion remains
+  // consistent. The TF tree (used for visualization and frame lookups) uses the
+  // corrected angle so that the robot model appears correctly oriented in RViz.
+  //
+  // If the robot appears rotated 90° sideways in RViz: this offset is why and
+  // it is correct. Do not remove it.
+  // ─────────────────────────────────────────────────────────────────────────
+  double final_theta = theta_ - 1.57079632679;  // theta_ - π/2
   odom_tf.transform.rotation =
       tf2::toMsg(tf2::Quaternion(
         0, 0,
@@ -126,7 +177,6 @@ void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time& stamp)
 
   tf_broadcaster_->sendTransform(odom_tf);
 
-  // ── log_zip: TF broadcast (sampled — every call but cheap) ───────────────
   log_zip("ODO", "TF", {
       {"x", x_}, {"y", y_}, {"th_adj", final_theta}
   });
@@ -149,6 +199,15 @@ geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
   pose.position.y = y_;
   pose.position.z = 0.0;
 
+  // ── NO YAW OFFSET HERE ───────────────────────────────────────────────────
+  // The odom message pose intentionally uses theta_ WITHOUT the −π/2 correction
+  // applied in broadcast_tf(). Nav2's EKF and the costmap consume this pose
+  // for sensor fusion; it must be in the robot's internal odometry frame and
+  // must be consistent with the twist field. Applying the offset here would
+  // desynchronise position integration from the twist, corrupting EKF estimates.
+  // See broadcast_tf() for the explanation of why the TF branch applies the
+  // correction while this branch does not.
+  // ─────────────────────────────────────────────────────────────────────────
   double final_theta = theta_;
   pose.orientation = tf2::toMsg(
     tf2::Quaternion(
@@ -164,23 +223,24 @@ geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
 }
 
 geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
-    const std::vector<double>& wheel_positions,
-    const rclcpp::Duration& period)
+    double left_diff_m, double right_diff_m, double dt_s)
 {
-  double dt = period.seconds();
-  if (dt < 1e-9) { dt = 1e-9; }
+  // left_diff_m and right_diff_m are arc-length displacements in metres
+  // already computed by update() for this cycle: (pos_now - pos_prev) * wheel_radius_.
+  // dt_s is the cycle period in seconds (already validated > 0 by update()).
+  //
+  // This function deliberately does NOT read prev_left_pos_ / prev_right_pos_.
+  // Receiving the pre-computed values means the function is call-order-independent
+  // with respect to when prev_* are written in update().
+  if (dt_s < 1e-9) { dt_s = 1e-9; }
 
-  double left_pos  = (wheel_positions[0] + wheel_positions[2]) * 0.5;
-  double right_pos = (wheel_positions[1] + wheel_positions[3]) * 0.5;
-
-  double left_vel  = (left_pos  - prev_left_pos_)  * wheel_radius_ / dt;
-  double right_vel = (right_pos - prev_right_pos_) * wheel_radius_ / dt;
+  double left_vel  = left_diff_m  / dt_s;
+  double right_vel = right_diff_m / dt_s;
 
   geometry_msgs::msg::Twist twist;
   twist.linear.x  = (left_vel + right_vel) * 0.5;
   twist.angular.z = (right_vel - left_vel) / wheel_separation_;
 
-  // ── log_zip: twist (linear + angular) ────────────────────────────────────
   log_zip("ODO", "TWS", {{"vx", twist.linear.x}, {"wz", twist.angular.z}});
 
   return twist;
