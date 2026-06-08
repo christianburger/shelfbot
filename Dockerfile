@@ -17,6 +17,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG USER_UID=1000
 ARG USER_GID=1000
 
+
 # Locale
 RUN apt-get update && apt-get install -y locales \
     && locale-gen en_US en_US.UTF-8 \
@@ -24,7 +25,6 @@ RUN apt-get update && apt-get install -y locales \
     && rm -rf /var/lib/apt/lists/*
 ENV LANG=en_US.UTF-8
 
-# System utilities & build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake git wget curl unzip ninja-build \
     sudo \
@@ -39,6 +39,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-jsonschema \
     python3-yaml \
     nano vim bash-completion \
+    joystick \
+    jstest \
+    evtest \
     && rm -rf /var/lib/apt/lists/*
 
 # ROS 2 Humble packages
@@ -92,6 +95,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-humble-rosidl-runtime-c \
     ros-humble-rosidl-typesupport-interface \
     ros-humble-builtin-interfaces \
+    ros-humble-joy \
+    ros-humble-teleop-twist-joy \
     && rm -rf /var/lib/apt/lists/*
 
 # System libraries for vision
