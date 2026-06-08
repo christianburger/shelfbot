@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y locales \
     && rm -rf /var/lib/apt/lists/*
 ENV LANG=en_US.UTF-8
 
+# System utilities & build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake git wget curl unzip ninja-build \
     sudo \
@@ -38,10 +39,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-lark \
     python3-jsonschema \
     python3-yaml \
-    nano vim bash-completion \
     joystick \
-    jstest \
     evtest \
+    nano vim bash-completion \
     && rm -rf /var/lib/apt/lists/*
 
 # ROS 2 Humble packages
