@@ -6,6 +6,8 @@
 #   • The final stage creates user 'chris' (UID/GID 1000, matching the host).
 #   • docker-entrypoint.sh runs as chris on every start and uses NOPASSWD sudo
 #     to repair ownership of persistent volumes.
+#   • /dev/input access: the container inherits the host's input group via
+#     group_add in docker-compose.yml.  No runtime groupadd/usermod is needed.
 #
 # Host repo:  /home/chris/shelfbot/shelfbot/
 # ─────────────────────────────────────────────────────────────────────────────
@@ -16,7 +18,8 @@ FROM osrf/ros:humble-desktop AS base
 ARG DEBIAN_FRONTEND=noninteractive
 ARG USER_UID=1000
 ARG USER_GID=1000
-
+# Cache bust: change this value (e.g., to current date) to force a full rebuild
+ARG CACHE_BUST=20260608
 
 # Locale
 RUN apt-get update && apt-get install -y locales \
@@ -43,6 +46,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     evtest \
     nano vim bash-completion \
     && rm -rf /var/lib/apt/lists/*
+
+# Verify that joystick was actually installed (fails build if missing)
+RUN dpkg-query -W joystick || (echo "ERROR: joystick package not installed" && exit 1)
 
 # ROS 2 Humble packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -137,7 +143,6 @@ RUN git clone --depth 1 --branch v0.6 https://github.com/stevenlovegrove/Pangoli
     && cmake --install pangolin_src/build \
     && rm -rf pangolin_src
 
-
 # ── Stage 3: ORB-SLAM3 ────────────────────────────────────────────────────────
 FROM pangolin AS orbslam3
 
@@ -147,7 +152,6 @@ RUN git clone --depth 1 https://github.com/UZ-SLAMLab/ORB_SLAM3.git ${ORB_SLAM3_
 RUN sed -i 's/make -j4/make -j$(nproc)/g' ${ORB_SLAM3_ROOT}/build.sh || true
 RUN cd ${ORB_SLAM3_ROOT} && chmod +x build.sh \
     && CMAKE_PREFIX_PATH=/opt/pangolin:${CMAKE_PREFIX_PATH:-} ./build.sh
-
 
 # ── Stage 4: final ────────────────────────────────────────────────────────────
 FROM base AS final

@@ -10,6 +10,19 @@
 #
 # IDE settings stored in named volumes → survive container rebuilds/reboots.
 #
+# User and group identity:
+#   /etc/passwd and /etc/group from the host are bind-mounted read-only into
+#   the container.  This means the container sees exactly the same UID/GID
+#   mappings and group memberships as the host — including whatever group owns
+#   /dev/input/event* and chris's membership in it.  No GIDs are hardcoded
+#   anywhere; no groupadd or usermod is needed at runtime.  This is the
+#   standard Docker pattern for sharing host user identity with a container.
+#
+# Device access:
+#   /dev:/dev bind-mount exposes all host input devices inside the container.
+#   Access is granted automatically because the container inherits the host's
+#   /etc/group, so group membership for device GIDs is already correct.
+#
 # Usage:
 #   docker compose build
 #   xhost +local:docker
@@ -30,7 +43,10 @@ services:
     image: shelfbot:humble
     container_name: shelfbot
 
-    user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
+    # Run as the host chris user.  No GID override — group membership is
+    # resolved from the bind-mounted /etc/group, which is the host's own
+    # group database and already contains all correct supplementary groups.
+    user: "${DOCKER_UID:-1000}"
 
     network_mode: host
 
@@ -49,6 +65,13 @@ services:
       - clion_config:/home/chris/.config/JetBrains
       - clion_local:/home/chris/.local/share/JetBrains
 
+      # Host user and group databases — bind-mounted read-only so the container
+      # sees the same UID/GID mappings and group memberships as the host.
+      # This gives chris access to /dev/input/event* (and any other host
+      # devices) without hardcoding GIDs or running groupadd at runtime.
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/group:/etc/group:ro
+
     environment:
       - DISPLAY=${DISPLAY:-:0}
       - QT_X11_NO_MITSHM=1
@@ -58,6 +81,11 @@ services:
     privileged: true
     devices:
       - /dev:/dev
+
+    # Explicitly add the host's input group (GID 97) as a supplementary group.
+    # This gives the container process access to /dev/input/event*.
+    group_add:
+      - "97"
 
     stdin_open: true
     tty: true

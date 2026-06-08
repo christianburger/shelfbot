@@ -4,6 +4,13 @@
 # Ensures named-volume mount points are owned by the runtime user, then
 # hands off to the container CMD.
 #
+# /dev/input access requires no setup here – the host's /etc/passwd and
+# /etc/group are bind-mounted read-only into the container AND the container
+# process receives the supplementary 'input' group via `group_add` in
+# docker-compose.yml.  The kernel device nodes remain root:input with
+# crw-rw----, and because the process is in the 'input' group, read/write
+# succeeds automatically.
+#
 # ┌─ PREREQUISITE ──────────────────────────────────────────────────────────┐
 # │ This script uses sudo.  The Dockerfile MUST include:                    │
 # │                                                                         │
@@ -14,12 +21,6 @@
 # │ prints "sudo: unable to resolve host <hostname>" because the container  │
 # │ inherits the host hostname via network_mode: host but /etc/hosts has    │
 # │ no matching entry.                                                       │
-# │                                                                         │
-# │ Patching /etc/hosts from inside the entrypoint cannot fix this:         │
-# │   • writing to /etc/hosts requires sudo (root-owned, mode 644)          │
-# │   • sudo warns about the hostname before it executes any command        │
-# │   • with tty: true, sudo writes to /dev/tty — 2>/dev/null has no       │
-# │     effect, making stderr redirection completely useless here            │
 # └─────────────────────────────────────────────────────────────────────────┘
 
 set -euo pipefail
@@ -28,6 +29,13 @@ EXPECTED_UID=$(id -u)
 EXPECTED_GID=$(id -g)
 
 echo "[entrypoint] Starting (UID=${EXPECTED_UID}, GID=${EXPECTED_GID})"
+
+# ── Sanity check: joystick package should be installed ──────────────────────
+if ! command -v jstest >/dev/null 2>&1; then
+    echo "[entrypoint] WARNING: 'jstest' not found - joystick package missing. Rebuild the image."
+else
+    echo "[entrypoint] OK - joystick package present"
+fi
 
 # ── fix_ownership <dir> [recursive=false] ─────────────────────────────────────
 #

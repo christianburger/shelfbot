@@ -9,6 +9,11 @@ def generate_launch_description():
         executable='joy_node',
         name='joy_node',
         parameters=[{
+            # device_id: 0 selects the first joystick enumerated by the joy
+            # node's internal evdev scan, which maps to /dev/input/event25
+            # (the Microntek USB Joystick) on this host.
+            # device_name matching is unreliable due to trailing-space padding
+            # in the kernel device name string; device_id is the safe choice.
             'device_id': 0,
             'deadzone': 0.1,
             'autorepeat_rate': 20.0,
