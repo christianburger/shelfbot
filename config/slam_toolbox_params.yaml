@@ -1,0 +1,87 @@
+slam_toolbox:
+  ros__parameters:
+
+    # ── Solver ────────────────────────────────────────────────────────────────
+    solver_plugin:              solver_plugins::CeresSolver
+    ceres_linear_solver:        SPARSE_NORMAL_CHOLESKY
+    ceres_preconditioner:       SCHUR_JACOBI
+    ceres_trust_strategy:       LEVENBERG_MARQUARDT
+    ceres_dogleg_type:          TRADITIONAL_DOGLEG
+    ceres_loss_function:        None
+
+    # ── TF frames ─────────────────────────────────────────────────────────────
+    # These must match the actual TF frames published by the robot stack:
+    #   odom_frame:  parent frame of wheel odometry (FourWheelDriveOdometry publishes odom → base_footprint)
+    #   map_frame:   slam_toolbox publishes this → odom_frame TF
+    #   base_frame:  robot body frame — slam_toolbox looks up base_frame → lidar scan frame
+    #   scan_topic:  must match lidar_relay_node output topic
+    odom_frame:   odom
+    map_frame:    map
+    base_frame:   base_footprint
+    scan_topic:   /scan
+    mode:         mapping
+
+    # ── Scan matching ─────────────────────────────────────────────────────────
+    use_scan_matching:      true
+    use_scan_barycenter:    true
+
+    # ── Motion thresholds ─────────────────────────────────────────────────────
+    # Don't process a new scan unless the robot has moved this much since the
+    # last processed scan. Prevents wasting CPU on stationary scans and avoids
+    # accumulating noise in the pose graph when the robot is still.
+    # At 5 Hz lidar the robot must move 10cm OR rotate 5° to trigger a new node.
+    minimum_travel_distance:    0.1       # metres
+    minimum_travel_heading:     0.0872    # radians (~5°)
+    minimum_time_interval:      0.2       # seconds — one scan period at 5 Hz
+
+    # ── TF timing ─────────────────────────────────────────────────────────────
+    # transform_timeout: how long slam_toolbox waits for a TF lookup before
+    # dropping the scan. At startup the odom TF may not be ready immediately.
+    # 0.5s is sufficient given the 6s startup delay in the launch file.
+    # tf_buffer_duration: how much TF history to keep. 30s is ample.
+    transform_timeout:          0.5
+    tf_buffer_duration:         30.0
+
+    # ── Map resolution ────────────────────────────────────────────────────────
+    # 0.05m = 5cm per cell. Good for a 50cm-wide robot in warehouse aisles.
+    # Finer resolution (0.025) gives more detail but increases memory and CPU.
+    resolution:             0.05
+
+    # ── Laser range limits ────────────────────────────────────────────────────
+    # FIX: slam_toolbox reads these as max_laser_range and minimum_laser_range.
+    # The launch log showed: "minimum laser range setting (0.0 m) exceeds the
+    # capabilities of the used Lidar (0.0 m)" — slam_toolbox was seeing 0.0
+    # because it falls back to 0 when range_min in the scan message is 0.
+    # The lidar_relay publishes range_min from firmware (0.02m). slam_toolbox
+    # uses the LARGER of scan.range_min and this parameter — so 0.1 here is
+    # fine; it just filters out readings closer than 10cm.
+    # max_laser_range must not exceed range_max from lidar_relay (12.0m).
+    max_laser_range:        10.0          # slightly under 12m firmware max
+    minimum_laser_range:    0.1           # filters out near-field noise
+
+    # ── Loop closure ──────────────────────────────────────────────────────────
+    do_loop_closing:                         true
+    loop_search_distance:                    5.0
+    loop_match_minimum_response_coarse:      0.35
+    loop_match_minimum_response_fine:        0.45
+    loop_match_maximum_variance_coarse:      3.0
+    loop_search_maximum_distance:            3.0
+
+    # ── Message filter queue ──────────────────────────────────────────────────
+    # FIX: The launch log showed repeated:
+    #   "Message Filter dropping message: frame 'lidar_frame' ... queue is full"
+    # This happens at startup when scans arrive before the odom TF is ready.
+    # Increasing throttle_scans gives slam_toolbox more time to drain the queue
+    # before dropping. The default is 1 (process every scan); setting to 1
+    # is fine here since we already limit by minimum_time_interval above.
+    # The real fix is the 6s startup delay ensuring odom TF is live before
+    # slam_toolbox starts. The dropped messages at startup are benign — the
+    # map simply starts a few scans late.
+    throttle_scans:     1
+
+    # ── Pose graph ────────────────────────────────────────────────────────────
+    stack_size_to_use:  40000000   # 40 MB — increase if stack overflow warnings appear
+
+    # ── Map saving / interactive mode ─────────────────────────────────────────
+    # Enables /slam_toolbox/save_map service for persisting the map to disk.
+    enable_interactive_mode:    true

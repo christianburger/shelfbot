@@ -10,17 +10,20 @@ import xacro
 def generate_launch_description():
 
     # ── Paths ──────────────────────────────────────────────────────────────────
-    pkg_share        = get_package_share_directory('shelfbot')
-    nav2_bringup_dir = get_package_share_directory('nav2_bringup')
+    pkg_share          = get_package_share_directory('shelfbot')
+    nav2_bringup_dir   = get_package_share_directory('nav2_bringup')
+    slam_toolbox_dir   = get_package_share_directory('slam_toolbox')
 
-    xacro_file        = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
-    controller_config = os.path.join(pkg_share, 'config', 'four_wheel_drive_controller.yaml')
-    nav2_params       = os.path.join(pkg_share, 'config', 'nav2_camera_params.yaml')
-    rviz_config       = os.path.join(pkg_share, 'config', 'nav2_troubleshoot.rviz')
-
-    camera_info_url   = 'file://' + os.path.join(pkg_share, 'config', 'esp32_cam_calibration.yaml')
+    xacro_file         = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
+    controller_config  = os.path.join(pkg_share, 'config', 'four_wheel_drive_controller.yaml')
+    nav2_params        = os.path.join(pkg_share, 'config', 'nav2_params.yaml')
+    slam_params        = os.path.join(pkg_share, 'config', 'slam_toolbox_params.yaml')
+    rviz_config        = os.path.join(pkg_share, 'config', 'nav2_troubleshoot.rviz')
+    camera_info_url    = 'file://' + os.path.join(pkg_share, 'config', 'esp32_cam_calibration.yaml')
 
     # ── Lidar mount ────────────────────────────────────────────────────────────
+    # z=0.2m above base_link centre. Roll and pitch must be 0.
+    # Any tilt makes the scan plane non-horizontal and corrupts the 2D map.
     lidar_x, lidar_y, lidar_z         = '0.0', '0.0', '0.2'
     lidar_roll, lidar_pitch, lidar_yaw = '0.0', '0.0', '0.0'
 
@@ -40,6 +43,13 @@ def generate_launch_description():
         arguments=['--ros-args', '--log-level', 'warn'],
     )
 
+    # FIX: controller_server (Nav2) publishes velocity commands to /cmd_vel_nav.
+    # velocity_smoother subscribes to /cmd_vel_nav and publishes to /cmd_vel.
+    # This is the correct chain for Humble without collision_monitor:
+    #   Nav2 controller_server → /cmd_vel_nav → velocity_smoother → /cmd_vel → hardware
+    #
+    # The four_wheel_drive_controller subscribes to /cmd_vel directly
+    # via the remapping below, which is unchanged.
     control_node = Node(
         package='controller_manager',
         executable='ros2_control_node',
@@ -52,6 +62,9 @@ def generate_launch_description():
         arguments=['--ros-args', '--log-level', 'info'],
     )
 
+    # TF chain: base_link → lidar_frame
+    # slam_toolbox looks up this transform for every scan it processes.
+    # Must be live before slam_toolbox starts (tier 3).
     static_tf_lidar = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -75,10 +88,7 @@ def generate_launch_description():
         respawn_delay=2.0,
     )
 
-    # ── Camera pipeline ────────────────────────────────────────────────────────
-    # Subscribes /camera/compressed  (RELIABLE, VOLATILE)  from ESP32 micro-ROS
-    # Publishes  /camera/image_raw   (RELIABLE, VOLATILE)
-    #            /camera/camera_info (RELIABLE, VOLATILE)
+    # Camera is used for AprilTag detection only — not SLAM.
     camera_publisher = Node(
         package='shelfbot',
         executable='camera_publisher',
@@ -99,6 +109,8 @@ def generate_launch_description():
 
     # ══════════════════════════════════════════════════════════════════════════
     # TIER 2  (t=3 s) – ros2_control spawners
+    # Wheel odometry (odom → base_footprint TF) starts publishing here.
+    # slam_toolbox must not start before this TF is live.
     # ══════════════════════════════════════════════════════════════════════════
 
     joint_broadcaster_spawner = Node(
@@ -118,15 +130,37 @@ def generate_launch_description():
     )
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TIER 3  (t=6 s) – perception nodes
-    # Needs camera_publisher to be publishing before these subscribe.
+    # TIER 3  (t=6 s) – slam_toolbox
     #
-    # apriltag_detector:
-    #   Subscribes  /camera/image_raw   (RELIABLE, VOLATILE)
-    #               /camera/camera_info (RELIABLE, VOLATILE)
-    #   Publishes   /tag_poses          (RELIABLE, VOLATILE)
-    #               /apriltag_markers   (RELIABLE, VOLATILE)
-    #               TF: camera_link_optical_frame → tag_N
+    # Requires before starting:
+    #   /scan            — lidar_relay_node (tier 1, immediate)
+    #   odom → base_footprint TF — wheel odometry (tier 2, t=3s)
+    #   base_link → lidar_frame TF — static_tf_lidar (tier 1, immediate)
+    #
+    # Publishes:
+    #   /map             — 2D occupancy grid
+    #   map → odom TF    — required by Nav2 global costmap (tier 5)
+    #
+    # The 3s gap between tier 2 and tier 3 gives the controllers time to
+    # activate and begin publishing odom. Without this gap, slam_toolbox drops
+    # the first several scans because the TF queue is full (seen in launch log).
+    # ══════════════════════════════════════════════════════════════════════════
+
+    slam_toolbox = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(slam_toolbox_dir, 'launch', 'online_async_launch.py')
+        ),
+        launch_arguments={
+            'slam_params_file': slam_params,
+            'use_sim_time':     'false',
+        }.items(),
+    )
+
+    delay_slam = TimerAction(period=6.0, actions=[slam_toolbox])
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # TIER 4  (t=8 s) – AprilTag detector
+    # Camera is for tag detection only. Independent of SLAM.
     # ══════════════════════════════════════════════════════════════════════════
 
     apriltag_detector = Node(
@@ -143,17 +177,22 @@ def generate_launch_description():
         respawn_delay=3.0,
     )
 
-    delay_perception = TimerAction(
-        period=6.0,
-        actions=[apriltag_detector],
-    )
+    delay_perception = TimerAction(period=8.0, actions=[apriltag_detector])
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TIER 4  (t=10 s) – Nav2
-    # Needs /odom and the full TF chain stable before costmaps activate.
-    # nav2_camera_params.yaml must set:
-    #   global_frame: odom    (navigates in odom space until AMCL provides map)
-    #   obstacle_layer source: /scan
+    # TIER 5  (t=12 s) – Nav2
+    #
+    # Requires before starting:
+    #   /map             — from slam_toolbox (tier 3, t=6s)
+    #   map → odom TF    — from slam_toolbox (tier 3, t=6s)
+    #   /scan            — for local costmap (tier 1, immediate)
+    #
+    # FIX: collision_monitor is NOT included in navigation_launch.py in Humble.
+    # Its absence was causing lifecycle_manager to stall indefinitely.
+    # Removed from lifecycle_manager node_names in nav2_params.yaml.
+    #
+    # cmd_vel chain:
+    #   controller_server → /cmd_vel_nav → velocity_smoother → /cmd_vel → hardware
     # ══════════════════════════════════════════════════════════════════════════
 
     nav2 = IncludeLaunchDescription(
@@ -162,15 +201,15 @@ def generate_launch_description():
         ),
         launch_arguments={
             'params_file':  nav2_params,
-            'use_sim_time': 'False',
-            'autostart':    'True',
+            'use_sim_time': 'false',
+            'autostart':    'true',
         }.items(),
     )
 
-    delay_nav2 = TimerAction(period=10.0, actions=[nav2])
+    delay_nav2 = TimerAction(period=12.0, actions=[nav2])
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TIER 5  (t=18 s) – RViz
+    # TIER 6  (t=20 s) – RViz
     # ══════════════════════════════════════════════════════════════════════════
 
     rviz_node = Node(
@@ -182,10 +221,10 @@ def generate_launch_description():
         output='screen',
     )
 
-    delay_rviz = TimerAction(period=18.0, actions=[rviz_node])
+    delay_rviz = TimerAction(period=20.0, actions=[rviz_node])
 
     return LaunchDescription([
-        # Tier 1 – hardware + camera pipeline (immediate)
+        # Tier 1 – hardware + camera (immediate)
         robot_state_pub,
         control_node,
         static_tf_lidar,
@@ -193,10 +232,12 @@ def generate_launch_description():
         camera_publisher,
         # Tier 2 – controllers (t=3 s)
         delay_controllers,
-        # Tier 3 – perception (t=6 s)
+        # Tier 3 – SLAM (t=6 s)
+        delay_slam,
+        # Tier 4 – AprilTags (t=8 s)
         delay_perception,
-        # Tier 4 – Nav2 (t=10 s)
+        # Tier 5 – Nav2 (t=12 s)
         delay_nav2,
-        # Tier 5 – RViz (t=18 s)
+        # Tier 6 – RViz (t=20 s)
         delay_rviz,
     ])
