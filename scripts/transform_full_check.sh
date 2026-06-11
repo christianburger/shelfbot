@@ -18,10 +18,17 @@
 #
 # Default transforms checked with --all:
 #   map → odom
-#   odom → base_link
-#   base_link → lidar_frame
+#   odom → base_footprint
+#   base_footprint → base_link
+#   base_link → laser_link
 #   base_link → camera_link_optical_frame
 #   base_link → camera_link
+#
+# NOTE: 'laser_link' is the URDF frame (lidar_sensor.xacro / joint_laser).
+# robot_state_publisher broadcasts base_link → laser_link on /tf_static.
+# lidar_relay_node stamps /scan with frame_id='laser_link'.
+# There is no 'lidar_frame' in the TF tree — that was a ghost frame from a
+# now-removed static_transform_publisher node.
 # =============================================================================
 
 set -euo pipefail
@@ -39,7 +46,6 @@ TIMEOUT_SEC=3           # seconds to wait for a transform
 
 # ---------------------------------------------------------------------------
 # Helper: check a single transform
-# Returns 0 if transform exists and is recent, 1 otherwise
 # ---------------------------------------------------------------------------
 check_transform() {
     local from="$1"
@@ -56,7 +62,6 @@ check_transform() {
         return 1
     fi
 
-    # Extract translation (should be non-empty if transform exists)
     local trans
     trans=$(echo "$output" | gawk '/Translation/ {print $0; exit}')
     if [[ -z "$trans" ]]; then
@@ -74,7 +79,7 @@ check_transform() {
 }
 
 # ---------------------------------------------------------------------------
-# List all transforms currently published (using tf2_monitor or tf2_echo)
+# List all transforms currently published
 # ---------------------------------------------------------------------------
 list_transforms() {
     echo -e "\n${BOLD}Currently published transforms (first 20 lines of /tf):${RESET}"
@@ -95,11 +100,16 @@ check_all() {
     echo -e "\n${BOLD}Checking full TF transform tree for navigation...${RESET}"
     echo "────────────────────────────────────────────────────────────"
 
-    # Define required transforms: "from to"
+    # FIX: 'laser_link' replaces 'lidar_frame'.
+    # The URDF defines 'laser_link' (lidar_sensor.xacro) attached to base_link
+    # via joint_laser. robot_state_publisher broadcasts this on /tf_static.
+    # The old 'lidar_frame' was published by a now-removed static_tf_lidar
+    # node in the launch file and was never part of the URDF tree.
     local transforms=(
         "map odom"
-        "odom base_link"
-        "base_link lidar_frame"
+        "odom base_footprint"
+        "base_footprint base_link"
+        "base_link laser_link"
         "base_link camera_link_optical_frame"
         "base_link camera_link"
     )
@@ -125,7 +135,7 @@ check_all() {
 # Usage
 # ---------------------------------------------------------------------------
 usage() {
-    grep '^#' "$0" | sed 's/^# \?//' | head -20
+    grep '^#' "$0" | sed 's/^# \?//' | head -25
     exit 0
 }
 

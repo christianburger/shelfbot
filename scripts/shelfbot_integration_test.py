@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-shelfbot_integration_test.py – fixed version with node discovery retry.
+shelfbot_integration_test.py
 """
 
 import sys
@@ -39,6 +39,14 @@ MOTOR_COUNT_EXPECTED = 5
 SENSOR_COUNT_EXPECTED = 6
 LASER_POINTS_EXPECTED = 12
 NODE_DISCOVERY_TIMEOUT = 5.0   # seconds to wait for shelfbot_firmware node
+
+# FIX: laser_scan frame_id must match the URDF link name.
+# The URDF (lidar_sensor.xacro) defines the lidar as 'laser_link' attached to
+# base_link via joint_laser. robot_state_publisher broadcasts this on /tf_static.
+# lidar_relay_node stamps /scan with frame_id='laser_link'.
+# The previous value 'lidar_frame' was a ghost frame not in the URDF TF tree,
+# which caused Nav2 costmap TF lookups to fail silently.
+LASER_FRAME_ID_EXPECTED = "laser_link"
 
 NS = "shelfbot_firmware"
 
@@ -208,7 +216,10 @@ def check_laser_scan_payload(col: Collector) -> None:
     m = msgs[-1]
     host_epoch = time.time()
     record(f"laser_scan has {LASER_POINTS_EXPECTED} range points", len(m.ranges) == LASER_POINTS_EXPECTED, f"got {len(m.ranges)}")
-    record("laser_scan frame_id == 'lidar_frame'", m.header.frame_id == "lidar_frame", f"got '{m.header.frame_id}'")
+    # FIX: check for 'laser_link' (URDF frame) not 'lidar_frame' (orphaned ghost frame)
+    record(f"laser_scan frame_id == '{LASER_FRAME_ID_EXPECTED}'",
+           m.header.frame_id == LASER_FRAME_ID_EXPECTED,
+           f"got '{m.header.frame_id}'")
     record("laser_scan range_min == 0.02 m", abs(m.range_min - 0.02) < 1e-4, f"got {m.range_min}")
     record("laser_scan range_max == 12.0 m", abs(m.range_max - 12.0) < 1e-4, f"got {m.range_max}")
     stamp_sec = m.header.stamp.sec + m.header.stamp.nanosec * 1e-9

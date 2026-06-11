@@ -21,12 +21,6 @@ def generate_launch_description():
     rviz_config        = os.path.join(pkg_share, 'config', 'nav2_troubleshoot.rviz')
     camera_info_url    = 'file://' + os.path.join(pkg_share, 'config', 'esp32_cam_calibration.yaml')
 
-    # ── Lidar mount ────────────────────────────────────────────────────────────
-    # z=0.2m above base_link centre. Roll and pitch must be 0.
-    # Any tilt makes the scan plane non-horizontal and corrupts the 2D map.
-    lidar_x, lidar_y, lidar_z         = '0.0', '0.0', '0.2'
-    lidar_roll, lidar_pitch, lidar_yaw = '0.0', '0.0', '0.0'
-
     # ── Robot description ──────────────────────────────────────────────────────
     doc = xacro.process_file(xacro_file, mappings={'communication_type': 'microros'})
     robot_description = {'robot_description': doc.toxml()}
@@ -62,27 +56,39 @@ def generate_launch_description():
         arguments=['--ros-args', '--log-level', 'info'],
     )
 
-    # TF chain: base_link → lidar_frame
-    # slam_toolbox looks up this transform for every scan it processes.
-    # Must be live before slam_toolbox starts (tier 3).
-    static_tf_lidar = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_tf_lidar',
-        arguments=[
-            lidar_x, lidar_y, lidar_z,
-            lidar_roll, lidar_pitch, lidar_yaw,
-            'base_link', 'lidar_frame',
-        ],
-        parameters=[{'use_sim_time': False}],
-    )
+    # NOTE: static_tf_lidar has been REMOVED.
+    #
+    # The URDF (shelfbot.urdf.xacro) already defines the lidar link as
+    # 'laser_link' and attaches it to base_link via joint_laser at the correct
+    # physical position. robot_state_publisher broadcasts this transform on
+    # /tf_static automatically.
+    #
+    # The previous static_tf_lidar node published base_link → lidar_frame at
+    # z=0.2m, which is a DIFFERENT frame name from the URDF's laser_link.
+    # This created two conflicting lidar frames in the TF tree:
+    #   - base_link → laser_link   (from URDF / robot_state_publisher)
+    #   - base_link → lidar_frame  (from static_tf_lidar — orphaned, wrong z)
+    #
+    # Nav2 costmaps and slam_toolbox both look up the frame_id stamped on
+    # /scan messages. lidar_relay_node now stamps scans with 'laser_link'
+    # (matching the URDF), so the lookup succeeds and costmaps populate.
 
     lidar_relay = Node(
         package='shelfbot',
         executable='lidar_relay_node',
         name='lidar_relay_node',
         output='screen',
-        parameters=[{'frame_id': 'lidar_frame', 'publish_hz': 5.0}],
+        parameters=[{
+            # FIX: frame_id changed from 'lidar_frame' to 'laser_link'.
+            # 'laser_link' is the frame defined in the URDF (lidar_sensor.xacro)
+            # and broadcast by robot_state_publisher. All /scan consumers
+            # (Nav2 local costmap, global costmap, slam_toolbox) perform a TF
+            # lookup from this frame_id into the costmap/map frame. If the
+            # frame_id does not exist in the TF tree the lookup fails silently
+            # and no obstacles are ever marked — exactly the symptom observed.
+            'frame_id': 'laser_link',
+            'publish_hz': 5.0,
+        }],
         arguments=['--ros-args', '--log-level', 'warn'],
         respawn=True,
         respawn_delay=2.0,
@@ -133,9 +139,9 @@ def generate_launch_description():
     # TIER 3  (t=6 s) – slam_toolbox
     #
     # Requires before starting:
-    #   /scan            — lidar_relay_node (tier 1, immediate)
+    #   /scan                   — lidar_relay_node (tier 1, immediate)
     #   odom → base_footprint TF — wheel odometry (tier 2, t=3s)
-    #   base_link → lidar_frame TF — static_tf_lidar (tier 1, immediate)
+    #   base_link → laser_link TF — robot_state_publisher (tier 1, immediate)
     #
     # Publishes:
     #   /map             — 2D occupancy grid
@@ -227,7 +233,6 @@ def generate_launch_description():
         # Tier 1 – hardware + camera (immediate)
         robot_state_pub,
         control_node,
-        static_tf_lidar,
         lidar_relay,
         camera_publisher,
         # Tier 2 – controllers (t=3 s)

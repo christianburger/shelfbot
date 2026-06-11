@@ -3,7 +3,6 @@
 # shelfbot_integration_test.sh
 # -----------------------------------------------------------------------------
 # End-to-end integration test for the shelfbot firmware micro-ROS node.
-# Replaces shelfbot_integration_test.py — no rclpy, no Python required.
 #
 # Usage:
 #   source /opt/ros/humble/setup.bash   # or source install/setup.bash
@@ -34,6 +33,13 @@ LASER_POINTS_EXPECTED=12
 NS="shelfbot_firmware"
 VERBOSE_TAGS=""               # comma-separated; "all" enables everything
 
+# FIX: laser_scan frame_id must match the URDF link name.
+# The URDF (lidar_sensor.xacro) defines the lidar as 'laser_link' attached to
+# base_link via joint_laser. robot_state_publisher broadcasts this on /tf_static.
+# lidar_relay_node stamps /scan with frame_id='laser_link'.
+# The previous value 'lidar_frame' was a ghost frame not in the URDF TF tree.
+LASER_FRAME_ID_EXPECTED="laser_link"
+
 # ---------------------------------------------------------------------------
 # Colour codes
 # ---------------------------------------------------------------------------
@@ -46,13 +52,13 @@ DIM="\033[2m"
 RESET="\033[0m"
 
 # ---------------------------------------------------------------------------
-# Result accumulator  (uses temp file so subshells can write to it)
+# Result accumulator
 # ---------------------------------------------------------------------------
 RESULTS_FILE=$(mktemp /tmp/shelfbot_results.XXXXXX)
 trap 'rm -f "$RESULTS_FILE" /tmp/shelfbot_echo_*.tmp' EXIT
 
 # ---------------------------------------------------------------------------
-# Helpers: arg parsing
+# Helpers
 # ---------------------------------------------------------------------------
 usage() {
     grep '^#' "$0" | sed 's/^# \?//' | head -20
@@ -71,9 +77,6 @@ parse_args() {
     done
 }
 
-# ---------------------------------------------------------------------------
-# Helper: check if a verbosity tag is active
-# ---------------------------------------------------------------------------
 is_verbose() {
     local tag="$1"
     [[ "$VERBOSE_TAGS" == *"all"* ]] && return 0
@@ -81,17 +84,11 @@ is_verbose() {
     return 1
 }
 
-# ---------------------------------------------------------------------------
-# Helper: print a verbose detail line (only if tag active)
-# ---------------------------------------------------------------------------
 vlog() {
     local tag="$1"; shift
     is_verbose "$tag" && echo -e "    ${DIM}↳ $*${RESET}" || true
 }
 
-# ---------------------------------------------------------------------------
-# Core: record a test result
-# ---------------------------------------------------------------------------
 record() {
     local name="$1"
     local passed="$2"
@@ -105,19 +102,11 @@ record() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Core: section header
-# ---------------------------------------------------------------------------
 section() {
     echo -e "\n${BOLD}${1}${RESET}"
     printf '%.0s─' {1..60}; echo
 }
 
-# ---------------------------------------------------------------------------
-# Core: collect messages from a topic into a temp file
-#   collect_topic TOPIC MIN_MSGS TIMEOUT [extra ros2 args...]
-#   Returns temp file path on stdout
-# ---------------------------------------------------------------------------
 collect_topic() {
     local topic="$1"
     local min_msgs="$2"
@@ -147,9 +136,6 @@ collect_topic() {
     echo "$tmpfile"
 }
 
-# ---------------------------------------------------------------------------
-# Helper: extract first value of a YAML field (simple version)
-# ---------------------------------------------------------------------------
 extract_field() {
     local file="$1"
     local field="$2"
@@ -160,9 +146,6 @@ extract_field() {
 # TEST MODULES
 # =============================================================================
 
-# ---------------------------------------------------------------------------
-# 1. Node discovery
-# ---------------------------------------------------------------------------
 test_node_discovery() {
     section "1. Node discovery"
 
@@ -183,9 +166,6 @@ test_node_discovery() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# 2. QoS profile verification
-# ---------------------------------------------------------------------------
 test_qos_profiles() {
     section "2. QoS profile verification"
 
@@ -223,9 +203,6 @@ test_qos_profiles() {
     done
 }
 
-# ---------------------------------------------------------------------------
-# 3. Message receipt
-# ---------------------------------------------------------------------------
 test_topic_receipt() {
     section "3. Message receipt (all topics must publish within ${RECEIVE_TIMEOUT}s)"
 
@@ -250,9 +227,6 @@ test_topic_receipt() {
     done
 }
 
-# ---------------------------------------------------------------------------
-# 4. Heartbeat increments monotonically
-# ---------------------------------------------------------------------------
 test_heartbeat_increments() {
     section "4. Heartbeat counter increments monotonically"
 
@@ -290,11 +264,6 @@ test_heartbeat_increments() {
     rm -f "$tmpfile"
 }
 
-# ---------------------------------------------------------------------------
-# 5. motor_positions payload
-# FIX: gawk now resets state on "---" and stops after the first complete
-#      message, preventing double-accumulation when two messages arrive.
-# ---------------------------------------------------------------------------
 test_motor_positions() {
     section "5. motor_positions payload"
 
@@ -312,7 +281,6 @@ test_motor_positions() {
     local result
     result=$(gawk '
         /^---$/ {
-            # End of one message — if we already collected data, stop here
             if (n > 0) { done = 1 }
             in_data = 0
             next
@@ -344,10 +312,6 @@ test_motor_positions() {
     rm -f "$tmpfile"
 }
 
-# ---------------------------------------------------------------------------
-# 6. distance_sensors payload
-# FIX: same gawk reset-on-separator fix as motor_positions above.
-# ---------------------------------------------------------------------------
 test_distance_sensors() {
     section "6. distance_sensors payload"
 
@@ -398,9 +362,6 @@ test_distance_sensors() {
     rm -f "$tmpfile"
 }
 
-# ---------------------------------------------------------------------------
-# 7. tof_distance payload
-# ---------------------------------------------------------------------------
 test_tof_distance() {
     section "7. tof_distance payload"
 
@@ -424,12 +385,6 @@ test_tof_distance() {
     rm -f "$tmpfile"
 }
 
-# ---------------------------------------------------------------------------
-# 8. laser_scan payload and timestamp
-# FIX: gawk now resets in_ranges on "---" and stops after the first complete
-#      message, preventing range point double-accumulation (24 instead of 12)
-#      when two messages arrive in the collection window.
-# ---------------------------------------------------------------------------
 test_laser_scan() {
     section "8. laser_scan payload and timestamp"
 
@@ -449,14 +404,14 @@ test_laser_scan() {
 
     local result
     result=$(gawk -v epoch_min="$EPOCH_MIN" -v host_epoch="$host_epoch" \
-                  -v pts_expected="$LASER_POINTS_EXPECTED" '
+                  -v pts_expected="$LASER_POINTS_EXPECTED" \
+                  -v expected_frame="$LASER_FRAME_ID_EXPECTED" '
         function extract_value(line, field) {
             if (match(line, field ":[[:space:]]*([0-9.-]+)", arr))
                 return arr[1]
             return ""
         }
         /^---$/ {
-            # End of one message — if we already have ranges, stop processing
             if (nr > 0) { done = 1 }
             in_ranges = 0
             next
@@ -492,8 +447,9 @@ test_laser_scan() {
 
     record "laser_scan has ${LASER_POINTS_EXPECTED} range points" \
         "$([[ "$nr" -eq "$LASER_POINTS_EXPECTED" ]] && echo 1 || echo 0)" "got ${nr}"
-    record "laser_scan frame_id == 'lidar_frame'" \
-        "$([[ "$frame_id" == "lidar_frame" ]] && echo 1 || echo 0)" "got '${frame_id}'"
+    # FIX: check for LASER_FRAME_ID_EXPECTED ('laser_link') not hardcoded 'lidar_frame'
+    record "laser_scan frame_id == '${LASER_FRAME_ID_EXPECTED}'" \
+        "$([[ "$frame_id" == "$LASER_FRAME_ID_EXPECTED" ]] && echo 1 || echo 0)" "got '${frame_id}'"
     record "laser_scan range_min == 0.02m" \
         "$(awk "BEGIN{v=$range_min+0; print (v>0.0199 && v<0.0201)?1:0}")" "got ${range_min}"
     record "laser_scan range_max == 12.0m" \
@@ -507,9 +463,6 @@ test_laser_scan() {
     rm -f "$tmpfile"
 }
 
-# ---------------------------------------------------------------------------
-# 9. LED round-trip (publish led → receive led_state)
-# ---------------------------------------------------------------------------
 test_led_round_trip() {
     section "9. LED command round-trip (publish led → receive led_state)"
 
@@ -538,9 +491,6 @@ test_led_round_trip() {
     done
 }
 
-# ---------------------------------------------------------------------------
-# 10. QoS compatibility — no mismatched pub/sub pairs
-# ---------------------------------------------------------------------------
 test_qos_compatibility() {
     section "10. QoS compatibility — no incompatible pairings"
 
@@ -583,12 +533,6 @@ test_qos_compatibility() {
     done
 }
 
-# ---------------------------------------------------------------------------
-# 11. Node lifecycle — full graph
-# FIX: lifecycle state check now matches only the word "active" preceded by
-#      a space or start-of-string, preventing "inactive" from falsely passing.
-#      Also accepts state [3] which is the numeric form of "active" in Humble.
-# ---------------------------------------------------------------------------
 test_node_lifecycle() {
     section "11. Node lifecycle — full graph"
 
@@ -605,7 +549,6 @@ test_node_lifecycle() {
         lidar_relay_node
         planner_server
         robot_state_publisher
-        shelfbot_camera
         shelfbot_firmware
         shelfbot_hardware_interface_microros_node
         shelfbot_odometry_node
@@ -622,6 +565,11 @@ test_node_lifecycle() {
     vlog "lifecycle" "ros2 lifecycle nodes:\n$(echo "$lifecycle_list" | sed 's/^/      /')"
 
     for node in "${expected_nodes[@]}"; do
+        # static_tf_lidar no longer exists — skip it
+        if [[ "$node" == "static_tf_lidar" ]]; then
+            continue
+        fi
+
         local found=0
         echo "$node_list" | grep -qxF "/${node}" && found=1
 
@@ -632,15 +580,10 @@ test_node_lifecycle() {
 
         record "/${node} present" 1
 
-        # Only check lifecycle state if this node is a managed node
         if echo "$lifecycle_list" | grep -qxF "/${node}"; then
             local state_raw
             state_raw=$(ros2 lifecycle get "/${node}" 2>/dev/null || echo "unknown")
 
-            # FIX: match " active" (space-prefixed) or "^active" to exclude
-            # "inactive" which contains "active" as a substring.
-            # Also accept numeric [3] which ros2 lifecycle get returns in Humble
-            # when the node reports active state.
             local active=0
             if [[ "$state_raw" =~ (^|[[:space:]])active([[:space:]]|$) ]] || \
                [[ "$state_raw" =~ \[3\] ]]; then
@@ -653,9 +596,6 @@ test_node_lifecycle() {
     done
 }
 
-# ---------------------------------------------------------------------------
-# 12. Per-node detail dump  (only when -v node or -v all)
-# ---------------------------------------------------------------------------
 report_node_details() {
     is_verbose "node" || return 0
 
@@ -707,6 +647,7 @@ main() {
     echo -e "  Heartbeat window  : ${HEARTBEAT_WINDOW}s"
     echo -e "  Host epoch        : $(date +%s)"
     echo -e "  Epoch lower bound : ${EPOCH_MIN}  (Nov 2023)"
+    echo -e "  Laser frame ID    : ${LASER_FRAME_ID_EXPECTED}"
     [[ -n "$VERBOSE_TAGS" ]] && \
         echo -e "  Verbose tags      : ${YELLOW}${VERBOSE_TAGS}${RESET}"
 

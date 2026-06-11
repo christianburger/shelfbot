@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Nav2 parameter file for shelfbot with slam_toolbox.
 #
-# FIXES applied vs previous version:
+# FIXES applied:
 #
 # 1. collision_monitor REMOVED from lifecycle_manager node_names.
 #    collision_monitor is not included in nav2_bringup navigation_launch.py
@@ -11,18 +11,32 @@
 #
 # 2. velocity_smoother cmd_vel chain FIXED.
 #    With collision_monitor removed, velocity_smoother publishes directly to
-#    /cmd_vel. The cmd_vel_in/out remapping in collision_monitor is gone.
-#    velocity_smoother now: subscribes /cmd_vel_nav (Nav2 output),
+#    /cmd_vel. velocity_smoother now: subscribes /cmd_vel_nav (Nav2 output),
 #    publishes /cmd_vel (hardware interface input).
 #
 # 3. controller_server remapping added so it publishes to /cmd_vel_nav,
 #    which velocity_smoother then smooths and forwards to /cmd_vel.
 #
+# 4. lifecycle_manager node_names ORDER FIXED.
+#    controller_server must be FIRST. The lifecycle manager activates nodes
+#    in order and aborts on any failure. planner_server (global costmap)
+#    requires the map→odom TF from slam_toolbox which may not be ready at
+#    activation time — putting it first caused the whole stack to abort before
+#    controller_server was ever reached, leaving all subsequent nodes in
+#    unconfigured [1] state.
+#
+# 5. Scan frame_id corrected throughout.
+#    The URDF (lidar_sensor.xacro / shelfbot.urdf.xacro) defines the lidar
+#    as 'laser_link' attached to base_link via joint_laser.
+#    robot_state_publisher broadcasts base_link → laser_link on /tf_static.
+#    lidar_relay_node now stamps /scan with frame_id='laser_link'.
+#    All TF references here use 'laser_link' to match.
+#
 # TF chain (must all be live before Nav2 activates at t=12s):
-#   map → odom            (slam_toolbox, t=6s)
-#   odom → base_footprint (FourWheelDriveOdometry, t=3s)
-#   base_footprint → base_link   (robot_state_publisher, t=0s)
-#   base_link → lidar_frame      (static_tf_lidar, t=0s)
+#   map → odom                   (slam_toolbox, t=6s)
+#   odom → base_footprint        (FourWheelDriveOdometry, t=3s)
+#   base_footprint → base_link   (robot_state_publisher/URDF, t=0s)
+#   base_link → laser_link       (robot_state_publisher/URDF, t=0s)
 # ─────────────────────────────────────────────────────────────────────────────
 
 bt_navigator:
@@ -138,6 +152,10 @@ local_costmap:
       height: 3
       resolution: 0.05
       robot_radius: 0.30
+      # transform_tolerance: generous at startup; the odom→base_footprint TF
+      # is published by the hardware interface which starts at t=3s but may
+      # take a few hundred ms to receive the first motor position from micro-ROS.
+      transform_tolerance: 1.0
       plugins: ["voxel_layer", "inflation_layer"]
 
       voxel_layer:
@@ -181,6 +199,9 @@ global_costmap:
       robot_radius: 0.30
       resolution: 0.05
       track_unknown_space: true
+      # transform_tolerance: generous because map→odom TF from slam_toolbox
+      # may not be ready until ~6s after launch.
+      transform_tolerance: 1.0
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
 
       static_layer:
@@ -282,7 +303,7 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    # FIX: velocity_smoother subscribes to /cmd_vel_nav (Nav2 controller output)
+    # velocity_smoother subscribes to /cmd_vel_nav (Nav2 controller output)
     # and publishes to /cmd_vel (hardware interface input).
     # The controller_server remapping in the launch file sends its output to
     # /cmd_vel_nav. velocity_smoother then rate-limits it before it reaches
@@ -303,9 +324,18 @@ lifecycle_manager_navigation:
     # FIX: collision_monitor removed — it is not launched by navigation_launch.py
     # in ROS2 Humble and its absence was stalling the lifecycle manager.
     # slam_toolbox is also NOT listed here — it manages its own lifecycle.
+    #
+    # FIX: ORDER IS CRITICAL. The lifecycle manager activates nodes in sequence
+    # and aborts the entire chain on any failure. controller_server must be
+    # first because its local costmap uses only the odom frame (always
+    # available). planner_server's global costmap requires map→odom TF from
+    # slam_toolbox — putting planner_server first caused it to time out waiting
+    # for the map TF, aborting before controller_server was ever attempted,
+    # which left bt_navigator, velocity_smoother, and waypoint_follower all
+    # stuck in unconfigured [1] state.
     node_names:
-      - planner_server
       - controller_server
+      - planner_server
       - smoother_server
       - behavior_server
       - bt_navigator
