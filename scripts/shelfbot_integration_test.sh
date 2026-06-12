@@ -33,12 +33,43 @@ LASER_POINTS_EXPECTED=12
 NS="shelfbot_firmware"
 VERBOSE_TAGS=""               # comma-separated; "all" enables everything
 
-# FIX: laser_scan frame_id must match the URDF link name.
-# The URDF (lidar_sensor.xacro) defines the lidar as 'laser_link' attached to
-# base_link via joint_laser. robot_state_publisher broadcasts this on /tf_static.
-# lidar_relay_node stamps /scan with frame_id='laser_link'.
-# The previous value 'lidar_frame' was a ghost frame not in the URDF TF tree.
+# laser_scan frame_id must match the URDF link name used by lidar_relay_node.
 LASER_FRAME_ID_EXPECTED="laser_link"
+
+# All firmware publishers use best_effort QoS.
+# Format: "topic:expected_qos" — kept as a plain array to avoid
+# declare -A at global scope which is unreliable under set -euo pipefail.
+QOS_EXPECTED=(
+    "heartbeat:best_effort"
+    "motor_positions:best_effort"
+    "distance_sensors:best_effort"
+    "led_state:best_effort"
+    "tof_distance:best_effort"
+    "laser_scan:best_effort"
+)
+
+# Nodes expected to be present in the full system graph.
+# Remove nodes from this list if they are not yet deployed.
+EXPECTED_NODES=(
+    apriltag_detector_node
+    behavior_server
+    bt_navigator
+    camera_publisher
+    controller_manager
+    controller_server
+    four_wheel_drive_controller
+    joint_state_broadcaster
+    lifecycle_manager_navigation
+    lidar_relay_node
+    planner_server
+    robot_state_publisher
+    shelfbot_firmware
+    shelfbot_hardware_interface_microros_node
+    shelfbot_odometry_node
+    smoother_server
+    velocity_smoother
+    waypoint_follower
+)
 
 # ---------------------------------------------------------------------------
 # Colour codes
@@ -107,6 +138,9 @@ section() {
     printf '%.0s─' {1..60}; echo
 }
 
+# Collect at least min_msgs from a topic within timeout_s seconds.
+# Extra args (e.g. --no-arr) are forwarded to ros2 topic echo.
+# Prints the path to a temp file containing the raw output.
 collect_topic() {
     local topic="$1"
     local min_msgs="$2"
@@ -121,25 +155,38 @@ collect_topic() {
         >> "$tmpfile" 2>/dev/null &
     local pid=$!
 
-    local elapsed=0
+    local deadline
+    deadline=$(( $(date +%s) + timeout_s ))
+
     while kill -0 "$pid" 2>/dev/null; do
         local sep_count
         sep_count=$(grep -c "^---$" "$tmpfile" 2>/dev/null || true)
-        [[ "$sep_count" -ge "$min_msgs" ]] && { kill "$pid" 2>/dev/null; break; }
+        if [[ "$sep_count" -ge "$min_msgs" ]]; then
+            kill "$pid" 2>/dev/null || true
+            break
+        fi
+        if [[ $(date +%s) -ge $deadline ]]; then
+            kill "$pid" 2>/dev/null || true
+            break
+        fi
         sleep 0.2
-        elapsed=$(awk "BEGIN{printf \"%.1f\", $elapsed + 0.2}")
-        awk "BEGIN{exit ($elapsed >= $timeout_s) ? 0 : 1}" && \
-            { kill "$pid" 2>/dev/null; break; } || true
     done
     wait "$pid" 2>/dev/null || true
 
     echo "$tmpfile"
 }
 
-extract_field() {
-    local file="$1"
-    local field="$2"
-    grep "$field" "$file" | head -1 | sed "s/.*${field}[[:space:]]*//"
+# Get the publisher QoS reliability for a topic.
+# Prints "best_effort", "reliable", or "" if no publisher found.
+get_pub_qos() {
+    local topic="$1"
+    local info
+    info=$(ros2 topic info -v "$topic" 2>/dev/null || true)
+    echo "$info" | gawk '
+        /Publisher/  { in_pub=1 }
+        /Subscriber/ { in_pub=0 }
+        in_pub && /Reliability:/ { print tolower($2); exit }
+    ' || true
 }
 
 # =============================================================================
@@ -169,32 +216,18 @@ test_node_discovery() {
 test_qos_profiles() {
     section "2. QoS profile verification"
 
-    declare -A expected=(
-        ["heartbeat"]="best_effort"
-        ["motor_positions"]="best_effort"
-        ["distance_sensors"]="best_effort"
-        ["led_state"]="best_effort"
-        ["tof_distance"]="best_effort"
-        ["laser_scan"]="reliable"
-    )
-
-    for short in "${!expected[@]}"; do
+    for entry in "${QOS_EXPECTED[@]}"; do
+        local short="${entry%%:*}"
+        local want="${entry##*:}"
         local topic="/${NS}/${short}"
-        local want="${expected[$short]}"
-        local info
-        info=$(ros2 topic info -v "$topic" 2>/dev/null || true)
 
-        vlog "qos" "ros2 topic info -v ${topic}:\n$(echo "$info" | sed 's/^/      /')"
+        vlog "qos" "Checking ${topic}"
 
         local got
-        got=$(echo "$info" | gawk '
-            /Publisher/  { in_pub=1 }
-            /Subscriber/ { in_pub=0 }
-            in_pub && /Reliability:/ { print tolower($2); exit }
-        ')
+        got=$(get_pub_qos "$topic")
 
         if [[ -z "$got" ]]; then
-            record "QoS ${short}" 0 "no publisher found"
+            record "QoS ${short} == ${want}" 0 "no publisher found"
         elif [[ "$got" == "$want" ]]; then
             record "QoS ${short} == ${want}" 1
         else
@@ -367,7 +400,7 @@ test_tof_distance() {
 
     local topic="/${NS}/tof_distance"
     local tmpfile
-    tmpfile=$(collect_topic "$topic" 1 "$RECEIVE_TIMEOUT")
+    tmpfile=$(collect_topic "$topic" 1 "$RECEIVE_TIMEOUT" --no-arr)
 
     vlog "tof" "Raw tof_distance:\n$(cat "$tmpfile" | sed 's/^/      /')"
 
@@ -377,9 +410,9 @@ test_tof_distance() {
     fi
 
     local val
-    val=$(extract_field "$tmpfile" "data:")
+    val=$(grep "^data:" "$tmpfile" | head -1 | awk '{print $2}' || true)
     local ok
-    ok=$(echo "$val" | gawk '{v=$1+0; print (v==-1.0 || (v>=0.0 && v<=12.0)) ? 1 : 0}')
+    ok=$(echo "$val" | gawk '{v=$1+0; print (v==-1.0 || (v>=0.0 && v<=12.0)) ? 1 : 0}' || true)
 
     record "tof_distance is -1.0 or in 0–12m range" "$ok" "value=${val}"
     rm -f "$tmpfile"
@@ -406,11 +439,7 @@ test_laser_scan() {
     result=$(gawk -v epoch_min="$EPOCH_MIN" -v host_epoch="$host_epoch" \
                   -v pts_expected="$LASER_POINTS_EXPECTED" \
                   -v expected_frame="$LASER_FRAME_ID_EXPECTED" '
-        function extract_value(line, field) {
-            if (match(line, field ":[[:space:]]*([0-9.-]+)", arr))
-                return arr[1]
-            return ""
-        }
+        function abs(x) { return (x < 0) ? -x : x }
         /^---$/ {
             if (nr > 0) { done = 1 }
             in_ranges = 0
@@ -420,18 +449,14 @@ test_laser_scan() {
         /frame_id:/  { if (!frame_id)  frame_id  = $2 }
         /range_min:/ { if (!range_min) range_min = $2+0 }
         /range_max:/ { if (!range_max) range_max = $2+0 }
-        {
-            sec_val = extract_value($0, "sec")
-            if (sec_val != "" && !stamp_sec_done) { stamp_sec = sec_val+0; stamp_sec_done=1 }
-            ns_val = extract_value($0, "nanosec")
-            if (ns_val != "" && !stamp_ns_done) { stamp_ns = ns_val+0; stamp_ns_done=1 }
-        }
+        /sec:/       { if (!stamp_sec_done)  { stamp_sec = $2+0; stamp_sec_done=1 } }
+        /nanosec:/   { if (!stamp_ns_done)   { stamp_ns  = $2+0; stamp_ns_done=1  } }
         /^ranges:/   { in_ranges=1; next }
         in_ranges && /^- / { ranges[nr++] = $2+0 }
         in_ranges && !/^- / && NF>0 { in_ranges=0 }
         END {
             stamp = stamp_sec + stamp_ns * 1e-9
-            delta = (stamp > host_epoch) ? stamp - host_epoch : host_epoch - stamp
+            delta = abs(stamp - host_epoch)
             sentinel = range_max + 1.0
             range_ok=1
             for (i=0; i<nr; i++) if (ranges[i]<0 || ranges[i]>sentinel) range_ok=0
@@ -447,7 +472,6 @@ test_laser_scan() {
 
     record "laser_scan has ${LASER_POINTS_EXPECTED} range points" \
         "$([[ "$nr" -eq "$LASER_POINTS_EXPECTED" ]] && echo 1 || echo 0)" "got ${nr}"
-    # FIX: check for LASER_FRAME_ID_EXPECTED ('laser_link') not hardcoded 'lidar_frame'
     record "laser_scan frame_id == '${LASER_FRAME_ID_EXPECTED}'" \
         "$([[ "$frame_id" == "$LASER_FRAME_ID_EXPECTED" ]] && echo 1 || echo 0)" "got '${frame_id}'"
     record "laser_scan range_min == 0.02m" \
@@ -469,37 +493,70 @@ test_led_round_trip() {
     local led_topic="/${NS}/led"
     local state_topic="/${NS}/led_state"
 
-    for state in "true" "false"; do
-        local label
-        [[ "$state" == "true" ]] && label="ON" || label="OFF"
+    # -------------------------------------------------------------------------
+    # ON test
+    # -------------------------------------------------------------------------
+    # Step 1: start a persistent listener in the background — no --once.
+    local tmpfile_on
+    tmpfile_on=$(mktemp /tmp/shelfbot_echo_XXXXXX.tmp)
+    ros2 topic echo "$state_topic" > "$tmpfile_on" 2>/dev/null &
+    local pid_on=$!
 
-        vlog "led" "Publishing LED ${label} to ${led_topic}"
-        ros2 topic pub --once "$led_topic" std_msgs/msg/Bool "{data: ${state}}" >/dev/null 2>&1
+    # Step 2: wait for DDS subscription to establish.
+    sleep 1.5
 
-        local found=0
-        for i in {1..20}; do
-            local val
-            val=$(timeout 1 ros2 topic echo --once --field data "$state_topic" 2>/dev/null || true)
-            if [[ "$val" == "$state" ]]; then
-                found=1
-                break
-            fi
-            sleep 0.2
-        done
-        record "LED ${label} command reflected in led_state" "$found"
-        sleep 0.5
-    done
+    # Step 3: publish ON command.
+    vlog "led" "Publishing LED ON"
+    ros2 topic pub --once "$led_topic" std_msgs/msg/Bool "{data: true}" >/dev/null 2>&1
+
+    # Step 4: wait for firmware to respond.
+    sleep 1.0
+
+    # Step 5: stop listener and check output.
+    kill "$pid_on" 2>/dev/null || true
+    wait "$pid_on" 2>/dev/null || true
+
+    vlog "led" "ON output: $(cat "$tmpfile_on" | tr "\n" " ")"
+    local found_on=0
+    grep -qi "data: true" "$tmpfile_on" 2>/dev/null && found_on=1
+    record "LED ON command reflected in led_state" "$found_on"
+    rm -f "$tmpfile_on"
+
+    sleep 0.5
+
+    # -------------------------------------------------------------------------
+    # OFF test
+    # -------------------------------------------------------------------------
+    local tmpfile_off
+    tmpfile_off=$(mktemp /tmp/shelfbot_echo_XXXXXX.tmp)
+    ros2 topic echo "$state_topic" > "$tmpfile_off" 2>/dev/null &
+    local pid_off=$!
+
+    sleep 1.5
+
+    vlog "led" "Publishing LED OFF"
+    ros2 topic pub --once "$led_topic" std_msgs/msg/Bool "{data: false}" >/dev/null 2>&1
+
+    sleep 1.0
+
+    kill "$pid_off" 2>/dev/null || true
+    wait "$pid_off" 2>/dev/null || true
+
+    vlog "led" "OFF output: $(cat "$tmpfile_off" | tr "\n" " ")"
+    local found_off=0
+    grep -qi "data: false" "$tmpfile_off" 2>/dev/null && found_off=1
+    record "LED OFF command reflected in led_state" "$found_off"
+    rm -f "$tmpfile_off"
 }
 
 test_qos_compatibility() {
     section "10. QoS compatibility — no incompatible pairings"
 
-    declare -A want_pub=(
-        ["motor_positions"]="best_effort"
-        ["laser_scan"]="reliable"
-    )
+    # Check that no firmware publisher (best_effort) is paired with a
+    # reliable external subscriber, which would cause silent message drops.
+    local topics=(motor_positions laser_scan distance_sensors tof_distance heartbeat led_state)
 
-    for short in "${!want_pub[@]}"; do
+    for short in "${topics[@]}"; do
         local topic="/${NS}/${short}"
         local info
         info=$(ros2 topic info -v "$topic" 2>/dev/null || true)
@@ -511,14 +568,15 @@ test_qos_compatibility() {
             /Publisher/  { in_pub=1 }
             /Subscriber/ { in_pub=0 }
             in_pub && /Reliability:/ { print tolower($2); exit }
-        ')
+        ' || true)
         sub_qos=$(echo "$info" | gawk '
-            /Subscriber/ { in_sub=1; found_sub=1 }
+            /Subscriber/ { in_sub=1 }
             in_sub && /Reliability:/ { print tolower($2); exit }
-        ')
+        ' || true)
 
         if [[ -z "$pub_qos" ]]; then
-            record "${short} QoS pairing" 0 "no publisher found"; continue
+            record "${short} QoS pairing" 0 "no publisher found"
+            continue
         fi
 
         local compat=1
@@ -536,40 +594,13 @@ test_qos_compatibility() {
 test_node_lifecycle() {
     section "11. Node lifecycle — full graph"
 
-    local -a expected_nodes=(
-        apriltag_detector_node
-        behavior_server
-        bt_navigator
-        camera_publisher
-        controller_manager
-        controller_server
-        four_wheel_drive_controller
-        joint_state_broadcaster
-        lifecycle_manager_navigation
-        lidar_relay_node
-        planner_server
-        robot_state_publisher
-        shelfbot_firmware
-        shelfbot_hardware_interface_microros_node
-        shelfbot_odometry_node
-        smoother_server
-        static_tf_lidar
-        velocity_smoother
-        waypoint_follower
-    )
-
     local node_list lifecycle_list
     node_list=$(ros2 node list 2>/dev/null)
     lifecycle_list=$(ros2 lifecycle nodes 2>/dev/null || true)
 
     vlog "lifecycle" "ros2 lifecycle nodes:\n$(echo "$lifecycle_list" | sed 's/^/      /')"
 
-    for node in "${expected_nodes[@]}"; do
-        # static_tf_lidar no longer exists — skip it
-        if [[ "$node" == "static_tf_lidar" ]]; then
-            continue
-        fi
-
+    for node in "${EXPECTED_NODES[@]}"; do
         local found=0
         echo "$node_list" | grep -qxF "/${node}" && found=1
 

@@ -79,15 +79,9 @@ def generate_launch_description():
         name='lidar_relay_node',
         output='screen',
         parameters=[{
-            # FIX: frame_id changed from 'lidar_frame' to 'laser_link'.
-            # 'laser_link' is the frame defined in the URDF (lidar_sensor.xacro)
-            # and broadcast by robot_state_publisher. All /scan consumers
-            # (Nav2 local costmap, global costmap, slam_toolbox) perform a TF
-            # lookup from this frame_id into the costmap/map frame. If the
-            # frame_id does not exist in the TF tree the lookup fails silently
-            # and no obstacles are ever marked — exactly the symptom observed.
             'frame_id': 'laser_link',
-            'publish_hz': 5.0,
+            'publish_hz': 10.0,                    # increased from 5.0
+            'qos_reliability': 'best_effort',     # <-- critical fix
         }],
         arguments=['--ros-args', '--log-level', 'warn'],
         respawn=True,
