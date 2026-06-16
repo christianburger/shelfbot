@@ -3,6 +3,7 @@
 # shelfbot_integration_test.sh
 # -----------------------------------------------------------------------------
 # End-to-end integration test for the shelfbot firmware micro-ROS node.
+# Version: 1.0.0
 #
 # Usage:
 #   source /opt/ros/humble/setup.bash   # or source install/setup.bash
@@ -22,6 +23,14 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
+# Version
+# ---------------------------------------------------------------------------
+VERSION_MAJOR=1
+VERSION_MINOR=0
+VERSION_PATCH=0
+VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}"
+
+# ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
 RECEIVE_TIMEOUT=8
@@ -29,23 +38,21 @@ HEARTBEAT_WINDOW=3
 EPOCH_MIN=1700000000          # Nov 2023 — below = boot-relative stamp
 MOTOR_COUNT_EXPECTED=5
 SENSOR_COUNT_EXPECTED=6
-LASER_POINTS_EXPECTED=12
+LASER_POINTS_EXPECTED=360     # FIX: was 12, should be 360
 NS="shelfbot_firmware"
 VERBOSE_TAGS=""               # comma-separated; "all" enables everything
 
 # laser_scan frame_id must match the URDF link name used by lidar_relay_node.
 LASER_FRAME_ID_EXPECTED="laser_link"
 
-# All firmware publishers use best_effort QoS.
-# Format: "topic:expected_qos" — kept as a plain array to avoid
-# declare -A at global scope which is unreliable under set -euo pipefail.
+# All firmware publishers use best_effort QoS, except laser_scan which is reliable.
 QOS_EXPECTED=(
     "heartbeat:best_effort"
     "motor_positions:best_effort"
     "distance_sensors:best_effort"
     "led_state:best_effort"
     "tof_distance:best_effort"
-    "laser_scan:best_effort"
+    "laser_scan:reliable"          # FIX: was best_effort
 )
 
 # Nodes expected to be present in the full system graph.
@@ -93,6 +100,7 @@ trap 'rm -f "$RESULTS_FILE" /tmp/shelfbot_echo_*.tmp' EXIT
 # ---------------------------------------------------------------------------
 usage() {
     grep '^#' "$0" | sed 's/^# \?//' | head -20
+    echo "Version: $VERSION"
     exit 0
 }
 
@@ -160,7 +168,7 @@ collect_topic() {
 
     while kill -0 "$pid" 2>/dev/null; do
         local sep_count
-        sep_count=$(grep -c "^---$" "$tmpfile" 2>/dev/null || true)
+        sep_count=$(grep -c "^---$" "$tmpfile" 2>/dev/null | tr -d '[:space:]' || echo 0)
         if [[ "$sep_count" -ge "$min_msgs" ]]; then
             kill "$pid" 2>/dev/null || true
             break
@@ -247,7 +255,7 @@ test_topic_receipt() {
         tmpfile=$(collect_topic "$topic" 1 "$RECEIVE_TIMEOUT" --no-arr)
 
         local sep_count
-        sep_count=$(grep -c "^---$" "$tmpfile" 2>/dev/null || echo 0)
+        sep_count=$(grep -c "^---$" "$tmpfile" 2>/dev/null | tr -d '[:space:]' || echo 0)
 
         vlog "topics" "${short} raw sample:\n$(head -10 "$tmpfile" | sed 's/^/      /')"
 
@@ -452,14 +460,21 @@ test_laser_scan() {
         /sec:/       { if (!stamp_sec_done)  { stamp_sec = $2+0; stamp_sec_done=1 } }
         /nanosec:/   { if (!stamp_ns_done)   { stamp_ns  = $2+0; stamp_ns_done=1  } }
         /^ranges:/   { in_ranges=1; next }
-        in_ranges && /^- / { ranges[nr++] = $2+0 }
+        in_ranges && /^- / {
+            v = $2
+            if (v == ".inf") {
+                ranges[nr++] = 99999
+            } else {
+                val = v+0
+                ranges[nr++] = val
+                if (val < 0 || val > range_max + 1.0) range_ok = 0
+            }
+        }
         in_ranges && !/^- / && NF>0 { in_ranges=0 }
+        BEGIN { range_ok=1 }
         END {
             stamp = stamp_sec + stamp_ns * 1e-9
             delta = abs(stamp - host_epoch)
-            sentinel = range_max + 1.0
-            range_ok=1
-            for (i=0; i<nr; i++) if (ranges[i]<0 || ranges[i]>sentinel) range_ok=0
             ranges_str=""
             for (i=0; i<(nr<6?nr:6); i++) ranges_str=ranges_str sprintf("%.3f",ranges[i]) " "
             printf "%s|%.4f|%.4f|%.3f|%.3f|%d|%d|%s\n",
@@ -496,23 +511,18 @@ test_led_round_trip() {
     # -------------------------------------------------------------------------
     # ON test
     # -------------------------------------------------------------------------
-    # Step 1: start a persistent listener in the background — no --once.
     local tmpfile_on
     tmpfile_on=$(mktemp /tmp/shelfbot_echo_XXXXXX.tmp)
     ros2 topic echo "$state_topic" > "$tmpfile_on" 2>/dev/null &
     local pid_on=$!
 
-    # Step 2: wait for DDS subscription to establish.
     sleep 1.5
 
-    # Step 3: publish ON command.
     vlog "led" "Publishing LED ON"
     ros2 topic pub --once "$led_topic" std_msgs/msg/Bool "{data: true}" >/dev/null 2>&1
 
-    # Step 4: wait for firmware to respond.
     sleep 1.0
 
-    # Step 5: stop listener and check output.
     kill "$pid_on" 2>/dev/null || true
     wait "$pid_on" 2>/dev/null || true
 
@@ -552,8 +562,6 @@ test_led_round_trip() {
 test_qos_compatibility() {
     section "10. QoS compatibility — no incompatible pairings"
 
-    # Check that no firmware publisher (best_effort) is paired with a
-    # reliable external subscriber, which would cause silent message drops.
     local topics=(motor_positions laser_scan distance_sensors tof_distance heartbeat led_state)
 
     for short in "${topics[@]}"; do
@@ -673,6 +681,7 @@ main() {
 
     echo -e "\n${BOLD}╔══════════════════════════════════════════════════╗${RESET}"
     echo -e "${BOLD}║        Shelfbot Firmware Integration Test        ║${RESET}"
+    echo -e "${BOLD}║              Version ${VERSION}                   ║${RESET}"
     echo -e "${BOLD}╚══════════════════════════════════════════════════╝${RESET}"
     echo -e "  Timeout per topic : ${RECEIVE_TIMEOUT}s"
     echo -e "  Heartbeat window  : ${HEARTBEAT_WINDOW}s"
