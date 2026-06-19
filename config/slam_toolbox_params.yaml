@@ -10,19 +10,12 @@ slam_toolbox:
     ceres_loss_function:        None
 
     # ── TF frames ─────────────────────────────────────────────────────────────
-    # These must match the actual TF frames published by the robot stack:
-    #   odom_frame:  parent frame of wheel odometry (FourWheelDriveOdometry
-    #                publishes odom → base_footprint)
-    #   map_frame:   slam_toolbox publishes this → odom_frame TF
-    #   base_frame:  robot body frame — slam_toolbox looks up
-    #                base_frame → scan frame_id for every processed scan
-    #   scan_topic:  must match lidar_relay_node output topic
-    #
-    # The scan frame_id is read from each /scan message header. lidar_relay_node
-    # stamps scans with frame_id='laser_link' (the URDF link defined in
-    # lidar_sensor.xacro and broadcast by robot_state_publisher via joint_laser).
-    # slam_toolbox therefore looks up base_footprint → laser_link, which is
-    # available via: base_footprint → base_link → laser_link (all from URDF).
+    # odom_frame:  parent of wheel odometry (FourWheelDriveOdometry publishes
+    #              odom → base_footprint)
+    # map_frame:   slam_toolbox publishes map → odom_frame
+    # base_frame:  slam_toolbox looks up base_frame → scan frame_id per scan.
+    #              Chain: base_footprint → base_link → laser_link (URDF static).
+    # scan_topic:  lidar_relay_node output, re-stamped with laptop wall-clock.
     odom_frame:   odom
     map_frame:    map
     base_frame:   base_footprint
@@ -34,31 +27,42 @@ slam_toolbox:
     use_scan_barycenter:    true
 
     # ── Motion thresholds ─────────────────────────────────────────────────────
-    # Don't process a new scan unless the robot has moved this much since the
-    # last processed scan. Prevents wasting CPU on stationary scans and avoids
-    # accumulating noise in the pose graph when the robot is still.
-    # At 5 Hz lidar the robot must move 10cm OR rotate 5° to trigger a new node.
-    minimum_travel_distance:    0.1       # metres
-    minimum_travel_heading:     0.0872    # radians (~5°)
-    minimum_time_interval:      0.2       # seconds — one scan period at 5 Hz
+    # FIX: minimum_travel_distance was 0.1m. slam_toolbox does NOT publish
+    # map → odom until it processes its FIRST scan into the pose graph.
+    # With 0.1m threshold, the robot must physically move before the first
+    # scan is accepted — meaning map → odom never appears at startup and
+    # Nav2's global costmap (map frame) can never activate.
+    #
+    # Setting to 0.0 makes slam_toolbox process the very first scan it receives
+    # regardless of motion, publishing map → odom immediately. Subsequent scans
+    # are still gated by minimum_time_interval to avoid CPU waste.
+    #
+    # minimum_travel_heading: 0.0 for the same reason — don't gate on rotation.
+    minimum_travel_distance:    0.0       # process first scan unconditionally
+    minimum_travel_heading:     0.0       # process first scan unconditionally
+    minimum_time_interval:      0.5       # seconds — matches scan rate (~2 Hz
+                                          # effective after lidar_relay re-stamp)
 
     # ── TF timing ─────────────────────────────────────────────────────────────
-    # transform_timeout: how long slam_toolbox waits for a TF lookup before
-    # dropping the scan. At startup the odom TF may not be ready immediately.
-    # 0.5s is sufficient given the 6s startup delay in the launch file.
-    # tf_buffer_duration: how much TF history to keep. 30s is ample.
-    transform_timeout:          0.5
+    # FIX: transform_timeout was 0.5s but controller TF publishes at 2 Hz
+    # (every 500ms). A timeout exactly equal to the publish interval causes
+    # ~50% of lookups to fail. Increasing to 1.0s ensures every scan finds
+    # a valid bracketing TF entry in the buffer.
+    #
+    # tf_buffer_duration: 30s keeps enough history for loop closure lookups.
+    transform_timeout:          1.0       # was 0.5 — must exceed TF period (500ms)
     tf_buffer_duration:         30.0
 
     # ── Map resolution ────────────────────────────────────────────────────────
-    # 0.05m = 5cm per cell. Good for a 50cm-wide robot in warehouse aisles.
-    resolution:             0.05
+    resolution:             0.05          # 5cm/cell — good for 50cm-wide robot
 
     # ── Laser range limits ────────────────────────────────────────────────────
-    # slam_toolbox uses the LARGER of scan.range_min and minimum_laser_range.
-    # max_laser_range must not exceed range_max from lidar_relay (12.0m).
-    max_laser_range:        10.0          # slightly under 12m firmware max
-    minimum_laser_range:    0.1           # filters out near-field noise
+    # FIX: minimum_laser_range was 0.1 but the LYDSTO LDS02RR range_min is
+    # 0.02m (confirmed by integration test). slam_toolbox warns when this
+    # exceeds lidar capability. Set to 0.05 — filters near-field noise while
+    # staying within the lidar's stated minimum.
+    max_laser_range:        10.0
+    minimum_laser_range:    0.05          # was 0.1; lidar min is 0.02m
 
     # ── Loop closure ──────────────────────────────────────────────────────────
     do_loop_closing:                         true
@@ -69,13 +73,11 @@ slam_toolbox:
     loop_search_maximum_distance:            3.0
 
     # ── Message filter queue ──────────────────────────────────────────────────
-    # throttle_scans=1: process every scan (we already limit by
-    # minimum_time_interval). The 6s startup delay ensures odom TF is live
-    # before slam_toolbox starts, so queue-full drops at startup are avoided.
+    # throttle_scans=1: process every scan that passes the time interval gate.
     throttle_scans:     1
 
     # ── Pose graph ────────────────────────────────────────────────────────────
-    stack_size_to_use:  40000000   # 40 MB
+    stack_size_to_use:  40000000          # 40 MB
 
     # ── Map saving / interactive mode ─────────────────────────────────────────
     enable_interactive_mode:    true
