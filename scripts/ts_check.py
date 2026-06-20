@@ -342,11 +342,21 @@ class ShelfbotTsCheck(Node):
                 t  = tf.transform.translation
                 stamp_ns = (tf.header.stamp.sec * 1_000_000_000
                             + tf.header.stamp.nanosec)
-                age = (now_rclpy.nanoseconds - stamp_ns) * 1e-9
+
+                # Static transforms (/tf_static) carry stamp=0; avoid showing
+                # epoch time as the "age".
+                if stamp_ns == 0:
+                    age_str = "static"
+                    tag     = _pass()
+                else:
+                    age     = (now_rclpy.nanoseconds - stamp_ns) * 1e-9
+                    age_str = _colour(f'{age:.3f}s', age)
+                    tag     = _pass()
+
                 print(f"  {parent:<18} → {child:<22} "
                       f"t=[{t.x:6.3f},{t.y:6.3f},{t.z:6.3f}]  "
-                      f"age={_colour(f'{age:.3f}s', age)}  "
-                      f"{_pass()}  {DIM}{note}{RST}")
+                      f"age={age_str}  "
+                      f"{tag}  {DIM}{note}{RST}")
             except Exception as exc:
                 all_ok = False
                 print(f"  {parent:<18} → {child:<22} {_fail(str(exc)[:55])}")

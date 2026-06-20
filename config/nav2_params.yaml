@@ -175,7 +175,7 @@ local_costmap:
           raytrace_max_range: 10.0
           raytrace_min_range: 0.0
           obstacle_max_range: 9.5
-          obstacle_min_range: 0.0
+          obstacle_min_range: 0.25
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -218,10 +218,11 @@ global_costmap:
           clearing: true
           marking: true
           data_type: "LaserScan"
+          inf_is_valid: false
           raytrace_max_range: 10.0
           raytrace_min_range: 0.0
           obstacle_max_range: 9.5
-          obstacle_min_range: 0.0
+          obstacle_min_range: 0.25
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -301,11 +302,11 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    # velocity_smoother subscribes to /cmd_vel_nav (Nav2 controller output)
-    # and publishes to /cmd_vel (hardware interface input).
-    # The controller_server remapping in the launch file sends its output to
-    # /cmd_vel_nav. velocity_smoother then rate-limits it before it reaches
-    # the hardware. This replaces the broken collision_monitor chain.
+    # Explicit topic names — required when collision_monitor is absent.
+    # controller_server publishes to cmd_vel_nav (remapped in navigation_launch.py);
+    # velocity_smoother republishes smoothed output to cmd_vel for the hardware.
+    input_topic: "cmd_vel_nav"
+    output_topic: "cmd_vel"
     max_velocity: [0.5, 0.0, 1.0]
     min_velocity: [-0.5, 0.0, -1.0]
     max_accel: [1.5, 0.0, 2.0]
