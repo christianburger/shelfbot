@@ -1,83 +1,105 @@
+# slam_toolbox_params.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# FIXES applied vs previous version:
+#
+# 1. minimum_time_interval  0.50 → 0.25 s  (4 scan processings/s instead of 2)
+#    With sparse environments (59 % inf rays), more attempts = better map.
+#
+# 2. minimum_laser_range  0.05 → 0.02 m
+#    LYDSTO LDS02RR range_min = 0.02 m (confirmed by integration test).
+#    Previous value 0.05 discarded valid near-field returns.
+#
+# 3. map_update_interval: 1.0 s  (was absent, defaulted to ~5 s)
+#    The global costmap static_layer subscribes at Nav2 start (T+20 s).
+#    With 1 s updates slam gets 12 complete map publications before
+#    static_layer first subscribes.  With the old default only 2-3.
+#
+# 4. loop_match_minimum_response_coarse  0.35 → 0.20
+#    loop_match_minimum_response_fine    0.45 → 0.30
+#    Open warehouse / sparse scan environments produce lower matcher scores.
+#    Tightening the gate caused slam to reject most scans while still
+#    publishing the map→odom TF from odometry  →  map grew in bounds but
+#    all cells remained -1.  Lower thresholds allow cell insertion to proceed.
+#
+# 5. transform_timeout  1.0 → 0.5 s
+#    controller update_rate is now 4 Hz (250 ms TF period).
+#    At scan.stamp = now-600 ms, the nearest TF entry is at most 125 ms away.
+#    0.5 s timeout provides 4× headroom without the 1 s wait penalty.
+#
+# TF chain slam_toolbox needs (all must be live before scan processing):
+#   odom → base_footprint  (hardware interface, 4 Hz)
+#   base_footprint → base_link   (URDF static)
+#   base_link → laser_link       (URDF static)
+# ─────────────────────────────────────────────────────────────────────────────
+
 slam_toolbox:
   ros__parameters:
 
     # ── Solver ────────────────────────────────────────────────────────────────
-    solver_plugin:              solver_plugins::CeresSolver
-    ceres_linear_solver:        SPARSE_NORMAL_CHOLESKY
-    ceres_preconditioner:       SCHUR_JACOBI
-    ceres_trust_strategy:       LEVENBERG_MARQUARDT
-    ceres_dogleg_type:          TRADITIONAL_DOGLEG
-    ceres_loss_function:        None
+    solver_plugin:          solver_plugins::CeresSolver
+    ceres_linear_solver:    SPARSE_NORMAL_CHOLESKY
+    ceres_preconditioner:   SCHUR_JACOBI
+    ceres_trust_strategy:   LEVENBERG_MARQUARDT
+    ceres_dogleg_type:      TRADITIONAL_DOGLEG
+    ceres_loss_function:    None
 
     # ── TF frames ─────────────────────────────────────────────────────────────
-    # odom_frame:  parent of wheel odometry (FourWheelDriveOdometry publishes
-    #              odom → base_footprint)
-    # map_frame:   slam_toolbox publishes map → odom_frame
-    # base_frame:  slam_toolbox looks up base_frame → scan frame_id per scan.
-    #              Chain: base_footprint → base_link → laser_link (URDF static).
-    # scan_topic:  lidar_relay_node output, re-stamped with laptop wall-clock.
-    odom_frame:   odom
-    map_frame:    map
-    base_frame:   base_footprint
-    scan_topic:   /scan
-    mode:         mapping
+    odom_frame:  odom
+    map_frame:   map
+    base_frame:  base_footprint
+    scan_topic:  /scan
+    mode:        mapping
 
-    # ── Scan matching ─────────────────────────────────────────────────────────
-    use_scan_matching:      true
-    use_scan_barycenter:    true
+    # ── Scan matching ──────────────────────────────────────────────────────────
+    use_scan_matching:   true
+    use_scan_barycenter: true
 
-    # ── Motion thresholds ─────────────────────────────────────────────────────
-    # FIX: minimum_travel_distance was 0.1m. slam_toolbox does NOT publish
-    # map → odom until it processes its FIRST scan into the pose graph.
-    # With 0.1m threshold, the robot must physically move before the first
-    # scan is accepted — meaning map → odom never appears at startup and
-    # Nav2's global costmap (map frame) can never activate.
-    #
-    # Setting to 0.0 makes slam_toolbox process the very first scan it receives
-    # regardless of motion, publishing map → odom immediately. Subsequent scans
-    # are still gated by minimum_time_interval to avoid CPU waste.
-    #
-    # minimum_travel_heading: 0.0 for the same reason — don't gate on rotation.
-    minimum_travel_distance:    0.0       # process first scan unconditionally
-    minimum_travel_heading:     0.0       # process first scan unconditionally
-    minimum_time_interval:      0.5       # seconds — matches scan rate (~2 Hz
-                                          # effective after lidar_relay re-stamp)
+    # ── Motion / time thresholds ──────────────────────────────────────────────
+    # minimum_travel_distance/heading = 0.0  →  process first scan unconditionally
+    # (slam_toolbox will not publish map→odom until it processes at least one scan,
+    #  so these must be 0.0 to establish the map frame immediately at startup)
+    minimum_travel_distance: 0.0
+    minimum_travel_heading:  0.0
+
+    # FIX: 0.50 → 0.25  (was limiting to 2 scan processings/sec in sparse env)
+    minimum_time_interval:   0.25
+
+    # FIX: was absent (default ~5 s); 1 s ensures ≥12 /map publications
+    # before Nav2 static_layer first subscribes at T+20 s.
+    map_update_interval:     1.0
 
     # ── TF timing ─────────────────────────────────────────────────────────────
-    # FIX: transform_timeout was 0.5s but controller TF publishes at 2 Hz
-    # (every 500ms). A timeout exactly equal to the publish interval causes
-    # ~50% of lookups to fail. Increasing to 1.0s ensures every scan finds
-    # a valid bracketing TF entry in the buffer.
-    #
-    # tf_buffer_duration: 30s keeps enough history for loop closure lookups.
-    transform_timeout:          1.0       # was 0.5 — must exceed TF period (500ms)
-    tf_buffer_duration:         30.0
-
-    # ── Map resolution ────────────────────────────────────────────────────────
-    resolution:             0.05          # 5cm/cell — good for 50cm-wide robot
+    # FIX: 1.0 → 0.5 s.  controller_manager now runs at 4 Hz (250 ms period).
+    # Worst-case gap at scan.stamp (now-600 ms) = 125 ms  ≪  500 ms timeout.
+    transform_timeout:    0.5
+    tf_buffer_duration:   30.0
 
     # ── Laser range limits ────────────────────────────────────────────────────
-    # FIX: minimum_laser_range was 0.1 but the LYDSTO LDS02RR range_min is
-    # 0.02m (confirmed by integration test). slam_toolbox warns when this
-    # exceeds lidar capability. Set to 0.05 — filters near-field noise while
-    # staying within the lidar's stated minimum.
-    max_laser_range:        10.0
-    minimum_laser_range:    0.05          # was 0.1; lidar min is 0.02m
+    # FIX: minimum_laser_range 0.05 → 0.02  (sensor range_min = 0.02 m)
+    max_laser_range:     10.0
+    minimum_laser_range: 0.02
+
+    # ── Map resolution ────────────────────────────────────────────────────────
+    resolution: 0.05   # 5 cm/cell
 
     # ── Loop closure ──────────────────────────────────────────────────────────
-    do_loop_closing:                         true
-    loop_search_distance:                    5.0
-    loop_match_minimum_response_coarse:      0.35
-    loop_match_minimum_response_fine:        0.45
-    loop_match_maximum_variance_coarse:      3.0
-    loop_search_maximum_distance:            3.0
+    do_loop_closing:          true
+    loop_search_distance:     5.0
+    loop_search_maximum_distance: 3.0
 
-    # ── Message filter queue ──────────────────────────────────────────────────
-    # throttle_scans=1: process every scan that passes the time interval gate.
-    throttle_scans:     1
+    # FIX: 0.35 → 0.20  (sparse/open environments score ~0.20-0.25 on first scans)
+    loop_match_minimum_response_coarse: 0.20
 
-    # ── Pose graph ────────────────────────────────────────────────────────────
-    stack_size_to_use:  40000000          # 40 MB
+    # FIX: 0.45 → 0.30  (same reason — prevents slam dropping all scans)
+    loop_match_minimum_response_fine:   0.30
 
-    # ── Map saving / interactive mode ─────────────────────────────────────────
-    enable_interactive_mode:    true
+    loop_match_maximum_variance_coarse: 3.0
+
+    # ── Message filter ────────────────────────────────────────────────────────
+    throttle_scans: 1   # process every scan that passes the time gate
+
+    # ── Pose graph memory ─────────────────────────────────────────────────────
+    stack_size_to_use: 40000000   # 40 MB
+
+    # ── Interactive / save mode ───────────────────────────────────────────────
+    enable_interactive_mode: true

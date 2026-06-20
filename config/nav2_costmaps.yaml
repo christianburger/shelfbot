@@ -1,0 +1,139 @@
+# nav2_costmaps.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# Modular costmap configuration loaded by nav_debug.launch.py alongside
+# nav2_servers.yaml.  In navigation_launch.py (legacy), this file's content
+# is merged into nav2_params.yaml.
+#
+# DESIGN
+# ──────────────────────────────────────────────────────────────────────────────
+# local_costmap
+#   frame : odom   — works before slam_toolbox provides map→odom TF
+#   plugin: voxel_layer + inflation_layer
+#   NO static_layer — independent of /map; works whenever /scan is live
+#
+# global_costmap
+#   frame : map    — requires slam_toolbox's map→odom TF
+#   plugins: static_layer + obstacle_layer + inflation_layer
+#   static_layer subscribes to /map (TRANSIENT_LOCAL) — receives the
+#   most-recently published /map immediately on subscription.
+#   With map_update_interval=1 s in slam_toolbox, and Nav2 starting at T+20 s,
+#   the static_layer gets a map that is ≥12 s old = at least 12 update cycles.
+#
+# CRITICAL TIMING (scan→TF gap)
+# ──────────────────────────────────────────────────────────────────────────────
+# lidar_relay stamps /scan at now-600 ms.
+# Both costmaps must look up laser_link→costmap_frame at scan.stamp.
+#
+# local (odom frame):  needs odom→base_footprint at now-600 ms
+#   → TF published at 4 Hz (250 ms period)
+#   → nearest entry ≤125 ms from now-600 ms  →  interpolation succeeds ✓
+#
+# global (map frame):  needs map→odom at now-600 ms
+#   → slam_toolbox publishes map→odom when processing scans (≤4 Hz)
+#   → with minimum_time_interval=0.25 s → TF updated ≥4 times/sec  ✓
+#
+# transform_tolerance: 1.0 s provides an additional safety margin.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── LOCAL COSTMAP ─────────────────────────────────────────────────────────────
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      use_sim_time:      false
+      global_frame:      odom
+      robot_base_frame:  base_footprint
+      update_frequency:  5.0
+      publish_frequency: 2.0
+      rolling_window:    true
+      width:             3
+      height:            3
+      resolution:        0.05
+      robot_radius:      0.30
+      # Generous tolerance at startup: odom→base_footprint starts at T+4 s
+      # but the first motor position from micro-ROS may take another 200–400 ms.
+      transform_tolerance: 1.0
+
+      plugins: ["voxel_layer", "inflation_layer"]
+
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled:           true
+        publish_voxel_map: true
+        origin_z:          0.0
+        z_resolution:      0.05
+        z_voxels:          16
+        max_obstacle_height: 2.0
+        mark_threshold:    0
+        observation_sources: scan
+        scan:
+          topic:               /scan
+          data_type:           LaserScan
+          max_obstacle_height: 2.0
+          clearing:            true
+          marking:             true
+          # inf values are "no return" — do not mark as obstacle
+          inf_is_valid:        false
+          raytrace_max_range:  10.0
+          raytrace_min_range:  0.0
+          obstacle_max_range:  9.5
+          obstacle_min_range:  0.0
+
+      inflation_layer:
+        plugin:            "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius:  0.40
+
+      always_send_full_costmap: true
+
+
+# ── GLOBAL COSTMAP ────────────────────────────────────────────────────────────
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      use_sim_time:      false
+      global_frame:      map
+      robot_base_frame:  base_footprint
+      update_frequency:  1.0
+      publish_frequency: 1.0
+      # No rolling_window — costmap uses full /map extent from static_layer.
+      # When /map is populated, the global costmap reflects the entire known area.
+      robot_radius:      0.30
+      resolution:        0.05
+      track_unknown_space: true
+      # Generous tolerance: map→odom from slam_toolbox may lag slightly.
+      transform_tolerance: 1.0
+
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        # TRANSIENT_LOCAL: receives the LAST /map published by slam_toolbox
+        # even if the costmap subscribes after the map was first published.
+        # slam_toolbox publishes /map with TRANSIENT_LOCAL by default in Humble.
+        map_subscribe_transient_local: true
+
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: scan
+        scan:
+          topic:               /scan
+          data_type:           LaserScan
+          max_obstacle_height: 2.0
+          clearing:            true
+          marking:             true
+          # FIX: explicit false — .inf rays are "no return", not obstacles.
+          # Previously absent (defaulted to false), now explicit to prevent
+          # future regressions if the Nav2 default ever changes.
+          inf_is_valid:        false
+          raytrace_max_range:  10.0
+          raytrace_min_range:  0.0
+          obstacle_max_range:  9.5
+          obstacle_min_range:  0.0
+
+      inflation_layer:
+        plugin:              "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius:    0.40
+
+      always_send_full_costmap: true
