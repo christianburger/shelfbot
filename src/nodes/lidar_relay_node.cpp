@@ -31,9 +31,8 @@ public:
         frame_id_ = get_parameter("frame_id").as_string();
 
         // ── Subscriber ────────────────────────────────────────────────────
-        // Firmware publishes RELIABLE; we must match to avoid silent QoS drop.
+        // Firmware publishes RELIABLE; match it.
         auto sub_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable();
-
         sub_ = create_subscription<sensor_msgs::msg::LaserScan>(
             "/shelfbot_firmware/laser_scan",
             sub_qos,
@@ -42,13 +41,14 @@ public:
             });
 
         // ── Publisher ─────────────────────────────────────────────────────
-        // Nav2 and slam_toolbox subscribe to /scan with BEST_EFFORT.
+        // Use RELIABLE to be compatible with ALL subscribers (BEST_EFFORT + RELIABLE).
+        // This matches Nav2's default costmap QoS and still works with slam_toolbox.
         pub_ = create_publisher<sensor_msgs::msg::LaserScan>(
-            "/scan", rclcpp::SensorDataQoS());
+            "/scan", rclcpp::SystemDefaultsQoS());   // RELIABLE, KeepLast(10), Volatile durability
 
         RCLCPP_INFO(get_logger(),
             "[%s] relay /shelfbot_firmware/laser_scan (RELIABLE) "
-            "→ /scan (BEST_EFFORT)  frame_id='%s'  timestamp preserved",
+            "→ /scan (RELIABLE)  frame_id='%s'  timestamp preserved",
             LOG_TAG, frame_id_.c_str());
     }
 
