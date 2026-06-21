@@ -1,24 +1,126 @@
-# Configuration for robot_localization EKF
+# ekf.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# robot_localization EKF for shelfbot.
+#
+# TOPIC CHAIN (must match before enabling):
+#
+#   /wheel_odom_raw         ← four_wheel_drive_odometry.cpp  (publish_tf: false)
+#         ↓
+#   ekf_filter_node  →  /odom  (remapped from odometry/filtered in launch file)
+#         ↓ (also broadcasts odom→base_footprint TF — the ONLY broadcaster)
+#   slam_toolbox             (consumes /odom, publishes map→odom TF)
+#         ↓ (pose fed back as /slam_pose via slam_pose_bridge_node)
+#   ekf_filter_node          (fuses wheel vx/wz + slam x,y,yaw)
+#
+# C++ PREREQUISITES (must be applied before enabling this node):
+#
+#   In four_wheel_drive_odometry.cpp:
+#     1. Change publisher topic from "odom" to "wheel_odom_raw"
+#     2. Add parameter "publish_tf" (default false when EKF is present)
+#     3. Gate broadcast_tf() behind the publish_tf parameter
+#
+#   In four_wheel_drive_hardware_interface.cpp:
+#     Pass publish_tf=false to FourWheelDriveOdometry constructor when EKF is running.
+#
+# SENSOR INPUTS:
+#   odom0  = /wheel_odom_raw    only vx (linear.x) and wz (angular.z) trusted
+#   pose0  = /slam_pose         x, y, yaw from slam_toolbox (via bridge node)
+#
+# FRAMES:
+#   world_frame: odom    EKF operates in odom frame for short-term consistency.
+#                        slam_toolbox still provides map→odom at the boundary.
+#                        Using world_frame: map would make the EKF responsible
+#                        for the full map→base_footprint chain which conflicts
+#                        with slam_toolbox's map→odom publication.
+# ─────────────────────────────────────────────────────────────────────────────
+
 ekf_filter_node:
   ros__parameters:
     frequency: 30.0
     sensor_timeout: 0.1
     two_d_mode: true
-    transform_time_offset: 0.1
+
+    # EKF publishes the odom→base_footprint TF.
+    # CRITICAL: set publish_tf: false in FourWheelDriveOdometry when this is true.
+    # Two nodes broadcasting the same TF causes "extrapolation into the future"
+    # errors in the controller because the TF buffer gets two conflicting entry
+    # streams with slightly different timestamps.
+    publish_tf: true
+
+    # Timestamp offset added to the published TF stamp.
+    # Keep at 0.0 — the EKF output is already at the current time.
+    transform_time_offset: 0.0
+
+    # How long to wait for a TF lookup before giving up.
+    # 0.1 s is adequate; the EKF runs at 30 Hz so TF entries are 33 ms apart.
     transform_timeout: 0.1
+
     print_diagnostics: true
     debug: false
 
-    map_frame: map
-    odom_frame: odom
-    base_link_frame: base_link
+    map_frame:       map
+    odom_frame:      odom
+    base_link_frame: base_footprint
+
+    # world_frame = odom means EKF maintains the odom→base_footprint TF.
+    # slam_toolbox separately maintains map→odom.
+    # Do NOT set this to map unless you remove slam_toolbox's TF publication.
     world_frame: odom
 
-    odom0: /odom
-    odom0_config: [true,  true,  false,
-                   false, false, true,
+    # ── Wheel odometry ────────────────────────────────────────────────────────
+    # Only trust forward velocity (vx) and yaw rate (wz) from wheel encoders.
+    # Skid-steer robots have significant wheel slip in x/y and the measured
+    # position integrates that slip — we let slam_toolbox correct position.
+    # The config vector is [x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az]
+    odom0: /wheel_odom_raw
+    odom0_config: [false, false, false,   # x, y, z position — NOT trusted (slip)
+                   false, false, false,   # roll, pitch, yaw — NOT from odom
+                   true,  false, false,   # vx only — forward velocity trusted
+                   false, false, true,    # wz — yaw rate trusted
+                   false, false, false]   # accelerations — not available
+    odom0_differential: false
+    odom0_relative: false
+    odom0_queue_size: 5
+
+    # ── slam_toolbox pose feedback ────────────────────────────────────────────
+    # slam_toolbox publishes map→odom TF but no direct pose topic.
+    # A slam_pose_bridge_node must look up map→base_footprint and republish
+    # as PoseWithCovarianceStamped on /slam_pose.
+    # Trust x, y, yaw from SLAM; ignore z, roll, pitch (2D robot).
+    pose0: /slam_pose
+    pose0_config: [true,  true,  false,   # x, y trusted from SLAM
+                   false, false, true,    # yaw trusted from SLAM
                    false, false, false,
                    false, false, false,
                    false, false, false]
-    odom0_differential: false
-    odom0_relative: false
+    pose0_differential: false
+    pose0_relative: false
+    pose0_queue_size: 5
+
+    # Mahalanobis distance threshold for rejecting bad SLAM pose estimates.
+    # 2.0 = reject if SLAM pose is >2 sigma from EKF prediction.
+    # Prevents a momentary SLAM tracking failure from corrupting the fused pose.
+    # Increase to 4.0 if legitimate SLAM corrections are being rejected.
+    pose0_rejection_threshold: 2.0
+    pose0_dynamic_rejection_threshold: 4.0
+
+    # ── Process noise covariance ──────────────────────────────────────────────
+    # Diagonal 15×15 matrix (x, y, z, r, p, y, vx, vy, vz, vr, vp, vy, ax, ay, az).
+    # Higher values = trust sensor measurements more, predict less.
+    # Lower values = trust the motion model more, resist sudden sensor jumps.
+    # Current values are conservative starting points for a 50 kg skid-steer robot.
+    process_noise_covariance: [0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.06, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.06, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.025,0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.025,0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.04, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.02, 0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.015]

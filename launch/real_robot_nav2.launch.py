@@ -20,6 +20,7 @@ def generate_launch_description():
     slam_params        = os.path.join(pkg_share, 'config', 'slam_toolbox_params.yaml')
     rviz_config        = os.path.join(pkg_share, 'config', 'nav2_troubleshoot.rviz')
     camera_info_url    = 'file://' + os.path.join(pkg_share, 'config', 'esp32_cam_calibration.yaml')
+    ekf_config         = os.path.join(pkg_share, 'config', 'ekf.yaml')
 
     # ── Robot description ──────────────────────────────────────────────────────
     doc = xacro.process_file(xacro_file, mappings={'communication_type': 'microros'})
@@ -103,7 +104,41 @@ def generate_launch_description():
     )
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TIER 3  (t=6 s) – slam_toolbox
+    # TIER 3  (t=5 s) – EKF
+    #
+    # PREREQUISITE: four_wheel_drive_odometry.cpp must publish to /wheel_odom_raw
+    # (not /odom) and must have publish_tf set to false so only the EKF owns
+    # the odom→base_footprint TF.  See notes in ekf.yaml.
+    #
+    # The EKF remaps its filtered output to /odom so all downstream consumers
+    # (Nav2, slam_toolbox) see a single authoritative /odom topic.
+    #
+    # CRITICAL: only ONE node must broadcast odom→base_footprint at a time.
+    # Having both the raw odometry C++ code and the EKF publish this TF
+    # simultaneously causes the "extrapolation into the future" errors in
+    # the controller_server because the TF buffer receives conflicting entries
+    # from two sources with slightly different timestamps.
+    # ══════════════════════════════════════════════════════════════════════════
+
+    ekf_node = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_filter_node',
+        output='screen',
+        parameters=[ekf_config],
+        remappings=[
+            # EKF publishes filtered odometry here; remap so Nav2 sees /odom
+            ('odometry/filtered', '/odom'),
+        ],
+    )
+
+    delay_ekf = TimerAction(period=5.0, actions=[ekf_node])
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # TIER 4  (t=7 s) – slam_toolbox
+    #
+    # Delayed after EKF so slam_toolbox's first scan lookup finds a valid
+    # odom→base_footprint TF in the EKF's buffer, not the raw odometry's.
     # ══════════════════════════════════════════════════════════════════════════
 
     slam_toolbox = IncludeLaunchDescription(
@@ -116,10 +151,30 @@ def generate_launch_description():
         }.items(),
     )
 
-    delay_slam = TimerAction(period=6.0, actions=[slam_toolbox])
+    delay_slam = TimerAction(period=7.0, actions=[slam_toolbox])
+
+    # ── Slam pose bridge (C++) ──────────────────────────────────────────────
+    # Bridges slam_toolbox's map→base_footprint TF into a PoseWithCovarianceStamped
+    # on /slam_pose for the EKF to fuse as pose0.
+    # Starts 1 second after slam_toolbox to ensure the TF is already being published.
+    slam_pose_bridge = Node(
+        package='shelfbot',
+        executable='slam_pose_bridge_node',
+        name='slam_pose_bridge_node',
+        output='screen',
+        parameters=[{
+            'publish_rate_hz': 5.0,
+            'map_frame':       'map',
+            'base_frame':      'base_footprint',
+            'tf_timeout_s':    0.3,
+        }],
+        arguments=['--ros-args', '--log-level', 'info'],
+    )
+
+    delay_slam_pose_bridge = TimerAction(period=8.0, actions=[slam_pose_bridge])
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TIER 4  (t=8 s) – AprilTag detector
+    # TIER 5  (t=9 s) – AprilTag detector
     # ══════════════════════════════════════════════════════════════════════════
 
     apriltag_detector = Node(
@@ -136,14 +191,21 @@ def generate_launch_description():
         respawn_delay=3.0,
     )
 
-    delay_perception = TimerAction(period=8.0, actions=[apriltag_detector])
+    delay_perception = TimerAction(period=9.0, actions=[apriltag_detector])
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TIER 5  (t=12 s) – Nav2
+    # TIER 6  (t=14 s) – Nav2
     #
-    # FIX: Explicitly remap controller_server's cmd_vel output to /cmd_vel_nav.
-    # Without this, controller_server publishes to the default topic and
-    # velocity_smoother never receives commands.
+    # Delayed 2 s longer than before so slam_toolbox has had 7 s to build at
+    # least one complete map→odom TF entry before the global costmap's
+    # message filter starts processing laser_link scans.  Previously scans
+    # arrived with firmware timestamps that were already 1-2 s old by the
+    # time the global costmap tried to look up the TF, exceeding the 1.0 s
+    # transform_tolerance and causing the message filter to drop them.
+    #
+    # This extra headroom — combined with the transform_tolerance increase in
+    # nav2_params.yaml — eliminates the "timestamp earlier than all available"
+    # drops from the global_costmap.
     # ══════════════════════════════════════════════════════════════════════════
 
     nav2 = IncludeLaunchDescription(
@@ -154,15 +216,14 @@ def generate_launch_description():
             'params_file':  nav2_params,
             'use_sim_time': 'false',
             'autostart':    'true',
-            # ─── CRITICAL: remap controller_server's cmd_vel to /cmd_vel_nav ───
             'remappings':   '[("controller_server/cmd_vel", "/cmd_vel_nav")]',
         }.items(),
     )
 
-    delay_nav2 = TimerAction(period=12.0, actions=[nav2])
+    delay_nav2 = TimerAction(period=14.0, actions=[nav2])
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TIER 6  (t=20 s) – RViz
+    # TIER 7  (t=22 s) – RViz
     # ══════════════════════════════════════════════════════════════════════════
 
     rviz_node = Node(
@@ -174,15 +235,18 @@ def generate_launch_description():
         output='screen',
     )
 
-    delay_rviz = TimerAction(period=20.0, actions=[rviz_node])
+    delay_rviz = TimerAction(period=22.0, actions=[rviz_node])
 
+    # ── LaunchDescription with all actions ────────────────────────────────────
     return LaunchDescription([
         robot_state_pub,
         control_node,
         lidar_relay,
         camera_publisher,
+        delay_ekf,
         delay_controllers,
         delay_slam,
+        delay_slam_pose_bridge,   # <-- NEW: C++ bridge node
         delay_perception,
         delay_nav2,
         delay_rviz,

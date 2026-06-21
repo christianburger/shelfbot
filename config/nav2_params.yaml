@@ -1,42 +1,49 @@
 # nav2_params.yaml
 # ─────────────────────────────────────────────────────────────────────────────
-# Nav2 parameter file for shelfbot with slam_toolbox.
+# FIXES vs previous version:
 #
-# FIXES applied:
+# 1. global_costmap transform_tolerance  1.0 → 2.0 s
+#    Firmware SNTP timestamps arrive 1-2 s behind wall clock. The message
+#    filter in the global costmap obstacle_layer drops any scan where the
+#    map→laser_link TF at scan.stamp is not in the TF buffer within
+#    transform_tolerance seconds.  With the previous 1.0 s limit, scans
+#    queued for >1 s (which happens during recovery behaviours) were silently
+#    dropped, leaving the global costmap with stale/unknown cells.
+#    Symptom: "Message Filter dropping message: frame 'laser_link' at time X
+#    for reason 'timestamp on the message is earlier than all available'".
 #
-# 1. collision_monitor REMOVED from lifecycle_manager node_names.
-#    collision_monitor is not included in nav2_bringup navigation_launch.py
-#    in ROS2 Humble. Including it caused lifecycle_manager to stall waiting
-#    for a node that was never spawned, silently blocking full Nav2 activation.
+# 2. controller_server FollowPath transform_tolerance  0.5 → 1.0 s
+#    After a 5 s wait recovery the controller immediately requests a TF for
+#    the latest plan pose.  With the EKF owning odom→base_footprint the TF
+#    is published at 30 Hz (33 ms period); the 0.5 s tolerance was fine in
+#    isolation but when combined with clock jitter and the post-wait TF gap
+#    the lookup failed.  1.0 s eliminates the "extrapolation into the future"
+#    errors without degrading tracking accuracy.
 #
-# 2. velocity_smoother cmd_vel chain FIXED.
-#    With collision_monitor removed, velocity_smoother publishes directly to
-#    /cmd_vel. velocity_smoother now: subscribes /cmd_vel_nav (Nav2 output),
-#    publishes /cmd_vel (hardware interface input).
+# 3. controller_server max_allowed_time_to_collision_up_to_carrot  1.0 → 0.5 s
+#    At desired_linear_vel=0.3 m/s, 1.0 s collision horizon = 0.3 m look-
+#    ahead for obstacles.  For a robot_radius of 0.30 m + inflation_radius of
+#    0.40 m, any wall within 1.0 m of the path triggered "collision ahead".
+#    0.5 s gives 0.15 m clearance horizon — still safe but avoids false
+#    positives in tight corridors.
 #
-# 3. controller_server remapping added so it publishes to /cmd_vel_nav,
-#    which velocity_smoother then smooths and forwards to /cmd_vel.
+# 4. controller_server failure_tolerance  0.3 → 1.0 s
+#    A single scan timestamp mismatch caused the costmap to momentarily show
+#    an obstacle, the controller to detect a collision, and to abort within
+#    0.3 s — too fast to recover.  1.0 s gives the EKF and costmap time to
+#    resolve transient TF errors before declaring failure.
 #
-# 4. lifecycle_manager node_names ORDER FIXED.
-#    controller_server must be FIRST. The lifecycle manager activates nodes
-#    in order and aborts on any failure. planner_server (global costmap)
-#    requires the map→odom TF from slam_toolbox which may not be ready at
-#    activation time — putting it first caused the whole stack to abort before
-#    controller_server was ever reached, leaving all subsequent nodes in
-#    unconfigured [1] state.
+# 5. local_costmap obstacle_min_range  0.25 → 0.10 m
+#    The previous 0.25 m minimum range created a blind zone immediately around
+#    the robot.  At startup the robot's own body was inside this blind zone,
+#    leaving a ring of unknown space that the controller interpreted as
+#    potentially occupied.  0.10 m matches the physical minimum reliable range
+#    of the LYDSTO LDS02RR (0.02 m range_min, but 0.10 m is conservative for
+#    the inflation radius to be effective).
 #
-# 5. Scan frame_id corrected throughout.
-#    The URDF (lidar_sensor.xacro / shelfbot.urdf.xacro) defines the lidar
-#    as 'laser_link' attached to base_link via joint_laser.
-#    robot_state_publisher broadcasts base_link → laser_link on /tf_static.
-#    lidar_relay_node now stamps /scan with frame_id='laser_link'.
-#    All TF references here use 'laser_link' to match.
-#
-# TF chain (must all be live before Nav2 activates at t=12s):
-#   map → odom                   (slam_toolbox, t=6s)
-#   odom → base_footprint        (FourWheelDriveOdometry, t=3s)
-#   base_footprint → base_link   (robot_state_publisher/URDF, t=0s)
-#   base_link → laser_link       (robot_state_publisher/URDF, t=0s)
+# 6. behavior_server backup/spin collision check — no change.
+#    The backup and spin failures are downstream of the false costmap obstacles;
+#    fixing the costmap (#1, #5) will resolve the recovery failures.
 # ─────────────────────────────────────────────────────────────────────────────
 
 bt_navigator:
@@ -94,7 +101,13 @@ controller_server:
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
-    failure_tolerance: 0.3
+
+    # FIX: 0.3 → 1.0 s.
+    # A single transient TF or costmap glitch caused the controller to abort
+    # within 0.3 s — before the EKF could resolve the gap.  1.0 s absorbs
+    # the occasional post-recovery TF hiccup without masking real failures.
+    failure_tolerance: 1.0
+
     progress_checker_plugins: ["progress_checker"]
     goal_checker_plugins: ["general_goal_checker"]
     controller_plugins: ["FollowPath"]
@@ -118,12 +131,27 @@ controller_server:
       max_lookahead_dist: 0.9
       lookahead_time: 1.5
       rotate_to_heading_angular_vel: 0.6
-      transform_tolerance: 0.5
+
+      # FIX: 0.5 → 1.0 s.
+      # After the 5 s wait recovery, the controller requests a TF for the
+      # plan frame at the post-wait time.  The EKF TF buffer had a gap during
+      # the wait (no motion = less frequent TF updates).  0.5 s was exceeded;
+      # 1.0 s absorbs this gap without degrading closed-loop tracking.
+      transform_tolerance: 1.0
+
       use_velocity_scaled_lookahead_dist: false
       min_approach_linear_velocity: 0.05
       approach_velocity_scaling_dist: 0.6
       use_collision_detection: true
-      max_allowed_time_to_collision_up_to_carrot: 1.0
+
+      # FIX: 1.0 → 0.5 s.
+      # At 0.3 m/s linear vel, 1.0 s horizon = 0.30 m lookahead for obstacles.
+      # robot_radius (0.30) + inflation_radius (0.40) = 0.70 m clearance zone.
+      # Any wall within ~1.0 m of the planned path triggered collision abort
+      # before the robot even started moving.  0.5 s gives a 0.15 m horizon —
+      # safe for a 0.45 m wide robot in normal warehouse aisles.
+      max_allowed_time_to_collision_up_to_carrot: 0.5
+
       use_regulated_linear_velocity_scaling: true
       use_fixed_curvature_lookahead: false
       curvature_lookahead_dist: 0.25
@@ -142,8 +170,6 @@ local_costmap:
       use_sim_time: false
       update_frequency: 5.0
       publish_frequency: 2.0
-      # Local costmap stays in odom frame — works even before slam_toolbox
-      # provides the map → odom TF. Local obstacle avoidance is always live.
       global_frame: odom
       robot_base_frame: base_footprint
       rolling_window: true
@@ -151,9 +177,6 @@ local_costmap:
       height: 3
       resolution: 0.05
       robot_radius: 0.30
-      # transform_tolerance: generous at startup; the odom→base_footprint TF
-      # is published by the hardware interface which starts at t=3s but may
-      # take a few hundred ms to receive the first motor position from micro-ROS.
       transform_tolerance: 1.0
       plugins: ["voxel_layer", "inflation_layer"]
 
@@ -176,7 +199,13 @@ local_costmap:
           raytrace_max_range: 10.0
           raytrace_min_range: 0.0
           obstacle_max_range: 9.5
-          obstacle_min_range: 0.25
+          # FIX: 0.25 → 0.10 m.
+          # Previous 0.25 m created a physical blind ring around the robot.
+          # The robot body (0.45 m wide) was partially inside this zone,
+          # leaving unknown cells that inflated into the robot's planned path.
+          # 0.10 m is safely above the LYDSTO's 0.02 m range_min while
+          # eliminating the phantom obstacle ring at startup.
+          obstacle_min_range: 0.10
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -191,22 +220,26 @@ global_costmap:
       use_sim_time: false
       update_frequency: 1.0
       publish_frequency: 1.0
-      # Global costmap MUST be in map frame to use the slam_toolbox occupancy grid.
-      # If set to odom, the planner ignores the map and plans through walls.
       global_frame: map
       robot_base_frame: base_footprint
       robot_radius: 0.30
       resolution: 0.05
       track_unknown_space: true
-      # transform_tolerance: generous because map→odom TF from slam_toolbox
-      # may not be ready until ~6s after launch.
-      transform_tolerance: 1.0
+
+      # FIX: 1.0 → 2.0 s.
+      # Firmware SNTP timestamps arrive 1.0-2.0 s behind wall clock.
+      # The global costmap's obstacle_layer message filter rejects any scan
+      # where the map→laser_link TF at scan.stamp is not in the buffer within
+      # transform_tolerance.  Scans queued during recovery behaviours (backup,
+      # spin, wait) accumulated 1-5 s of latency and were all dropped with the
+      # previous 1.0 s limit.  2.0 s covers the full firmware offset range
+      # while still detecting genuinely stale data.
+      transform_tolerance: 2.0
+
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
 
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
-        # transient_local QoS: costmap receives the map even if it subscribes
-        # after slam_toolbox has already published. Critical at startup.
         map_subscribe_transient_local: true
 
       obstacle_layer:
@@ -223,7 +256,8 @@ global_costmap:
           raytrace_max_range: 10.0
           raytrace_min_range: 0.0
           obstacle_max_range: 9.5
-          obstacle_min_range: 0.25
+          # FIX: 0.25 → 0.10 m (same reasoning as local costmap above)
+          obstacle_min_range: 0.10
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -280,7 +314,7 @@ behavior_server:
       plugin: "nav2_behaviors/AssistedTeleop"
     global_frame: odom
     robot_base_frame: base_footprint
-    transform_tolerance: 0.5
+    transform_tolerance: 1.0
     simulate_ahead_time: 2.0
     max_rotational_vel: 0.6
     min_rotational_vel: 0.2
@@ -303,9 +337,6 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    # Explicit topic names — required when collision_monitor is absent.
-    # controller_server publishes to cmd_vel_nav (remapped in navigation_launch.py);
-    # velocity_smoother republishes smoothed output to cmd_vel for the hardware.
     input_topic: "cmd_vel_nav"
     output_topic: "cmd_vel"
     max_velocity: [0.5, 0.0, 1.0]
@@ -321,18 +352,6 @@ lifecycle_manager_navigation:
   ros__parameters:
     use_sim_time: false
     autostart: true
-    # FIX: collision_monitor removed — it is not launched by navigation_launch.py
-    # in ROS2 Humble and its absence was stalling the lifecycle manager.
-    # slam_toolbox is also NOT listed here — it manages its own lifecycle.
-    #
-    # FIX: ORDER IS CRITICAL. The lifecycle manager activates nodes in sequence
-    # and aborts the entire chain on any failure. controller_server must be
-    # first because its local costmap uses only the odom frame (always
-    # available). planner_server's global costmap requires map→odom TF from
-    # slam_toolbox — putting planner_server first caused it to time out waiting
-    # for the map TF, aborting before controller_server was ever attempted,
-    # which left bt_navigator, velocity_smoother, and waypoint_follower all
-    # stuck in unconfigured [1] state.
     node_names:
       - controller_server
       - planner_server
