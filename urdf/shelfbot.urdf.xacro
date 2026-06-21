@@ -56,12 +56,10 @@
     </inertial>
   </link>
 
-  <!-- base_footprint sits on the ground; base_link centre is raised by
-       half its height plus one wheel radius -->
   <joint name="joint_base_footprint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
-    <origin xyz="0 0 ${base_height/2 + wheel_radius}" rpy="0 0 0"/>
+    <origin xyz="0 0 ${base_height/2 + wheel_radius}" rpy="0 0 ${-pi/2}"/>
   </joint>
 
   <!-- ── Motors (fixed to base_link) ───────────────────────────────── -->

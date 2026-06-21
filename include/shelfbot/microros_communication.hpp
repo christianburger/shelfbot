@@ -36,7 +36,7 @@ private:
     bool state_received_ = false;
 
     rclcpp::Time last_received_time_;
-    rclcpp::Duration max_allowed_interval_{1, 0}; // 1 second
+    rclcpp::Duration max_allowed_interval_{2, 0};
 };
 
 }

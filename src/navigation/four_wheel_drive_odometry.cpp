@@ -14,8 +14,8 @@ FourWheelDriveOdometry::FourWheelDriveOdometry(
   : node_(node),
     clock_(clock),
     wheel_separation_(wheel_separation),
-    wheel_radius_(wheel_radius)
-{
+    wheel_radius_(wheel_radius) {
+
   // ── publish_tf parameter ──────────────────────────────────────────────────
   // When the EKF (robot_localization) is running, the EKF owns the
   // odom→base_footprint TF.  Two nodes broadcasting the same TF edge
@@ -137,44 +137,34 @@ void FourWheelDriveOdometry::update(
         broadcast_tf(stamp);
     }
 }
+    void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time& stamp) {
+    if (!tf_broadcaster_) return;
 
-void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time& stamp)
-{
-  if (!tf_broadcaster_) return;  // Safety guard — should not happen
+    geometry_msgs::msg::TransformStamped odom_tf;
+    odom_tf.header.stamp    = stamp;
+    odom_tf.header.frame_id = "odom";
+    odom_tf.child_frame_id  = "base_footprint";
 
-  geometry_msgs::msg::TransformStamped odom_tf;
-  odom_tf.header.stamp    = stamp;
-  odom_tf.header.frame_id = "odom";
-  odom_tf.child_frame_id  = "base_footprint";
+    odom_tf.transform.translation.x = x_;
+    odom_tf.transform.translation.y = y_;
+    odom_tf.transform.translation.z = 0.0;
 
-  odom_tf.transform.translation.x = x_;
-  odom_tf.transform.translation.y = y_;
-  odom_tf.transform.translation.z = 0.0;
+    // No yaw offset. The URDF joint_base_footprint now carries rpy="0 0 -pi/2"
+    // which aligns base_link's physical forward (+Y) with base_footprint's +X.
+    // The odometry integrates along odom +X at theta_=0, which is correct per
+    // REP-103. Both the TF and the /wheel_odom_raw message now use the same theta_.
+    odom_tf.transform.rotation =
+        tf2::toMsg(tf2::Quaternion(
+          0, 0,
+          std::sin(theta_ / 2.0),
+          std::cos(theta_ / 2.0)));
 
-  // ── TF YAW OFFSET ─────────────────────────────────────────────────────────
-  // Applies a fixed −π/2 correction to theta_ before broadcasting.
-  // This compensates for the firmware encoder convention where positive
-  // encoder direction is rotated 90° from ROS forward (+X in odom frame).
-  //
-  // The offset is ONLY applied to the TF broadcast, not to calculate_pose().
-  // The /odom message pose uses raw theta_ for consistency with the twist field
-  // (used by the EKF's velocity integration).  Applying the offset there would
-  // decouple the position integral from the velocity integral in the EKF.
-  // ─────────────────────────────────────────────────────────────────────────
-  double final_theta = theta_ - 1.57079632679;  // theta_ − π/2
-  odom_tf.transform.rotation =
-      tf2::toMsg(tf2::Quaternion(
-        0, 0,
-        std::sin(final_theta / 2.0),
-        std::cos(final_theta / 2.0)));
+    tf_broadcaster_->sendTransform(odom_tf);
 
-  tf_broadcaster_->sendTransform(odom_tf);
-
-  log_zip("ODO", "TF", {{"x", x_}, {"y", y_}, {"th_adj", final_theta}});
+    log_zip("ODO", "TF", {{"x", x_}, {"y", y_}, {"th", theta_}});
 }
 
-nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const
-{
+nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const {
   nav_msgs::msg::Odometry odom;
   odom.header.stamp    = clock_->now();
   odom.header.frame_id = "odom";
@@ -183,8 +173,7 @@ nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const
   return odom;
 }
 
-geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
-{
+geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const {
   geometry_msgs::msg::Pose pose;
   pose.position.x = x_;
   pose.position.y = y_;
@@ -205,9 +194,7 @@ geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
   return pose;
 }
 
-geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
-    double left_diff_m, double right_diff_m, double dt_s)
-{
+geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(double left_diff_m, double right_diff_m, double dt_s) {
   if (dt_s < 1e-9) { dt_s = 1e-9; }
 
   double left_vel  = left_diff_m  / dt_s;
@@ -222,8 +209,7 @@ geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
   return twist;
 }
 
-std::array<double, 36> FourWheelDriveOdometry::calculate_pose_covariance()
-{
+std::array<double, 36> FourWheelDriveOdometry::calculate_pose_covariance() {
   pose_covariance_.fill(0.0);
   pose_covariance_[0]  = 0.1;
   pose_covariance_[7]  = 0.1;
@@ -231,12 +217,11 @@ std::array<double, 36> FourWheelDriveOdometry::calculate_pose_covariance()
   return pose_covariance_;
 }
 
-std::array<double, 36> FourWheelDriveOdometry::calculate_twist_covariance()
-{
+std::array<double, 36> FourWheelDriveOdometry::calculate_twist_covariance() {
   twist_covariance_.fill(0.0);
   twist_covariance_[0]  = 0.1;
   twist_covariance_[35] = 0.2;
   return twist_covariance_;
 }
 
-}  // namespace shelfbot
+}
