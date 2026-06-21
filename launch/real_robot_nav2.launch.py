@@ -153,26 +153,6 @@ def generate_launch_description():
 
     delay_slam = TimerAction(period=7.0, actions=[slam_toolbox])
 
-    # ── Slam pose bridge (C++) ──────────────────────────────────────────────
-    # Bridges slam_toolbox's map→base_footprint TF into a PoseWithCovarianceStamped
-    # on /slam_pose for the EKF to fuse as pose0.
-    # Starts 1 second after slam_toolbox to ensure the TF is already being published.
-    slam_pose_bridge = Node(
-        package='shelfbot',
-        executable='slam_pose_bridge_node',
-        name='slam_pose_bridge_node',
-        output='screen',
-        parameters=[{
-            'publish_rate_hz': 5.0,
-            'map_frame':       'map',
-            'base_frame':      'base_footprint',
-            'tf_timeout_s':    0.3,
-        }],
-        arguments=['--ros-args', '--log-level', 'info'],
-    )
-
-    delay_slam_pose_bridge = TimerAction(period=8.0, actions=[slam_pose_bridge])
-
     # ══════════════════════════════════════════════════════════════════════════
     # TIER 5  (t=9 s) – AprilTag detector
     # ══════════════════════════════════════════════════════════════════════════
@@ -246,7 +226,6 @@ def generate_launch_description():
         delay_ekf,
         delay_controllers,
         delay_slam,
-        delay_slam_pose_bridge,   # <-- NEW: C++ bridge node
         delay_perception,
         delay_nav2,
         delay_rviz,

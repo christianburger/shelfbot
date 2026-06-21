@@ -44,14 +44,15 @@ namespace shelfbot {
 //   with the twist field for EKF sensor fusion).
 // ─────────────────────────────────────────────────────────────────────────────
 
-class FourWheelDriveOdometry
-{
+class FourWheelDriveOdometry {
+
 public:
   FourWheelDriveOdometry(
-    std::shared_ptr<rclcpp::Node> node,
-    const rclcpp::Clock::SharedPtr& clock,
-    double wheel_separation,
-    double wheel_radius);
+      std::shared_ptr<rclcpp::Node> node,
+      const rclcpp::Clock::SharedPtr& clock,
+      double wheel_separation,
+      double wheel_radius,
+      bool publish_tf = false);   // default false: EKF owns the TF
 
   // Called every control cycle from the hardware interface's read() path.
   void update(
@@ -96,10 +97,10 @@ private:
   double prev_right_pos_{0.0};
 
   double x_{0.0}, y_{0.0}, theta_{0.0};
-  std::array<double, 36> pose_covariance_;
-  std::array<double, 36> twist_covariance_;
+  std::array<double, 36> pose_covariance_{};
+  std::array<double, 36> twist_covariance_{};
 };
 
-}  // namespace shelfbot
+}
 
 #endif  // SHELFBOT_FOUR_WHEEL_DRIVE_ODOMETRY_HPP_

@@ -6,15 +6,19 @@
 
 namespace shelfbot {
 
-FourWheelDriveOdometry::FourWheelDriveOdometry(
-    std::shared_ptr<rclcpp::Node> node,
-    const rclcpp::Clock::SharedPtr& clock,
-    double wheel_separation,
-    double wheel_radius)
-  : node_(node),
-    clock_(clock),
-    wheel_separation_(wheel_separation),
-    wheel_radius_(wheel_radius) {
+    FourWheelDriveOdometry::FourWheelDriveOdometry(
+        std::shared_ptr<rclcpp::Node> node, const rclcpp::Clock::SharedPtr& clock, double wheel_separation, double wheel_radius, bool publish_tf) : node_(node), clock_(clock), wheel_separation_(wheel_separation), wheel_radius_(wheel_radius), publish_tf_(publish_tf) { // removed: publish_tf_ = node_->declare_parameter<bool>("odometry_publish_tf", true);
+        odom_pub_ = node_->create_publisher<nav_msgs::msg::Odometry>("wheel_odom_raw", 10);
+
+        if (publish_tf_) {
+            tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(node_);
+            log_info("FourWheelDriveOdometry", "Constructor",
+                     "TF broadcasting ENABLED (raw odometry owns odom→base_footprint)");
+        } else {
+            log_info("FourWheelDriveOdometry", "Constructor",
+                     "TF broadcasting DISABLED (EKF owns odom→base_footprint)");
+        }
+        // rest unchanged
 
   // ── publish_tf parameter ──────────────────────────────────────────────────
   // When the EKF (robot_localization) is running, the EKF owns the

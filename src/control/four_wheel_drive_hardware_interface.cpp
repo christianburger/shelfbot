@@ -47,10 +47,7 @@ FourWheelDriveHardwareInterface::on_init(const hardware_interface::HardwareInfo&
         return hardware_interface::CallbackReturn::ERROR;
     }
 
-    odometry_ = std::make_unique<FourWheelDriveOdometry>(
-        node_, node_->get_clock(),
-        std::stod(info_.hardware_parameters.at("wheel_separation")),
-        std::stod(info_.hardware_parameters.at("wheel_radius")));
+    odometry_ = std::make_unique<FourWheelDriveOdometry>(node_, node_->get_clock(), std::stod(info_.hardware_parameters.at("wheel_separation")), std::stod(info_.hardware_parameters.at("wheel_radius")), false );
 
     // ── log_zip: init complete ────────────────────────────────────────────
     log_zip("HW", "INIT", {

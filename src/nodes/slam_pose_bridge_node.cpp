@@ -1,4 +1,3 @@
-// slam_pose_bridge_node.cpp
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <tf2_ros/buffer.h>
