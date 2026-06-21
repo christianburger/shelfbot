@@ -1,20 +1,6 @@
-# four_wheel_drive_controller.yaml
-# ─────────────────────────────────────────────────────────────────────────────
-# FIX: update_rate 2 → 4 Hz
-#
-# At 2 Hz the TF (odom→base_footprint) was published every 500 ms.
-# lidar_relay re-stamps scans to now-600 ms.
-# Margin ratio was 600/500 = 1.2×  — any jitter caused TF lookup failures
-# at scan.stamp in slam_toolbox and the global costmap obstacle_layer.
-#
-# At 4 Hz TF period = 250 ms.  Margin ratio = 600/250 = 2.4×.
-# tf2 interpolation at scan.stamp (now-600ms) always has bracketing entries:
-#   entries at now-750ms and now-250ms  →  interpolate at now-600ms  ✓
-# ─────────────────────────────────────────────────────────────────────────────
-
 controller_manager:
   ros__parameters:
-    update_rate: 4   # Hz  ← WAS 2;  TF period now 250 ms, margin 2.4×
+    update_rate: 20
 
     four_wheel_drive_controller:
       type: shelfbot/FourWheelDriveController

@@ -34,7 +34,7 @@
 
 slam_toolbox:
   ros__parameters:
-
+    scan_queue_size: 50
     # ── Solver ────────────────────────────────────────────────────────────────
     solver_plugin:          solver_plugins::CeresSolver
     ceres_linear_solver:    SPARSE_NORMAL_CHOLESKY
@@ -71,8 +71,8 @@ slam_toolbox:
     # ── TF timing ─────────────────────────────────────────────────────────────
     # FIX: 1.0 → 0.5 s.  controller_manager now runs at 4 Hz (250 ms period).
     # Worst-case gap at scan.stamp (now-600 ms) = 125 ms  ≪  500 ms timeout.
-    transform_timeout:    0.5
-    tf_buffer_duration:   30.0
+    transform_timeout:    2.0
+    tf_buffer_duration:   60.0
 
     # ── Laser range limits ────────────────────────────────────────────────────
     # FIX: minimum_laser_range 0.05 → 0.02  (sensor range_min = 0.02 m)
