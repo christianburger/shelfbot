@@ -1,6 +1,6 @@
 controller_manager:
   ros__parameters:
-    update_rate: 4
+    update_rate: 20
 
     four_wheel_drive_controller:
       type: shelfbot/FourWheelDriveController
@@ -11,6 +11,7 @@ controller_manager:
     hardware_interface:
       type: shelfbot/FourWheelDriveHardwareInterface
       communication_type: "microros"
+      microros_health_timeout_s: 2.0
 
 four_wheel_drive_controller:
   ros__parameters:
@@ -31,11 +32,7 @@ four_wheel_drive_controller:
     wheel_radius:     0.075
 
     # ── Command velocity timeout ──────────────────────────────────────────────
-    cmd_vel_timeout: 0.5   # seconds
-
-    # ── Odometry yaw correction ───────────────────────────────────────────────
-    # Corrects a fixed orientation error in the encoder convention.
-    odometry_yaw_correction_degrees: -90.0
+    cmd_vel_timeout: 0.5
 
     # ── Robot physical dimensions (used by URDF xacro) ───────────────────────
     base_width:  0.45
@@ -71,15 +68,15 @@ four_wheel_drive_controller:
     box_inertia: 0.000083
 
     # ── Ultrasonic sensor parameters ──────────────────────────────────────────
-    ultrasonic_pcb_x_size:         0.045
-    ultrasonic_pcb_y_size:         0.020
-    ultrasonic_pcb_z_size:         0.002
-    ultrasonic_collision_z_size:   0.015
-    ultrasonic_mass:               0.01
-    ultrasonic_transducer_radius:  0.008
-    ultrasonic_transducer_length:  0.015
+    ultrasonic_pcb_x_size:          0.045
+    ultrasonic_pcb_y_size:          0.020
+    ultrasonic_pcb_z_size:          0.002
+    ultrasonic_collision_z_size:    0.015
+    ultrasonic_mass:                0.01
+    ultrasonic_transducer_radius:   0.008
+    ultrasonic_transducer_length:   0.015
     ultrasonic_transducer_x_offset: 0.0125
-    ultrasonic_z_offset:           0.01
+    ultrasonic_z_offset:            0.01
 
     # ── Joint dynamics ────────────────────────────────────────────────────────
     joint_damping:  0.1

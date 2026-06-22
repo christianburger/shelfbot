@@ -20,7 +20,6 @@ def generate_launch_description():
     slam_params        = os.path.join(pkg_share, 'config', 'slam_toolbox_params.yaml')
     rviz_config        = os.path.join(pkg_share, 'config', 'nav2_troubleshoot.rviz')
     camera_info_url    = 'file://' + os.path.join(pkg_share, 'config', 'esp32_cam_calibration.yaml')
-    ekf_config         = os.path.join(pkg_share, 'config', 'ekf.yaml')
 
     # ── Robot description ──────────────────────────────────────────────────────
     doc = xacro.process_file(xacro_file, mappings={'communication_type': 'microros'})
@@ -102,37 +101,6 @@ def generate_launch_description():
         period=3.0,
         actions=[joint_broadcaster_spawner, drive_controller_spawner],
     )
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # TIER 3  (t=5 s) – EKF
-    #
-    # PREREQUISITE: four_wheel_drive_odometry.cpp must publish to /wheel_odom_raw
-    # (not /odom) and must have publish_tf set to false so only the EKF owns
-    # the odom→base_footprint TF.  See notes in ekf.yaml.
-    #
-    # The EKF remaps its filtered output to /odom so all downstream consumers
-    # (Nav2, slam_toolbox) see a single authoritative /odom topic.
-    #
-    # CRITICAL: only ONE node must broadcast odom→base_footprint at a time.
-    # Having both the raw odometry C++ code and the EKF publish this TF
-    # simultaneously causes the "extrapolation into the future" errors in
-    # the controller_server because the TF buffer receives conflicting entries
-    # from two sources with slightly different timestamps.
-    # ══════════════════════════════════════════════════════════════════════════
-
-    ekf_node = Node(
-        package='robot_localization',
-        executable='ekf_node',
-        name='ekf_filter_node',
-        output='screen',
-        parameters=[ekf_config],
-        remappings=[
-            # EKF publishes filtered odometry here; remap so Nav2 sees /odom
-            ('odometry/filtered', '/odom'),
-        ],
-    )
-
-    delay_ekf = TimerAction(period=5.0, actions=[ekf_node])
 
     # ══════════════════════════════════════════════════════════════════════════
     # TIER 4  (t=7 s) – slam_toolbox
@@ -223,7 +191,6 @@ def generate_launch_description():
         control_node,
         lidar_relay,
         camera_publisher,
-        delay_ekf,
         delay_controllers,
         delay_slam,
         delay_perception,
