@@ -16,7 +16,7 @@
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "geometry_msgs/msg/twist.hpp"
-#include "std_msgs/msg/float64_multi_array.hpp" // ADDED FOR DEBUGGING
+#include "std_msgs/msg/float64_multi_array.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 #include "shelfbot/shelfbot_utils.hpp"
@@ -43,7 +43,7 @@ class FourWheelDriveController : public controller_interface::ControllerInterfac
   // ROS 2 Publishers and Subscribers
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_publisher_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_subscriber_;
-  rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr direct_cmd_subscriber_; // ADDED FOR DEBUGGING
+  rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr direct_cmd_subscriber_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   
   // Controller state
@@ -58,13 +58,12 @@ class FourWheelDriveController : public controller_interface::ControllerInterfac
   // Robot parameters
   double wheel_separation_;
   double wheel_radius_;
+  double gear_ratio_;   // <-- added
 
   // Twist command state
   std::shared_ptr<geometry_msgs::msg::Twist> last_cmd_vel_;
   rclcpp::Time last_cmd_vel_time_;
   rclcpp::Duration cmd_vel_timeout_;
-
-  // System clock is accessed via get_node()->get_clock()
 };
 } 
 

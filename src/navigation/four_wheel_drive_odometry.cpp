@@ -10,30 +10,38 @@ FourWheelDriveOdometry::FourWheelDriveOdometry(
     std::shared_ptr<rclcpp::Node> node,
     const rclcpp::Clock::SharedPtr& clock,
     double wheel_separation,
-    double wheel_radius)
+    double wheel_radius,
+    double gear_ratio)
   : node_(node),
     clock_(clock),
     wheel_separation_(wheel_separation),
-    wheel_radius_(wheel_radius) {
+    wheel_radius_(wheel_radius),
+    gear_ratio_(gear_ratio)
+{
+    if (wheel_radius_ <= 0.0 || gear_ratio_ <= 0.0) {
+        RCLCPP_FATAL(node_->get_logger(),
+            "FourWheelDriveOdometry: wheel_radius (%.4f) and gear_ratio (%.4f) "
+            "must both be > 0", wheel_radius_, gear_ratio_);
+        throw std::invalid_argument("wheel_radius and gear_ratio must be > 0");
+    }
 
-  // Always broadcast odom→base_footprint
-  tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(node_);
+    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(node_);
+    odom_pub_ = node_->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
 
-  // Publish directly to /odom.
-  // slam_toolbox consumes this (via the TF chain) and publishes the
-  // correcting map→odom TF.  Nav2 consumes both /odom and /map.
-  odom_pub_ = node_->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
+    pose_covariance_.fill(0.0);
+    twist_covariance_.fill(0.0);
 
-  pose_covariance_.fill(0.0);
-  twist_covariance_.fill(0.0);
-
-  log_zip("ODO", "INIT", {{"sep", wheel_separation_}, {"rad", wheel_radius_}});
-  log_info("FourWheelDriveOdometry", "Constructor",
-           "sep=" + std::to_string(wheel_separation_) +
-           " rad=" + std::to_string(wheel_radius_));
+    log_zip("ODO", "INIT", {
+        {"sep", wheel_separation_},
+        {"rad", wheel_radius_},
+        {"gr",  gear_ratio_}
+    });
+    log_info("FourWheelDriveOdometry", "Constructor",
+             "sep=" + std::to_string(wheel_separation_) +
+             " rad=" + std::to_string(wheel_radius_) +
+             " gear_ratio=" + std::to_string(gear_ratio_));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 void FourWheelDriveOdometry::update(
     const std::vector<double>& wheel_positions,
     const rclcpp::Duration& period)
@@ -59,8 +67,6 @@ void FourWheelDriveOdometry::update(
         return;
     }
 
-    // Average each side.  [0]=FL [1]=FR [2]=BL [3]=BR
-    // All values are forward-positive after the read()-side flip in the HW interface.
     const double left_pos  = (wheel_positions[0] + wheel_positions[2]) * 0.5;
     const double right_pos = (wheel_positions[1] + wheel_positions[3]) * 0.5;
 
@@ -72,8 +78,8 @@ void FourWheelDriveOdometry::update(
         return;
     }
 
-    const double left_diff  = (left_pos  - prev_left_pos_)  * wheel_radius_;
-    const double right_diff = (right_pos - prev_right_pos_) * wheel_radius_;
+    const double left_diff  = (left_pos  - prev_left_pos_)  * wheel_radius_ / gear_ratio_;
+    const double right_diff = (right_pos - prev_right_pos_) * wheel_radius_ / gear_ratio_;
 
     prev_left_pos_  = left_pos;
     prev_right_pos_ = right_pos;
@@ -105,7 +111,6 @@ void FourWheelDriveOdometry::update(
     broadcast_tf(stamp);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time& stamp)
 {
     geometry_msgs::msg::TransformStamped tf;
@@ -117,10 +122,6 @@ void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time& stamp)
     tf.transform.translation.y = y_;
     tf.transform.translation.z = 0.0;
 
-    // No yaw correction applied here.
-    // The URDF joint_base_footprint carries rpy="0 0 -pi/2", which aligns
-    // base_link's physical forward (+Y) with base_footprint +X (REP-103).
-    // theta_ = 0 correctly means the robot faces odom +X.
     tf.transform.rotation = tf2::toMsg(
         tf2::Quaternion(0, 0,
             std::sin(theta_ / 2.0),
@@ -130,7 +131,6 @@ void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time& stamp)
     log_zip("ODO", "TF", {{"x", x_}, {"y", y_}, {"th", theta_}});
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const
 {
     nav_msgs::msg::Odometry odom;
@@ -141,7 +141,6 @@ nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const
     return odom;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
 {
     geometry_msgs::msg::Pose pose;
@@ -160,7 +159,6 @@ geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
     return pose;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
     double left_diff_m, double right_diff_m, double dt_s)
 {
@@ -177,22 +175,21 @@ geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
     return twist;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 std::array<double, 36> FourWheelDriveOdometry::calculate_pose_covariance()
 {
     pose_covariance_.fill(0.0);
-    pose_covariance_[0]  = 0.1;   // x
-    pose_covariance_[7]  = 0.1;   // y
-    pose_covariance_[35] = 0.2;   // yaw
+    pose_covariance_[0]  = 0.1;
+    pose_covariance_[7]  = 0.1;
+    pose_covariance_[35] = 0.2;
     return pose_covariance_;
 }
 
 std::array<double, 36> FourWheelDriveOdometry::calculate_twist_covariance()
 {
     twist_covariance_.fill(0.0);
-    twist_covariance_[0]  = 0.1;  // vx
-    twist_covariance_[35] = 0.2;  // wz
+    twist_covariance_[0]  = 0.1;
+    twist_covariance_[35] = 0.2;
     return twist_covariance_;
 }
 
-}
+}  // namespace shelfbot

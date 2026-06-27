@@ -19,7 +19,10 @@ public:
     bool writeCommandsToHardware(const std::vector<double>& hw_commands) override;
     bool writeSpeedsToHardware(const std::vector<double>& hw_speeds) override;
     bool readStateFromHardware(std::vector<double>& hw_positions) override;
-    bool is_communication_healthy() const override;  // ADD override KEYWORD
+    bool is_communication_healthy() const override;
+
+    // ── override the new virtual method ────────────────────────────────────
+    void set_health_timeout(double seconds) override;
 
 private:
     void position_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
@@ -38,5 +41,4 @@ private:
     rclcpp::Time last_received_time_;
     rclcpp::Duration max_allowed_interval_{2, 0};
 };
-
 }

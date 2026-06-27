@@ -4,9 +4,10 @@
     <hardware>
       <plugin>shelfbot/FourWheelDriveHardwareInterface</plugin>
       <param name="communication_type">$(arg communication_type)</param>
-      <param name="base_url">$(arg base_url)</param>
+      <param name="microros_health_timeout_s">$(arg microros_health_timeout_s)</param>
       <param name="wheel_separation">$(arg wheel_separation)</param>
       <param name="wheel_radius">$(arg wheel_radius)</param>
+      <param name="gear_ratio">$(arg gear_ratio)</param>
     </hardware>
 
     <joint name="joint_base_axis_front_left">
@@ -34,5 +35,4 @@
       <state_interface name="velocity"/>
     </joint>
   </ros2_control>
-
 </robot>

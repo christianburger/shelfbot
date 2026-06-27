@@ -18,12 +18,15 @@
   <xacro:include filename="$(find shelfbot)/urdf/ultrasonic_sensor.xacro"/>
 
   <!-- ═══════════════════════════════════════════════════════════════════
-       Launch-file arguments (config is already loaded by common_properties)
+       Launch-file arguments – defaults are taken from the YAML config
+       via common_properties.xacro (loaded as 'config').
        ═══════════════════════════════════════════════════════════════════ -->
-  <xacro:arg name="base_url"            default="http://shelfbot.local/"/>
-  <xacro:arg name="communication_type"  default="${str(config['controller_manager']['ros__parameters']['hardware_interface']['communication_type'])}"/>
-  <xacro:arg name="wheel_separation"    default="${str(config['four_wheel_drive_controller']['ros__parameters']['wheel_separation'])}"/>
-  <xacro:arg name="wheel_radius"        default="${str(config['four_wheel_drive_controller']['ros__parameters']['wheel_radius'])}"/>
+  <xacro:arg name="communication_type" default="${str(config['controller_manager']['ros__parameters']['hardware_interface']['communication_type'])}"/>
+  <xacro:arg name="wheel_separation"   default="${str(config['four_wheel_drive_controller']['ros__parameters']['wheel_separation'])}"/>
+  <xacro:arg name="wheel_radius"       default="${str(config['four_wheel_drive_controller']['ros__parameters']['wheel_radius'])}"/>
+  <!-- NEW: gear_ratio and microros_health_timeout_s -->
+  <xacro:arg name="gear_ratio"                 default="${str(config['four_wheel_drive_controller']['ros__parameters']['gear_ratio'])}"/>
+  <xacro:arg name="microros_health_timeout_s"  default="${str(config['four_wheel_drive_controller']['ros__parameters']['microros_health_timeout_s'])}"/>
 
   <!-- ═══════════════════════════════════════════════════════════════════
        ros2_control hardware interface (real robot)
@@ -31,7 +34,7 @@
   <xacro:include filename="$(find shelfbot)/urdf/real.robot.urdf.xacro"/>
 
   <!-- ═══════════════════════════════════════════════════════════════════
-       Robot physical structure
+       Robot physical structure (unchanged)
        ═══════════════════════════════════════════════════════════════════ -->
 
   <!-- Root link — no inertial, no visual: required by REP 120 -->
@@ -170,17 +173,6 @@
   </joint>
 
   <!-- ── Camera ────────────────────────────────────────────────────── -->
-  <!--
-    camera.xacro creates two links: camera_link and camera_link_optical_frame.
-    After joint_camera (rpy="-pi/2 0 0") camera_link axes in base_link space:
-      +Z = base_link +Y (forward / optical axis)
-      +X = base_link +X (right)
-      +Y = base_link -Z (down)
-    camera_link is therefore already in ROS optical convention.
-    camera_link_optical_frame adds the standard rpy="-pi/2 0 -pi/2" child for
-    image_pipeline / rtabmap compatibility.
-    The camera_publisher frame_id parameter must be "camera_link_optical_frame".
-  -->
   <xacro:camera name="camera_link"
                 width="${camera_width}"
                 length="${camera_length}"
@@ -189,17 +181,14 @@
   <joint name="joint_camera" type="fixed">
     <parent link="base_link"/>
     <child link="camera_link"/>
-    <!-- Centred on top face of base_link, facing forward (+Y) -->
     <origin xyz="0 0 ${base_height}" rpy="${-pi/2} 0 0"/>
   </joint>
-
 
   <xacro:lidar_sensor name="laser_link"/>
 
   <joint name="joint_laser" type="fixed">
     <parent link="base_link"/>
     <child link="laser_link"/>
-    <!-- Centred on top face; adjust z if the lidar sits above/below the camera -->
     <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
   </joint>
 

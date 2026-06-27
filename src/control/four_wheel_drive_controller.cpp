@@ -21,6 +21,7 @@ CallbackReturn FourWheelDriveController::on_init() {
         auto_declare<vector<string>>("back_right_joint_names",  vector<string>());
         auto_declare<double>("wheel_separation", 0.0);
         auto_declare<double>("wheel_radius",     0.0);
+        auto_declare<double>("gear_ratio",       1.0);
         auto_declare<double>("cmd_vel_timeout",  0.5);
     } catch (const std::exception& e) {
         log_zip_s("CTRL", "INIT", {{"st", "err"}});
@@ -40,9 +41,23 @@ CallbackReturn FourWheelDriveController::on_configure(
     back_left_joint_names_   = get_node()->get_parameter("back_left_joint_names").as_string_array();
     front_right_joint_names_ = get_node()->get_parameter("front_right_joint_names").as_string_array();
     back_right_joint_names_  = get_node()->get_parameter("back_right_joint_names").as_string_array();
-    wheel_separation_        = get_node()->get_parameter("wheel_separation").as_double();
-    wheel_radius_            = get_node()->get_parameter("wheel_radius").as_double();
-    cmd_vel_timeout_         = rclcpp::Duration::from_seconds(
+
+    wheel_separation_ = get_node()->get_parameter("wheel_separation").as_double();
+    wheel_radius_     = get_node()->get_parameter("wheel_radius").as_double();
+    gear_ratio_       = get_node()->get_parameter("gear_ratio").as_double();
+
+    if (wheel_radius_ <= 0.0) {
+        log_error("FourWheelDriveController", "on_configure",
+                  "wheel_radius must be > 0, got " + std::to_string(wheel_radius_));
+        return CallbackReturn::ERROR;
+    }
+    if (gear_ratio_ <= 0.0) {
+        log_error("FourWheelDriveController", "on_configure",
+                  "gear_ratio must be > 0, got " + std::to_string(gear_ratio_));
+        return CallbackReturn::ERROR;
+    }
+
+    cmd_vel_timeout_ = rclcpp::Duration::from_seconds(
         get_node()->get_parameter("cmd_vel_timeout").as_double());
 
     for (const auto& joint : joint_names_) {
@@ -50,11 +65,11 @@ CallbackReturn FourWheelDriveController::on_configure(
         axis_commands_[joint]  = 0.0;
     }
 
-    // ── log_zip: controller configured ───────────────────────────────────
     log_zip("CTRL", "CFG", {
         {"jcnt", (double)joint_names_.size()},
         {"sep",  wheel_separation_},
         {"rad",  wheel_radius_},
+        {"gr",   gear_ratio_},
         {"tmo",  cmd_vel_timeout_.seconds()}
     });
 
@@ -84,8 +99,6 @@ void FourWheelDriveController::cmd_vel_callback(
 {
     last_cmd_vel_      = msg;
     last_cmd_vel_time_ = get_node()->now();
-
-    // ── log_zip: velocity goal received ──────────────────────────────────
     log_zip("CTRL", "GOAL", {{"vx", msg->linear.x}, {"wz", msg->angular.z}});
 }
 
@@ -95,7 +108,6 @@ CallbackReturn FourWheelDriveController::on_activate(
     for (size_t i = 0; i < joint_names_.size(); ++i)
         axis_commands_[joint_names_[i]] = state_interfaces_[i].get_value();
     last_cmd_vel_ = nullptr;
-
     log_zip_s("CTRL", "ACT", {{"st", "ok"}});
     return CallbackReturn::SUCCESS;
 }
@@ -120,18 +132,27 @@ controller_interface::return_type FourWheelDriveController::update(
         const double linear_vel  = last_cmd_vel_->linear.x;
         const double angular_vel = last_cmd_vel_->angular.z;
 
-        const double vel_left  = (linear_vel - angular_vel * wheel_separation_ * 0.5) / wheel_radius_;
-        const double vel_right = (linear_vel + angular_vel * wheel_separation_ * 0.5) / wheel_radius_;
+        const double wheel_vel_left  = (linear_vel - angular_vel * wheel_separation_ * 0.5)
+                                       / wheel_radius_;
+        const double wheel_vel_right = (linear_vel + angular_vel * wheel_separation_ * 0.5)
+                                       / wheel_radius_;
 
-        axis_commands_[front_left_joint_names_[0]]  = vel_left;
-        axis_commands_[front_right_joint_names_[0]] = vel_right;
-        axis_commands_[back_left_joint_names_[0]]   = vel_left;
-        axis_commands_[back_right_joint_names_[0]]  = vel_right;
+        const double motor_vel_left  = wheel_vel_left  * gear_ratio_;
+        const double motor_vel_right = wheel_vel_right * gear_ratio_;
+
+        axis_commands_[front_left_joint_names_[0]]  = motor_vel_left;
+        axis_commands_[front_right_joint_names_[0]] = motor_vel_right;
+        axis_commands_[back_left_joint_names_[0]]   = motor_vel_left;
+        axis_commands_[back_right_joint_names_[0]]  = motor_vel_right;
+
+        log_zip("CTRL", "IK", {
+            {"wvl", wheel_vel_left}, {"wvr", wheel_vel_right},
+            {"mvl", motor_vel_left}, {"mvr", motor_vel_right},
+            {"gr",  gear_ratio_}
+        });
     } else {
-        // Timeout or no command
         bool timed_out = last_cmd_vel_ && (time - last_cmd_vel_time_) >= cmd_vel_timeout_;
         if (timed_out) {
-            // ── log_zip: command timeout (log once per timeout event) ─────
             static rclcpp::Time last_timeout_log{0, 0, RCL_ROS_TIME};
             if ((time - last_timeout_log).seconds() > 1.0) {
                 log_zip("CTRL", "TMO", {

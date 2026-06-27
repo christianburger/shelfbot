@@ -1,21 +1,123 @@
+# four_wheel_drive_controller.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# SINGLE SOURCE OF TRUTH for all physical parameters.
+#
+# Parameter flow (enforced by robot_launch.py):
+#
+#   This file
+#     │
+#     ├─► robot_launch.py reads YAML, builds xacro mappings
+#     │       │
+#     │       ├─► xacro args → URDF visual/collision geometry
+#     │       │
+#     │       └─► xacro args → URDF <ros2_control> <param> tags
+#     │                             → info_.hardware_parameters
+#     │                             → FourWheelDriveHardwareInterface::on_init()
+#     │                             → FourWheelDriveOdometry(sep, radius, gear_ratio)
+#     │
+#     └─► controller_manager param server
+#             → FourWheelDriveController (wheel_separation, wheel_radius, gear_ratio, …)
+#
+# SECTIONS
+# ─────────────────────────────────────────────────────────────────────────────
+# [A] KINEMATICS      — wheel_separation, wheel_radius, gear_ratio
+#                       Read by: controller (param server) AND hardware interface
+#                       (info_.hardware_parameters via URDF).  Must stay in sync;
+#                       robot_launch.py writes both from these values.
+#
+# [B] HARDWARE COMM   — communication_type, microros_health_timeout_s
+#                       Read by: hardware interface only (info_.hardware_parameters).
+#                       Passed to URDF <ros2_control> <param> tags by launch.
+#
+# [C] ROBOT GEOMETRY  — masses, dimensions, inertias
+#                       Read by: xacro only (visual/collision links).
+#                       NOT read at runtime by any C++ node.
+#
+# [D] CONTROLLER      — joint names, cmd_vel_timeout
+#                       Read by: FourWheelDriveController via param server only.
+#
+# [E] JOINT DYNAMICS  — damping, friction
+#                       Read by: xacro only (<dynamics> tags).
+# ─────────────────────────────────────────────────────────────────────────────
+
 controller_manager:
   ros__parameters:
     update_rate: 20
-
     four_wheel_drive_controller:
       type: shelfbot/FourWheelDriveController
-
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
 
-    hardware_interface:
-      type: shelfbot/FourWheelDriveHardwareInterface
-      communication_type: "microros"
-      microros_health_timeout_s: 2.0
-
 four_wheel_drive_controller:
   ros__parameters:
-    # ── Joint names ───────────────────────────────────────────────────────────
+
+    # ── [A] KINEMATICS ────────────────────────────────────────────────────────
+    # Feeds: controller IK, hardware interface → odometry, URDF <ros2_control>.
+    # robot_launch.py passes these as xacro args AND they are loaded onto the
+    # param server for the controller.
+
+    wheel_separation: 0.50      # [m]  lateral distance between left/right contact points
+    wheel_radius:     0.075     # [m]  effective rolling radius of the wheel
+    # gear_ratio:       1.0     # [-]  motor_shaft_turns / wheel_turns  (>1 = reduction)
+    gear_ratio:       4.66      # [-]  motor_shaft_turns / wheel_turns  (>1 = reduction)
+                                #      controller IK:  motor_vel = wheel_vel × gear_ratio
+                                #      odometry:       arc = Δmotor_angle × wheel_radius / gear_ratio
+
+    # ── [B] HARDWARE COMM ─────────────────────────────────────────────────────
+    # Feeds: hardware interface only (via URDF <ros2_control> <param> tags).
+    # robot_launch.py passes these as xacro args so they land in
+    # info_.hardware_parameters — NOT on the controller param server.
+
+    communication_type:        "microros"
+    microros_health_timeout_s: 2.0      # [s]  max age of last firmware message before unhealthy
+
+    # ── [C] ROBOT GEOMETRY ────────────────────────────────────────────────────
+    # Feeds: xacro visual/collision geometry only.
+    # robot_launch.py passes these as xacro args.
+    # No C++ node reads these at runtime.
+
+    base_width:  0.45     # [m]
+    base_length: 0.55     # [m]
+    base_height: 0.02     # [m]
+    base_mass:   50.0     # [kg]
+
+    motor_radius: 0.05    # [m]
+    motor_length: 0.1     # [m]
+    motor_mass:   2.0     # [kg]
+
+    wheel_width: 0.05     # [m]
+    wheel_mass:  5.0      # [kg]
+
+    camera_width:        0.02    # [m]
+    camera_length:       0.02    # [m]
+    camera_height:       0.01    # [m]
+    camera_lens_radius:  0.005   # [m]
+    camera_mount_height: 0.5     # [m]
+    camera_mass:         0.5     # [kg]
+
+    base_axis_radius: 0.02     # [m]
+    base_axis_length: 0.175    # [m]
+    base_axis_mass:   2.0      # [kg]
+
+    box_x_size:  0.05      # [m]
+    box_y_size:  0.05      # [m]
+    box_z_size:  0.1       # [m]
+    box_mass:    0.1       # [kg]
+    box_inertia: 0.000083  # [kg·m²]
+
+    ultrasonic_pcb_x_size:          0.045   # [m]
+    ultrasonic_pcb_y_size:          0.020   # [m]
+    ultrasonic_pcb_z_size:          0.002   # [m]
+    ultrasonic_collision_z_size:    0.015   # [m]
+    ultrasonic_mass:                0.01    # [kg]
+    ultrasonic_transducer_radius:   0.008   # [m]
+    ultrasonic_transducer_length:   0.015   # [m]
+    ultrasonic_transducer_x_offset: 0.0125  # [m]
+    ultrasonic_z_offset:            0.01    # [m]
+
+    # ── [D] CONTROLLER ────────────────────────────────────────────────────────
+    # Feeds: FourWheelDriveController param server only.
+
     joint_names:
       - joint_base_axis_front_left
       - joint_base_axis_front_right
@@ -27,57 +129,10 @@ four_wheel_drive_controller:
     front_right_joint_names: ["joint_base_axis_front_right"]
     back_right_joint_names:  ["joint_base_axis_back_right"]
 
-    # ── Kinematics ────────────────────────────────────────────────────────────
-    wheel_separation: 0.50
-    wheel_radius:     0.075
+    cmd_vel_timeout: 0.5    # [s]  stop wheels if no cmd_vel received within this window
 
-    # ── Command velocity timeout ──────────────────────────────────────────────
-    cmd_vel_timeout: 0.5
+    # ── [E] JOINT DYNAMICS ────────────────────────────────────────────────────
+    # Feeds: xacro <dynamics> tags only.
 
-    # ── Robot physical dimensions (used by URDF xacro) ───────────────────────
-    base_width:  0.45
-    base_length: 0.55
-    base_height: 0.02
-    base_mass:   50.0
-
-    motor_radius: 0.05
-    motor_length: 0.1
-    motor_mass:   2.0
-
-    wheel_width: 0.05
-    wheel_mass:  5.0
-
-    camera_width:        0.02
-    camera_length:       0.02
-    camera_height:       0.01
-    camera_lens_radius:  0.005
-    camera_mount_height: 0.5
-    camera_mass:         0.5
-
-    base_axis_radius: 0.02
-    base_axis_length: 0.175
-    base_axis_mass:   2.0
-
-    gear_ratio: 1
-
-    # ── Box parameters ────────────────────────────────────────────────────────
-    box_x_size:  0.05
-    box_y_size:  0.05
-    box_z_size:  0.1
-    box_mass:    0.1
-    box_inertia: 0.000083
-
-    # ── Ultrasonic sensor parameters ──────────────────────────────────────────
-    ultrasonic_pcb_x_size:          0.045
-    ultrasonic_pcb_y_size:          0.020
-    ultrasonic_pcb_z_size:          0.002
-    ultrasonic_collision_z_size:    0.015
-    ultrasonic_mass:                0.01
-    ultrasonic_transducer_radius:   0.008
-    ultrasonic_transducer_length:   0.015
-    ultrasonic_transducer_x_offset: 0.0125
-    ultrasonic_z_offset:            0.01
-
-    # ── Joint dynamics ────────────────────────────────────────────────────────
-    joint_damping:  0.1
-    joint_friction: 0.1
+    joint_damping:  0.1     # [N·m·s/rad]
+    joint_friction: 0.1     # [N·m]

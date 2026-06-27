@@ -5,6 +5,36 @@
 
 namespace shelfbot {
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+// Read a required double from info_.hardware_parameters with a clear error on
+// missing or malformed values.
+static double require_double_param(
+    const hardware_interface::HardwareInfo& info,
+    const std::string& key)
+{
+    auto it = info.hardware_parameters.find(key);
+    if (it == info.hardware_parameters.end())
+        throw std::runtime_error("Missing required hardware parameter: " + key);
+    try {
+        return std::stod(it->second);
+    } catch (...) {
+        throw std::runtime_error("Hardware parameter '" + key +
+                                 "' is not a valid double: '" + it->second + "'");
+    }
+}
+
+static std::string require_string_param(
+    const hardware_interface::HardwareInfo& info,
+    const std::string& key)
+{
+    auto it = info.hardware_parameters.find(key);
+    if (it == info.hardware_parameters.end())
+        throw std::runtime_error("Missing required hardware parameter: " + key);
+    return it->second;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 FourWheelDriveHardwareInterface::FourWheelDriveHardwareInterface() {
     log_info("FourWheelDriveHardwareInterface", "Constructor",
              "Hardware interface constructor called.");
@@ -27,13 +57,49 @@ FourWheelDriveHardwareInterface::on_init(const hardware_interface::HardwareInfo&
     hw_velocity_commands_.resize(info_.joints.size(), 0.0);
     hw_max_speeds_.resize(info_.joints.size(), 10.0);
 
-    std::string comm_type = info_.hardware_parameters.at("communication_type");
+    // ── [A] KINEMATICS ────────────────────────────────────────────────────────
+    // Source: URDF <ros2_control> <param> tags, which are populated at launch
+    // time from four_wheel_drive_controller.yaml by robot_launch.py.
+    // These are the ONLY values used for odometry — never read from anywhere else.
+    double wheel_separation, wheel_radius, gear_ratio;
+    try {
+        wheel_separation = require_double_param(info_, "wheel_separation");
+        wheel_radius     = require_double_param(info_, "wheel_radius");
+        gear_ratio       = require_double_param(info_, "gear_ratio");
+    } catch (const std::runtime_error& e) {
+        log_error("FourWheelDriveHardwareInterface", "on_init", e.what());
+        return hardware_interface::CallbackReturn::ERROR;
+    }
 
-    node_       = std::make_shared<rclcpp::Node>("shelfbot_odometry_node");
+    if (wheel_radius <= 0.0) {
+        log_error("FourWheelDriveHardwareInterface", "on_init",
+                  "wheel_radius must be > 0, got " + std::to_string(wheel_radius));
+        return hardware_interface::CallbackReturn::ERROR;
+    }
+    if (gear_ratio <= 0.0) {
+        log_error("FourWheelDriveHardwareInterface", "on_init",
+                  "gear_ratio must be > 0, got " + std::to_string(gear_ratio));
+        return hardware_interface::CallbackReturn::ERROR;
+    }
+
+    // ── [B] HARDWARE COMM ─────────────────────────────────────────────────────
+    // Source: URDF <ros2_control> <param> tags (same launch-time fan-out).
+    std::string comm_type;
+    double health_timeout_s;
+    try {
+        comm_type       = require_string_param(info_, "communication_type");
+        health_timeout_s = require_double_param(info_, "microros_health_timeout_s");
+    } catch (const std::runtime_error& e) {
+        log_error("FourWheelDriveHardwareInterface", "on_init", e.what());
+        return hardware_interface::CallbackReturn::ERROR;
+    }
+
+    node_         = std::make_shared<rclcpp::Node>("shelfbot_odometry_node");
     node_spinner_ = std::thread([this]() { rclcpp::spin(node_); });
 
     if (comm_type == "microros") {
         comm_ = std::make_unique<MicroRosCommunication>();
+        comm_->set_health_timeout(health_timeout_s);  // [B] propagate timeout
         if (!comm_->open("")) {
             log_zip_s("HW", "INIT", {{"st", "comm_fail"}, {"type", "uros"}});
             log_error("FourWheelDriveHardwareInterface", "on_init",
@@ -47,13 +113,21 @@ FourWheelDriveHardwareInterface::on_init(const hardware_interface::HardwareInfo&
         return hardware_interface::CallbackReturn::ERROR;
     }
 
-    odometry_ = std::make_unique<FourWheelDriveOdometry>(node_, node_->get_clock(), std::stod(info_.hardware_parameters.at("wheel_separation")), std::stod(info_.hardware_parameters.at("wheel_radius")));
+    // ── Odometry ──────────────────────────────────────────────────────────────
+    // All three kinematic params come from [A] above — single source of truth.
+    odometry_ = std::make_unique<FourWheelDriveOdometry>(
+        node_,
+        node_->get_clock(),
+        wheel_separation,
+        wheel_radius,
+        gear_ratio);
 
-    // ── log_zip: init complete ────────────────────────────────────────────
     log_zip("HW", "INIT", {
-        {"joints", (double)info_.joints.size()},
-        {"sep",    std::stod(info_.hardware_parameters.at("wheel_separation"))},
-        {"rad",    std::stod(info_.hardware_parameters.at("wheel_radius"))}
+        {"joints",  (double)info_.joints.size()},
+        {"sep",     wheel_separation},
+        {"rad",     wheel_radius},
+        {"gr",      gear_ratio},
+        {"htmo_s",  health_timeout_s}
     });
     log_info("FourWheelDriveHardwareInterface", "on_init", "--- on_init successful ---");
     return hardware_interface::CallbackReturn::SUCCESS;
@@ -104,7 +178,6 @@ FourWheelDriveHardwareInterface::on_activate(const rclcpp_lifecycle::State& prev
 
     if (comm_) comm_->writeSpeedsToHardware(hw_velocity_commands_);
 
-    // ── log_zip: activated ────────────────────────────────────────────────
     log_zip_s("HW", "ACT", {{"from", previous_state.label()}, {"st", "ok"}});
     log_info("FourWheelDriveHardwareInterface", "on_activate", "--- on_activate successful ---");
     return hardware_interface::CallbackReturn::SUCCESS;
@@ -151,13 +224,15 @@ FourWheelDriveHardwareInterface::read(const rclcpp::Time& time,
         return hardware_interface::return_type::OK;
     }
 
-    // ── READ‑SIDE FLIP: Negate left‑side positions for real robot ─────────
-    // This makes the odometry see increasing left positions when moving forward.
+    // ── READ-SIDE FLIP: negate left-side motor positions ──────────────────────
+    // The left motors are physically mirrored — their encoder counts decrease
+    // when the robot moves forward.  Negating here makes all four positions
+    // increase monotonically during forward motion, which is what the
+    // differential-drive odometry expects.
+    // Index order: [0]=FL  [1]=FR  [2]=BL  [3]=BR
     hw_positions_[0] = -hw_positions_[0];  // front left
     hw_positions_[2] = -hw_positions_[2];  // back left
-    // ─────────────────────────────────────────────────────────────────────
 
-    // ── log_zip: successful read with raw positions ───────────────────────
     log_zip("HW", "RD", {
         {"hlth", healthy ? 1.0 : 0.0},
         {"p0",   hw_positions_[0]},
@@ -193,11 +268,13 @@ FourWheelDriveHardwareInterface::write(const rclcpp::Time& time,
         }
     }
 
-    // ── COMMAND‑SIDE FLIP: Negate left‑side commands for real robot ───────
-    // This makes left motors receive negative velocities (CCW) for forward motion.
+    // ── WRITE-SIDE FLIP: negate left-side motor commands ─────────────────────
+    // Mirror of the read-side flip.  Left motors must spin CCW (negative shaft
+    // velocity) to propel the robot forward.  The controller's IK already
+    // computed the correct wheel-side velocity; we correct for motor orientation
+    // here, keeping the IK sign-convention clean.
     hw_velocity_commands_[0] = -hw_velocity_commands_[0];  // front left
     hw_velocity_commands_[2] = -hw_velocity_commands_[2];  // back left
-    // ─────────────────────────────────────────────────────────────────────
 
     if (!comm_->writeSpeedsToHardware(hw_velocity_commands_)) {
         if (healthy) {
@@ -210,7 +287,6 @@ FourWheelDriveHardwareInterface::write(const rclcpp::Time& time,
         return hardware_interface::return_type::OK;
     }
 
-    // ── log_zip: write succeeded with velocity commands ───────────────────
     log_zip("HW", "WR", {
         {"hlth", healthy ? 1.0 : 0.0},
         {"c0",   hw_velocity_commands_[0]},
