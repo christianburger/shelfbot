@@ -58,6 +58,7 @@ def generate_launch_description():
             'frame_id': 'laser_link',
             'publish_hz': 10.0,
             'qos_reliability': 'best_effort',
+            'reverse_scan_order': True,
         }],
         arguments=['--ros-args', '--log-level', 'warn'],
         respawn=True,
@@ -105,8 +106,8 @@ def generate_launch_description():
     # ══════════════════════════════════════════════════════════════════════════
     # TIER 4  (t=7 s) – slam_toolbox
     #
-    # Delayed after EKF so slam_toolbox's first scan lookup finds a valid
-    # odom→base_footprint TF in the EKF's buffer, not the raw odometry's.
+    # Delayed until the hardware odometry publisher has produced a valid
+    # odom→base_footprint TF for slam_toolbox's first scan lookup.
     # ══════════════════════════════════════════════════════════════════════════
 
     slam_toolbox = IncludeLaunchDescription(

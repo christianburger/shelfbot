@@ -186,10 +186,14 @@
 
   <xacro:lidar_sensor name="laser_link"/>
 
+  <!-- The physical robot front is base_link +Y (mapped to base_footprint +X by
+       joint_base_footprint's -pi/2 yaw).  The real lidar scan ordering is
+       inverted relative to the previous +pi/2 model, so yaw laser_link -90 deg
+       relative to base_link and keep it at the front tip of the chassis. -->
   <joint name="joint_laser" type="fixed">
     <parent link="base_link"/>
     <child link="laser_link"/>
-    <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
+    <origin xyz="0 ${base_length/2} ${base_height}" rpy="0 0 ${-pi/2}"/>
   </joint>
 
   <!-- ── Ultrasonic sensors (3 front, 3 back) ──────────────────────── -->
