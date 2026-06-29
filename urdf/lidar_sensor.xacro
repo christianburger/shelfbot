@@ -2,8 +2,10 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <!--
     Minimal laser_link for the LYDSTO LDS02RR lidar.
-    Mounted flat on top of base_link, centred, facing up.
-    Adjust xyz/rpy to match physical placement.
+    Mounted flat with the scan plane parallel to the floor.  Per REP 103,
+    LaserScan angle 0 is along laser_link +X and positive angles rotate toward
+    +Y.  The mounting joint in shelfbot.urdf.xacro is responsible for placing
+    +X along the robot's physical forward direction.
   -->
   <xacro:macro name="lidar_sensor" params="name">
     <link name="${name}">
