@@ -81,7 +81,8 @@ def generate_launch_description():
         parameters=[{
             'frame_id': 'laser_link',
             'publish_hz': 10.0,                    # increased from 5.0
-            'qos_reliability': 'best_effort',     # <-- critical fix
+            'qos_reliability': 'best_effort',
+            'reverse_scan_order': True,     # <-- critical fix
         }],
         arguments=['--ros-args', '--log-level', 'warn'],
         respawn=True,

@@ -58,6 +58,7 @@ def generate_launch_description():
             'frame_id': 'laser_link',
             'publish_hz': 10.0,
             'qos_reliability': 'best_effort',
+            'reverse_scan_order': True,
         }],
         arguments=['--ros-args', '--log-level', 'warn'],
         respawn=True,
