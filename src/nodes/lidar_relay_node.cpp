@@ -43,18 +43,13 @@ public:
         // ── Publisher ─────────────────────────────────────────────────────
         // Use RELIABLE to be compatible with ALL subscribers (BEST_EFFORT + RELIABLE).
         // This matches Nav2's default costmap QoS and still works with slam_toolbox.
-        pub_ = create_publisher<sensor_msgs::msg::LaserScan>(
-            "/scan", rclcpp::SystemDefaultsQoS());   // RELIABLE, KeepLast(10), Volatile durability
+        pub_ = create_publisher<sensor_msgs::msg::LaserScan>("/scan", rclcpp::SystemDefaultsQoS());
 
-        RCLCPP_INFO(get_logger(),
-            "[%s] relay /shelfbot_firmware/laser_scan (RELIABLE) "
-            "→ /scan (RELIABLE)  frame_id='%s'  timestamp preserved",
-            LOG_TAG, frame_id_.c_str());
+        RCLCPP_INFO(get_logger(), "[%s] relay /shelfbot_firmware/laser_scan (RELIABLE) " "→ /scan (RELIABLE)  frame_id='%s'  timestamp preserved", LOG_TAG, frame_id_.c_str());
     }
 
 private:
     void on_scan(sensor_msgs::msg::LaserScan::SharedPtr msg) {
-
         // Preserve the firmware's original timestamp; only change frame_id.
         msg->header.frame_id = frame_id_;
 

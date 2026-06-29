@@ -111,9 +111,7 @@ AprilTagDetectorNode::~AprilTagDetectorNode() {
     tag36h11_destroy(tf_);
 }
 
-void AprilTagDetectorNode::cameraInfoCallback(
-    const sensor_msgs::msg::CameraInfo::ConstSharedPtr& info_msg)
-{
+void AprilTagDetectorNode::cameraInfoCallback( const sensor_msgs::msg::CameraInfo::ConstSharedPtr& info_msg) {
     latest_camera_info_ = info_msg;
     if (!camera_info_received_) {
         camera_info_received_ = true;
@@ -129,9 +127,7 @@ void AprilTagDetectorNode::cameraInfoCallback(
     }
 }
 
-bool AprilTagDetectorNode::validatePoseInputs(
-    double tagsize, double fx, double fy, double cx, double cy, int tag_id)
-{
+bool AprilTagDetectorNode::validatePoseInputs( double tagsize, double fx, double fy, double cx, double cy, int tag_id) {
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(4)
         << "Tag " << tag_id
@@ -157,9 +153,7 @@ bool AprilTagDetectorNode::validatePoseInputs(
     return true;
 }
 
-bool AprilTagDetectorNode::validatePose(
-    const apriltag_pose_t& pose, double error, int tag_id)
-{
+bool AprilTagDetectorNode::validatePose( const apriltag_pose_t& pose, double error, int tag_id) {
     std::ostringstream oss_err;
     oss_err << std::fixed << std::setprecision(2)
             << "Tag " << tag_id
@@ -191,9 +185,7 @@ bool AprilTagDetectorNode::validatePose(
     return false;
 }
 
-void AprilTagDetectorNode::imageCallback(
-    const sensor_msgs::msg::Image::ConstSharedPtr& image_msg)
-{
+void AprilTagDetectorNode::imageCallback( const sensor_msgs::msg::Image::ConstSharedPtr& image_msg) {
     if (!camera_info_received_ || !latest_camera_info_) {
         shelfbot::log_warn(this->get_name(), "ImageCallback",
             "No camera info yet — skipping frame");
@@ -275,7 +267,7 @@ void AprilTagDetectorNode::imageCallback(
     apriltag_detections_destroy(detections);
 }
 
-} // namespace shelfbot
+}
 
 int main(int argc, char* argv[]) {
     using shelfbot::AprilTagDetectorNode;

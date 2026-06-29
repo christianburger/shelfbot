@@ -8,9 +8,7 @@ using std::vector;
 
 namespace shelfbot {
 
-FourWheelDriveController::FourWheelDriveController()
-    : controller_interface::ControllerInterface(), cmd_vel_timeout_(0, 0)
-{}
+FourWheelDriveController::FourWheelDriveController() : controller_interface::ControllerInterface(), cmd_vel_timeout_(0, 0) {}
 
 CallbackReturn FourWheelDriveController::on_init() {
     try {
@@ -33,9 +31,7 @@ CallbackReturn FourWheelDriveController::on_init() {
     return CallbackReturn::SUCCESS;
 }
 
-CallbackReturn FourWheelDriveController::on_configure(
-    const rclcpp_lifecycle::State& previous_state)
-{
+CallbackReturn FourWheelDriveController::on_configure( const rclcpp_lifecycle::State& previous_state) {
     joint_names_             = get_node()->get_parameter("joint_names").as_string_array();
     front_left_joint_names_  = get_node()->get_parameter("front_left_joint_names").as_string_array();
     back_left_joint_names_   = get_node()->get_parameter("back_left_joint_names").as_string_array();
@@ -57,8 +53,7 @@ CallbackReturn FourWheelDriveController::on_configure(
         return CallbackReturn::ERROR;
     }
 
-    cmd_vel_timeout_ = rclcpp::Duration::from_seconds(
-        get_node()->get_parameter("cmd_vel_timeout").as_double());
+    cmd_vel_timeout_ = rclcpp::Duration::from_seconds( get_node()->get_parameter("cmd_vel_timeout").as_double());
 
     for (const auto& joint : joint_names_) {
         axis_positions_[joint] = 0.0;

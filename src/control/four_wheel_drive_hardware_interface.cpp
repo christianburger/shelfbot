@@ -1,7 +1,6 @@
 #include "shelfbot/four_wheel_drive_hardware_interface.hpp"
 #include "shelfbot/microros_communication.hpp"
-#include "shelfbot/shelfbot_utils.hpp"  // pulls in log_zip.hpp
-#include <sstream>
+#include "shelfbot/shelfbot_utils.hpp"
 
 namespace shelfbot {
 
@@ -10,8 +9,7 @@ namespace shelfbot {
 // missing or malformed values.
 static double require_double_param(
     const hardware_interface::HardwareInfo& info,
-    const std::string& key)
-{
+    const std::string& key) {
     auto it = info.hardware_parameters.find(key);
     if (it == info.hardware_parameters.end())
         throw std::runtime_error("Missing required hardware parameter: " + key);
@@ -25,8 +23,7 @@ static double require_double_param(
 
 static std::string require_string_param(
     const hardware_interface::HardwareInfo& info,
-    const std::string& key)
-{
+    const std::string& key) {
     auto it = info.hardware_parameters.find(key);
     if (it == info.hardware_parameters.end())
         throw std::runtime_error("Missing required hardware parameter: " + key);
@@ -40,13 +37,10 @@ FourWheelDriveHardwareInterface::FourWheelDriveHardwareInterface() {
              "Hardware interface constructor called.");
 }
 
-hardware_interface::CallbackReturn
-FourWheelDriveHardwareInterface::on_init(const hardware_interface::HardwareInfo& info)
-{
+hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_init(const hardware_interface::HardwareInfo& info) {
     log_zip_s("HW", "INIT", {{"st", "begin"}});
 
-    if (hardware_interface::SystemInterface::on_init(info)
-            != hardware_interface::CallbackReturn::SUCCESS) {
+    if (hardware_interface::SystemInterface::on_init(info) != hardware_interface::CallbackReturn::SUCCESS) {
         log_zip_s("HW", "INIT", {{"st", "base_fail"}});
         log_error("FourWheelDriveHardwareInterface", "on_init", "Base class on_init failed.");
         return hardware_interface::CallbackReturn::ERROR;
@@ -133,17 +127,13 @@ FourWheelDriveHardwareInterface::on_init(const hardware_interface::HardwareInfo&
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::CallbackReturn
-FourWheelDriveHardwareInterface::on_configure(const rclcpp_lifecycle::State& previous_state)
-{
+hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_configure(const rclcpp_lifecycle::State& previous_state) {
     log_zip_s("HW", "CFG", {{"from", previous_state.label()}});
     log_info("FourWheelDriveHardwareInterface", "on_configure", "--- on_configure successful ---");
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-std::vector<hardware_interface::StateInterface>
-FourWheelDriveHardwareInterface::export_state_interfaces()
-{
+std::vector<hardware_interface::StateInterface> FourWheelDriveHardwareInterface::export_state_interfaces() {
     std::vector<hardware_interface::StateInterface> state_interfaces;
     for (size_t i = 0; i < info_.joints.size(); i++) {
         state_interfaces.emplace_back(
@@ -155,9 +145,7 @@ FourWheelDriveHardwareInterface::export_state_interfaces()
     return state_interfaces;
 }
 
-std::vector<hardware_interface::CommandInterface>
-FourWheelDriveHardwareInterface::export_command_interfaces()
-{
+std::vector<hardware_interface::CommandInterface> FourWheelDriveHardwareInterface::export_command_interfaces() {
     std::vector<hardware_interface::CommandInterface> command_interfaces;
     for (size_t i = 0; i < info_.joints.size(); i++) {
         command_interfaces.emplace_back(
@@ -169,9 +157,7 @@ FourWheelDriveHardwareInterface::export_command_interfaces()
     return command_interfaces;
 }
 
-hardware_interface::CallbackReturn
-FourWheelDriveHardwareInterface::on_activate(const rclcpp_lifecycle::State& previous_state)
-{
+hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_activate(const rclcpp_lifecycle::State& previous_state) {
     std::fill(hw_velocity_commands_.begin(), hw_velocity_commands_.end(), 0.0);
     std::fill(hw_positions_.begin(),         hw_positions_.end(),         0.0);
     std::fill(hw_velocities_.begin(),        hw_velocities_.end(),        0.0);
@@ -183,9 +169,7 @@ FourWheelDriveHardwareInterface::on_activate(const rclcpp_lifecycle::State& prev
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::CallbackReturn
-FourWheelDriveHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& previous_state)
-{
+hardware_interface::CallbackReturn FourWheelDriveHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& previous_state) {
     if (comm_) comm_->close();
     log_zip_s("HW", "DEACT", {{"from", previous_state.label()}, {"st", "ok"}});
     log_info("FourWheelDriveHardwareInterface", "on_deactivate",
@@ -193,10 +177,7 @@ FourWheelDriveHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& pr
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::return_type
-FourWheelDriveHardwareInterface::read(const rclcpp::Time& time,
-                                      const rclcpp::Duration& period)
-{
+hardware_interface::return_type FourWheelDriveHardwareInterface::read(const rclcpp::Time& time, const rclcpp::Duration& period) {
     if (!comm_) {
         log_warn("FourWheelDriveHardwareInterface", "read",
                  "Communication interface not available.");
@@ -246,10 +227,7 @@ FourWheelDriveHardwareInterface::read(const rclcpp::Time& time,
     return hardware_interface::return_type::OK;
 }
 
-hardware_interface::return_type
-FourWheelDriveHardwareInterface::write(const rclcpp::Time& time,
-                                       const rclcpp::Duration& /*period*/)
-{
+hardware_interface::return_type FourWheelDriveHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& /*period*/) {
     if (!comm_) {
         log_error("FourWheelDriveHardwareInterface", "write",
                   "Communication interface not available.");
@@ -298,7 +276,7 @@ FourWheelDriveHardwareInterface::write(const rclcpp::Time& time,
     return hardware_interface::return_type::OK;
 }
 
-} // namespace shelfbot
+}
 
 #include "pluginlib/class_list_macros.hpp"
 PLUGINLIB_EXPORT_CLASS(

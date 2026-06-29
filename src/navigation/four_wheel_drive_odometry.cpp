@@ -16,8 +16,7 @@ FourWheelDriveOdometry::FourWheelDriveOdometry(
     clock_(clock),
     wheel_separation_(wheel_separation),
     wheel_radius_(wheel_radius),
-    gear_ratio_(gear_ratio)
-{
+    gear_ratio_(gear_ratio) {
     if (wheel_radius_ <= 0.0 || gear_ratio_ <= 0.0) {
         RCLCPP_FATAL(node_->get_logger(),
             "FourWheelDriveOdometry: wheel_radius (%.4f) and gear_ratio (%.4f) "
@@ -44,8 +43,7 @@ FourWheelDriveOdometry::FourWheelDriveOdometry(
 
 void FourWheelDriveOdometry::update(
     const std::vector<double>& wheel_positions,
-    const rclcpp::Duration& period)
-{
+    const rclcpp::Duration& period) {
     const double period_sec = period.seconds();
 
     if (period_sec <= 0.0) {
@@ -111,8 +109,7 @@ void FourWheelDriveOdometry::update(
     broadcast_tf(stamp);
 }
 
-void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time& stamp)
-{
+void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time& stamp) {
     geometry_msgs::msg::TransformStamped tf;
     tf.header.stamp    = stamp;
     tf.header.frame_id = "odom";
@@ -131,8 +128,7 @@ void FourWheelDriveOdometry::broadcast_tf(const rclcpp::Time& stamp)
     log_zip("ODO", "TF", {{"x", x_}, {"y", y_}, {"th", theta_}});
 }
 
-nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const
-{
+nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const {
     nav_msgs::msg::Odometry odom;
     odom.header.stamp    = clock_->now();
     odom.header.frame_id = "odom";
@@ -141,8 +137,7 @@ nav_msgs::msg::Odometry FourWheelDriveOdometry::get_odometry() const
     return odom;
 }
 
-geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
-{
+geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const {
     geometry_msgs::msg::Pose pose;
     pose.position.x  = x_;
     pose.position.y  = y_;
@@ -159,9 +154,7 @@ geometry_msgs::msg::Pose FourWheelDriveOdometry::calculate_pose() const
     return pose;
 }
 
-geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
-    double left_diff_m, double right_diff_m, double dt_s)
-{
+geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist( double left_diff_m, double right_diff_m, double dt_s) {
     if (dt_s < 1e-9) dt_s = 1e-9;
 
     const double left_vel  = left_diff_m  / dt_s;
@@ -175,8 +168,7 @@ geometry_msgs::msg::Twist FourWheelDriveOdometry::calculate_twist(
     return twist;
 }
 
-std::array<double, 36> FourWheelDriveOdometry::calculate_pose_covariance()
-{
+std::array<double, 36> FourWheelDriveOdometry::calculate_pose_covariance() {
     pose_covariance_.fill(0.0);
     pose_covariance_[0]  = 0.1;
     pose_covariance_[7]  = 0.1;
@@ -184,12 +176,11 @@ std::array<double, 36> FourWheelDriveOdometry::calculate_pose_covariance()
     return pose_covariance_;
 }
 
-std::array<double, 36> FourWheelDriveOdometry::calculate_twist_covariance()
-{
+std::array<double, 36> FourWheelDriveOdometry::calculate_twist_covariance() {
     twist_covariance_.fill(0.0);
     twist_covariance_[0]  = 0.1;
     twist_covariance_[35] = 0.2;
     return twist_covariance_;
 }
 
-}  // namespace shelfbot
+}

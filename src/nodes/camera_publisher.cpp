@@ -30,28 +30,16 @@ public:
     // RELIABLE + VOLATILE depth=10: matches what ORB-SLAM3 and apriltag_detector
     // subscribe with, and what camera_info_manager expects.
     auto reliable_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().durability_volatile();
-
-    image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(
-        "/camera/image_raw", reliable_qos);
-
-    info_publisher_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
-        "/camera/camera_info", reliable_qos);
+    image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>("/camera/image_raw", reliable_qos);
+    info_publisher_ = this->create_publisher<sensor_msgs::msg::CameraInfo>("/camera/camera_info", reliable_qos);
 
     // The ESP32-CAM micro-ROS publisher uses the micro-ROS default QoS:
     // RELIABLE, VOLATILE, depth=10.  We must match reliability on our side;
     // durability VOLATILE is fine (we do not need latched history).
     // SensorDataQoS is BEST_EFFORT — that will NOT connect to a RELIABLE
     // publisher, so we use an explicit RELIABLE profile here.
-    auto esp32_sub_qos = rclcpp::QoS(rclcpp::KeepLast(10))
-                             .reliable()
-                             .durability_volatile();
-
-    compressed_image_sub_ =
-        this->create_subscription<sensor_msgs::msg::CompressedImage>(
-            "/camera/compressed",   // matches micro-ROS topic
-            esp32_sub_qos,
-            std::bind(&CameraPublisher::image_callback, this,
-                      std::placeholders::_1));
+    auto esp32_sub_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().durability_volatile();
+    compressed_image_sub_ = this->create_subscription<sensor_msgs::msg::CompressedImage>("/camera/compressed", esp32_sub_qos,std::bind(&CameraPublisher::image_callback, this, std::placeholders::_1));
 
     RCLCPP_INFO(this->get_logger(), "CameraPublisher initialised:");
     RCLCPP_INFO(this->get_logger(), "  Image size : %dx%d", image_width_, image_height_);
@@ -61,9 +49,7 @@ public:
   }
 
 private:
-  void image_callback(
-      const sensor_msgs::msg::CompressedImage::ConstSharedPtr& compressed_msg)
-  {
+  void image_callback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr& compressed_msg) {
     cv_bridge::CvImageConstPtr cv_ptr;
     try {
       cv_ptr = cv_bridge::toCvCopy(compressed_msg,
@@ -148,8 +134,7 @@ private:
   std::shared_ptr<camera_info_manager::CameraInfoManager> info_manager_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr      image_publisher_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_publisher_;
-  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr
-      compressed_image_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_image_sub_;
 
   std::string camera_name_;
   std::string frame_id_;

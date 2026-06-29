@@ -166,25 +166,11 @@ target_link_libraries(lidar_relay_node
         shelfbot_utils
 )
 
-# ── Slam Pose Bridge Node ────────────────────────────────────────────────────
-add_executable(slam_pose_bridge_node
-        slam_pose_bridge_node.cpp
-)
-
-ament_target_dependencies(slam_pose_bridge_node
-        rclcpp
-        geometry_msgs
-        tf2
-        tf2_ros
-        tf2_geometry_msgs
-)
-
 # ── Install all executables ───────────────────────────────────────────────────
 install(TARGETS
         camera_publisher
         apriltag_detector_node
         shelfbot_slam_orb3_node
-        slam_pose_bridge_node
         lidar_relay_node
         DESTINATION lib/${PROJECT_NAME}
 )

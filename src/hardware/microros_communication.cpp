@@ -1,5 +1,5 @@
 #include "shelfbot/microros_communication.hpp"
-#include "shelfbot/shelfbot_utils.hpp"  // pulls in log_zip.hpp
+#include "shelfbot/shelfbot_utils.hpp"
 
 namespace shelfbot {
 
@@ -21,18 +21,12 @@ void MicroRosCommunication::set_health_timeout(double seconds) {
 
 bool MicroRosCommunication::open(const std::string& /*connection_string*/) {
     try {
-        node_ = std::make_shared<rclcpp::Node>(
-            "shelfbot_hardware_interface_microros_node");
+        node_ = std::make_shared<rclcpp::Node>("shelfbot_hardware_interface_microros_node");
         last_received_time_ = node_->now();
 
-        command_publisher_   = node_->create_publisher<std_msgs::msg::Float32MultiArray>(
-            "/shelfbot_firmware/motor_command", 10);
-        speed_publisher_     = node_->create_publisher<std_msgs::msg::Float32MultiArray>(
-            "/shelfbot_firmware/set_speed", 10);
-        position_subscriber_ = node_->create_subscription<std_msgs::msg::Float32MultiArray>(
-            "/shelfbot_firmware/motor_positions", rclcpp::SensorDataQoS(),
-            std::bind(&MicroRosCommunication::position_callback, this,
-                      std::placeholders::_1));
+        command_publisher_   = node_->create_publisher<std_msgs::msg::Float32MultiArray>("/shelfbot_firmware/motor_command", 10);
+        speed_publisher_     = node_->create_publisher<std_msgs::msg::Float32MultiArray>("/shelfbot_firmware/set_speed", 10);
+        position_subscriber_ = node_->create_subscription<std_msgs::msg::Float32MultiArray>("/shelfbot_firmware/motor_positions", rclcpp::SensorDataQoS(), std::bind(&MicroRosCommunication::position_callback, this, std::placeholders::_1));
 
         executor_.add_node(node_);
         executor_thread_ = std::thread([this]() { executor_.spin(); });
@@ -110,16 +104,14 @@ bool MicroRosCommunication::readStateFromHardware(std::vector<double>& hw_positi
     return true;
 }
 
-void MicroRosCommunication::position_callback(
-    const std_msgs::msg::Float32MultiArray::SharedPtr msg)
-{
+void MicroRosCommunication::position_callback( const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (!node_) {
         log_error("MicroRosCommunication", "position_callback", "Node not initialized");
         return;
     }
 
-    auto   now                = node_->now();
+    auto   now= node_->now();
     double time_since_last_ms = 0.0;
 
     if (last_received_time_.nanoseconds() > 0) {
@@ -183,4 +175,4 @@ bool MicroRosCommunication::is_communication_healthy() const {
     }
 }
 
-}  // namespace shelfbot
+}

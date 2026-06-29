@@ -12,26 +12,18 @@ AprilTagManager::AprilTagManager(rclcpp::Node* node) : node_(node) {
     // RELIABLE, VOLATILE, depth=10 — matches what ORB-SLAM3 / Nav2 subscribers
     // use.  The original SensorDataQoS (BEST_EFFORT) would silently fail to
     // deliver to any RELIABLE downstream consumer.
-    auto reliable_qos = rclcpp::QoS(rclcpp::KeepLast(10))
-                            .reliable()
-                            .durability_volatile();
-
-    marker_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(
-        "/apriltag_markers", reliable_qos);
-
-    pose_array_pub_ = node_->create_publisher<geometry_msgs::msg::PoseArray>(
-        "/tag_poses", reliable_qos);
-
-    shelfbot::log_info(node_->get_name(), "Constructor",
-        "Publishers created: /tag_poses, /apriltag_markers  (RELIABLE, VOLATILE)");
+    auto reliable_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().durability_volatile();
+    marker_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>("/apriltag_markers", reliable_qos);
+    pose_array_pub_ = node_->create_publisher<geometry_msgs::msg::PoseArray>("/tag_poses", reliable_qos);
+    shelfbot::log_info(node_->get_name(), "Constructor","Publishers created: /tag_poses, /apriltag_markers  (RELIABLE, VOLATILE)");
 }
 
 void AprilTagManager::updateTags(
     const geometry_msgs::msg::PoseArray& pose_array,
     const std_msgs::msg::Header&         header,
     const std::vector<int>&              ids,
-    double                               tag_size)
-{
+    double                               tag_size) {
+
     pose_array_msg_        = pose_array;
     pose_array_msg_.header = header;   // preserves SNTP epoch stamp from image
     pose_array_pub_->publish(pose_array_msg_);
@@ -49,8 +41,8 @@ void AprilTagManager::updateTags(
 void AprilTagManager::publishTransforms(
     const geometry_msgs::msg::PoseArray& pose_array,
     const std_msgs::msg::Header&         header,
-    const std::vector<int>&              ids)
-{
+    const std::vector<int>&              ids) {
+
     for (size_t i = 0; i < pose_array.poses.size(); ++i) {
         geometry_msgs::msg::TransformStamped ts;
         ts.header         = header;
@@ -75,8 +67,8 @@ void AprilTagManager::publishMarkers(
     const geometry_msgs::msg::PoseArray& pose_array,
     const std_msgs::msg::Header&         header,
     const std::vector<int>&              ids,
-    double                               tag_size)
-{
+    double                               tag_size) {
+
     visualization_msgs::msg::MarkerArray marker_array;
     for (size_t i = 0; i < pose_array.poses.size(); ++i) {
         visualization_msgs::msg::Marker marker;
@@ -99,4 +91,4 @@ void AprilTagManager::publishMarkers(
     marker_pub_->publish(marker_array);
 }
 
-} // namespace shelfbot
+}
