@@ -16,11 +16,32 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(camera_info_manager REQUIRED)
 find_package(message_filters REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
 # NOTE: nav2_bringup and rtabmap_ros are runtime-only packages.
 # They provide executables, not libraries to link against.
 # They are declared in package.xml so rosdep installs them,
 # but they must NOT appear here in find_package().
+
+# ── Exploration service interfaces ─────────────────────────────────────────────
+# Must be called from THIS file (the package root), not from a subdirectory's
+# CMakeLists.txt — rosidl_generate_interfaces() resolves each .srv path
+# relative to that file's CMAKE_CURRENT_SOURCE_DIR, and srv/ only exists
+# relative to the package root.  Called before add_subdirectory(src/nodes)
+# below so cpp_typesupport_target (used by src/nodes/CMakeLists.txt) is
+# already defined in the scope that subdirectory inherits.
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/GetFrontiers.srv"
+  "srv/GetNextFrontier.srv"
+  "srv/UpdateFrontierStatus.srv"
+  "srv/GetQueueSummary.srv"
+  "srv/CheckTagsFound.srv"
+  DEPENDENCIES geometry_msgs
+)
+# Generates shelfbot/srv/get_frontiers.hpp etc., consumed by the exploration
+# .cpp/.hpp files via #include <shelfbot/srv/get_frontiers.hpp>.
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 # ── Global include directory ──────────────────────────────────────────────────
 include_directories(include)
@@ -95,6 +116,7 @@ ament_export_dependencies(
   tf2
   tf2_ros
   tf2_geometry_msgs
+  rosidl_default_runtime
 )
 
 ament_package()

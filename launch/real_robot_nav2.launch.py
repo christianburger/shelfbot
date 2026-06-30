@@ -1,7 +1,9 @@
 import os
 from launch import LaunchDescription
-from launch.actions import TimerAction, IncludeLaunchDescription
+from launch.actions import TimerAction, IncludeLaunchDescription, DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import xacro
@@ -14,16 +16,37 @@ def generate_launch_description():
     nav2_bringup_dir   = get_package_share_directory('nav2_bringup')
     slam_toolbox_dir   = get_package_share_directory('slam_toolbox')
 
-    xacro_file         = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
-    controller_config  = os.path.join(pkg_share, 'config', 'four_wheel_drive_controller.yaml')
-    nav2_params        = os.path.join(pkg_share, 'config', 'nav2_params.yaml')
-    slam_params        = os.path.join(pkg_share, 'config', 'slam_toolbox_params.yaml')
-    rviz_config        = os.path.join(pkg_share, 'config', 'nav2_troubleshoot.rviz')
-    camera_info_url    = 'file://' + os.path.join(pkg_share, 'config', 'esp32_cam_calibration.yaml')
+    xacro_file          = os.path.join(pkg_share, 'urdf', 'shelfbot.urdf.xacro')
+    controller_config   = os.path.join(pkg_share, 'config', 'four_wheel_drive_controller.yaml')
+    nav2_params         = os.path.join(pkg_share, 'config', 'nav2_params.yaml')
+    slam_params         = os.path.join(pkg_share, 'config', 'slam_toolbox_params.yaml')
+    rviz_config         = os.path.join(pkg_share, 'config', 'nav2_troubleshoot.rviz')
+    camera_info_url     = 'file://' + os.path.join(pkg_share, 'config', 'esp32_cam_calibration.yaml')
+    default_bt_xml_path = os.path.join(pkg_share, 'config', 'exploration_tree.xml')
 
     # ── Robot description ──────────────────────────────────────────────────────
     doc = xacro.process_file(xacro_file, mappings={'communication_type': 'microros'})
     robot_description = {'robot_description': doc.toxml()}
+
+    # ── Mission launch arguments (exploration BT) ───────────────────────────────
+    # These control the new exploration_bt_node mission tier added below. The
+    # rest of the launch file (hardware, camera, SLAM, Nav2, RViz) is unchanged.
+    run_exploration_mission_arg = DeclareLaunchArgument(
+        'run_exploration_mission', default_value='true',
+        description='Bring up the frontier_discovery / frontier_queue / tag_registry / '
+                     'exploration_bt mission tier on top of base Nav2 bring-up.')
+
+    target_tag_ids_arg = DeclareLaunchArgument(
+        'target_tag_ids', default_value='[1, 2, 3]',
+        description='YAML list of AprilTag IDs that terminate exploration when all are found.')
+
+    bt_xml_path_arg = DeclareLaunchArgument(
+        'bt_xml_path', default_value=default_bt_xml_path,
+        description='Path to the exploration BehaviorTree XML.')
+
+    enable_groot_monitoring_arg = DeclareLaunchArgument(
+        'enable_groot_monitoring', default_value='false',
+        description='Publish BT state over ZMQ for live Groot2 monitoring.')
 
     # ══════════════════════════════════════════════════════════════════════════
     # TIER 1  (t=0 s) – hardware + camera pipeline
@@ -186,8 +209,97 @@ def generate_launch_description():
 
     delay_rviz = TimerAction(period=22.0, actions=[rviz_node])
 
+    # ══════════════════════════════════════════════════════════════════════════
+    # TIER 8  (t=26 s) – Exploration mission (custom BehaviorTree.CPP layer)
+    #
+    # Brought up 4 s after RViz / 12 s after Nav2's own TimerAction fires, by
+    # which point bt_navigator's lifecycle has had time to activate and
+    # /navigate_to_pose is serving goals. These four nodes only talk to each
+    # other and to Nav2 over topics/services — they hold no references to any
+    # node above — so this tier can be disabled wholesale via
+    # `run_exploration_mission:=false` without touching Tiers 1-7.
+    #
+    # frontier_discovery_node  /map            → /frontiers            (service: get_frontiers)
+    # frontier_queue_node      /frontiers      → dedup + status queue  (services: get_next /
+    #                                                                    update_status / get_summary)
+    # tag_registry_node        /tag_detections → found-tag tracking    (service: check_found)
+    # exploration_bt_node      ticks the custom BT (config/exploration_tree.xml), driving
+    #                           /navigate_to_pose and /cmd_vel until all target_tag_ids are
+    #                           found or the frontier queue is exhausted.
+    # ══════════════════════════════════════════════════════════════════════════
+
+    frontier_discovery = Node(
+        package='shelfbot',
+        executable='frontier_discovery_node',
+        name='frontier_discovery',
+        output='screen',
+        parameters=[{
+            'min_frontier_size': 5,
+            'publish_hz': 2.0,
+        }],
+        arguments=['--ros-args', '--log-level', 'info'],
+        condition=IfCondition(LaunchConfiguration('run_exploration_mission')),
+    )
+
+    frontier_queue = Node(
+        package='shelfbot',
+        executable='frontier_queue_node',
+        name='frontier_queue',
+        output='screen',
+        parameters=[{
+            'merge_radius':    0.40,
+            'max_attempts':    3,
+            'requeue_delay_s': 30.0,
+            'publish_hz':      2.0,
+        }],
+        arguments=['--ros-args', '--log-level', 'info'],
+        condition=IfCondition(LaunchConfiguration('run_exploration_mission')),
+    )
+
+    tag_registry = Node(
+        package='shelfbot',
+        executable='tag_registry_node',
+        name='tag_registry',
+        output='screen',
+        parameters=[{
+            'map_frame':       'map',
+            'camera_frame':    'camera_link_optical_frame',
+            'pose_avg_alpha':  0.10,
+            'publish_hz':      2.0,
+        }],
+        arguments=['--ros-args', '--log-level', 'info'],
+        condition=IfCondition(LaunchConfiguration('run_exploration_mission')),
+    )
+
+    exploration_bt = Node(
+        package='shelfbot',
+        executable='exploration_bt_node',
+        name='exploration_bt',
+        output='screen',
+        parameters=[{
+            'target_tag_ids':          LaunchConfiguration('target_tag_ids'),
+            'spin_angular_vel':        0.6,
+            'spin_duration_s':         10.5,
+            'tick_period_ms':          200,
+            'bt_xml_path':             LaunchConfiguration('bt_xml_path'),
+            'enable_groot_monitoring': LaunchConfiguration('enable_groot_monitoring'),
+        }],
+        arguments=['--ros-args', '--log-level', 'info'],
+        condition=IfCondition(LaunchConfiguration('run_exploration_mission')),
+    )
+
+    delay_mission = TimerAction(
+        period=26.0,
+        actions=[frontier_discovery, frontier_queue, tag_registry, exploration_bt],
+    )
+
     # ── LaunchDescription with all actions ────────────────────────────────────
     return LaunchDescription([
+        run_exploration_mission_arg,
+        target_tag_ids_arg,
+        bt_xml_path_arg,
+        enable_groot_monitoring_arg,
+
         robot_state_pub,
         control_node,
         lidar_relay,
@@ -197,4 +309,5 @@ def generate_launch_description():
         delay_perception,
         delay_nav2,
         delay_rviz,
+        delay_mission,
     ])

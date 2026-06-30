@@ -1,3 +1,4 @@
+
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(camera_info_manager REQUIRED)
@@ -13,6 +14,26 @@ find_package(tf2 REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(OpenCV REQUIRED)
+
+# ── Exploration / BT dependencies ──────────────────────────────────────────────
+find_package(behaviortree_cpp_v3 REQUIRED)
+find_package(nav2_msgs REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+# ── Exploration service interfaces ─────────────────────────────────────────────
+# Consumed by frontier_discovery_node, frontier_queue_node, tag_registry_node,
+# and the exploration_bt_behaviors library via #include <shelfbot/srv/*.hpp>.
+rosidl_generate_interfaces(${PROJECT_NAME}
+        "srv/GetFrontiers.srv"
+        "srv/GetNextFrontier.srv"
+        "srv/UpdateFrontierStatus.srv"
+        "srv/GetQueueSummary.srv"
+        "srv/CheckTagsFound.srv"
+        DEPENDENCIES geometry_msgs
+)
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 set(OpenGL_GL_PREFERENCE "GLVND")
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
@@ -166,11 +187,69 @@ target_link_libraries(lidar_relay_node
         shelfbot_utils
 )
 
+# ── Frontier Discovery Node ────────────────────────────────────────────────────
+add_executable(frontier_discovery_node
+        frontier_discovery_node.cpp
+)
+target_link_libraries(frontier_discovery_node "${cpp_typesupport_target}")
+ament_target_dependencies(frontier_discovery_node
+        rclcpp nav_msgs geometry_msgs visualization_msgs
+)
+
+# ── Frontier Queue Node ────────────────────────────────────────────────────────
+add_executable(frontier_queue_node
+        frontier_queue_node.cpp
+)
+target_link_libraries(frontier_queue_node "${cpp_typesupport_target}")
+ament_target_dependencies(frontier_queue_node
+        rclcpp geometry_msgs visualization_msgs
+)
+
+# ── Tag Registry Node ──────────────────────────────────────────────────────────
+add_executable(tag_registry_node
+        tag_registry_node.cpp
+)
+target_link_libraries(tag_registry_node "${cpp_typesupport_target}")
+ament_target_dependencies(tag_registry_node
+        rclcpp tf2_ros tf2_geometry_msgs visualization_msgs geometry_msgs
+)
+
+# ── Exploration BT (custom node library + main node) ───────────────────────────
+add_library(exploration_bt_behaviors SHARED
+        bt_behaviors.cpp
+)
+target_link_libraries(exploration_bt_behaviors "${cpp_typesupport_target}")
+ament_target_dependencies(exploration_bt_behaviors
+        rclcpp rclcpp_action behaviortree_cpp_v3 nav2_msgs geometry_msgs
+)
+target_include_directories(exploration_bt_behaviors PUBLIC
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+add_executable(exploration_bt_node
+        exploration_bt_node.cpp
+)
+target_link_libraries(exploration_bt_node
+        exploration_bt_behaviors
+        "${cpp_typesupport_target}"
+)
+ament_target_dependencies(exploration_bt_node
+        rclcpp rclcpp_action behaviortree_cpp_v3 nav2_msgs
+        geometry_msgs ament_index_cpp
+)
+
 # ── Install all executables ───────────────────────────────────────────────────
 install(TARGETS
         camera_publisher
         apriltag_detector_node
         shelfbot_slam_orb3_node
         lidar_relay_node
-        DESTINATION lib/${PROJECT_NAME}
+        frontier_discovery_node
+        frontier_queue_node
+        tag_registry_node
+        exploration_bt_node
+        exploration_bt_behaviors
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION lib/${PROJECT_NAME}
 )

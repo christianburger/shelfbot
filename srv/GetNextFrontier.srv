@@ -1,0 +1,7 @@
+# Request: empty — queue chooses the next PENDING frontier
+---
+int32   frontier_id     # -1 when no PENDING frontier exists
+float64 x               # map-frame position
+float64 y
+bool    success
+string  reason

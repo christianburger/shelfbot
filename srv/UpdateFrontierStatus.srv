@@ -1,0 +1,5 @@
+int32  frontier_id
+string status           # PENDING | ACTIVE | SUCCEEDED | BLOCKED
+---
+bool   success
+string reason

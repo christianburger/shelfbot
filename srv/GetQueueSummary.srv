@@ -1,0 +1,8 @@
+# Request: empty
+---
+int32 pending
+int32 active
+int32 succeeded
+int32 blocked
+int32 total
+bool  has_pending

@@ -1,0 +1,4 @@
+int32 min_size          # minimum frontier-region size in cells (0 = use node param)
+---
+geometry_msgs/PoseArray poses   # centroids in map frame
+int32 count

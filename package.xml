@@ -57,10 +57,27 @@
   <depend>nav2_behaviors</depend>
   <depend>nav2_waypoint_follower</depend>
   <depend>nav2_smoother</depend>
+  <depend>nav2_msgs</depend>
 
   <!-- ── SLAM / Localisation ──────────────────────────────────────────── -->
   <depend>rtabmap_ros</depend>
   <depend>robot_localization</depend>
+
+  <!-- ── Exploration mission (BehaviorTree.CPP custom node layer) ───────── -->
+  <!--
+    rosidl_interface_packages membership plus the generators/runtime depends
+    are required because this package both generates its own srv/ interfaces
+    (GetFrontiers, GetNextFrontier, UpdateFrontierStatus, GetQueueSummary,
+    CheckTagsFound — see src/nodes/CMakeLists.txt) and consumes them in the
+    same package.
+  -->
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <depend>behaviortree_cpp_v3</depend>
+  <depend>rclcpp_action</depend>
+  <depend>ament_index_cpp</depend>
 
   <!-- ── Misc tooling ─────────────────────────────────────────────────── -->
   <depend>xacro</depend>

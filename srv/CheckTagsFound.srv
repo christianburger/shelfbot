@@ -1,0 +1,5 @@
+int32[] target_ids      # IDs to check; empty = check all registered targets
+---
+bool    all_found
+int32[] found_ids
+int32[] missing_ids
