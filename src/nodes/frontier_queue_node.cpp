@@ -1,3 +1,4 @@
+
 // ─────────────────────────────────────────────────────────────────────────────
 // frontier_queue_node.cpp
 //
@@ -36,7 +37,7 @@
 #include <shelfbot/srv/update_frontier_status.hpp>
 #include <shelfbot/srv/get_queue_summary.hpp>
 
-#include "shelfbot/exploration/types.hpp"
+#include "shelfbot/types.hpp"
 
 using namespace shelfbot::exploration;
 

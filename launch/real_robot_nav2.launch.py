@@ -147,16 +147,35 @@ def generate_launch_description():
 
     # ══════════════════════════════════════════════════════════════════════════
     # TIER 5  (t=9 s) – AprilTag detector
+    #
+    # Uses the upstream apriltag_ros package's apriltag_node, NOT this
+    # project's own shelfbot/apriltag_detector_node executable. The two are
+    # not interchangeable:
+    #   - shelfbot's own apriltag_detector_node (raw apriltag C library)
+    #     publishes /tag_poses (geometry_msgs/PoseArray) and broadcasts TF
+    #     frames named "tag_<id>" — nothing in this package subscribes to
+    #     either; it only ever fed /apriltag_markers for RViz visualization.
+    #   - apriltag_ros's apriltag_node publishes /tag_detections
+    #     (apriltag_msgs/AprilTagDetectionArray) and broadcasts TF frames
+    #     named "tag<family>:<id>" (e.g. "tag36h11:1") — this is what
+    #     tag_registry_node.cpp actually subscribes to and looks up via TF.
+    # This wiring mirrors the (otherwise unused) launch/shelfbot.launch.py,
+    # which already paired apriltag_ros correctly with the same remappings.
     # ══════════════════════════════════════════════════════════════════════════
 
     apriltag_detector = Node(
-        package='shelfbot',
-        executable='apriltag_detector_node',
-        name='apriltag_detector_node',
-        output='screen',
+        package='apriltag_ros',
+        executable='apriltag_node',
+        name='apriltag_detector',
+        remappings=[
+            ('image_rect',  '/camera/image_raw'),
+            ('camera_info', '/camera/camera_info'),
+            ('detections',  'tag_detections'),
+        ],
         parameters=[{
-            'tag_size':             0.16,
-            'pose_error_threshold': 100.0,
+            'family':          '36h11',
+            'size':            0.16,
+            'image_transport': 'raw',
         }],
         arguments=['--ros-args', '--log-level', 'info'],
         respawn=True,

@@ -35,7 +35,7 @@ static constexpr const char* BB_NAV_SUCCEEDED = "nav_succeeded";
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal helper: retrieve BtContext from the blackboard.
 // ─────────────────────────────────────────────────────────────────────────────
-static BtContextPtr ctx_from(const BT::NodeConfig& cfg) {
+static BtContextPtr ctx_from(const BT::NodeConfiguration& cfg) {
     return cfg.blackboard->get<BtContextPtr>(BB_CTX);
 }
 
@@ -43,7 +43,7 @@ static BtContextPtr ctx_from(const BT::NodeConfig& cfg) {
 // AllTargetTagsFound
 // ═════════════════════════════════════════════════════════════════════════════
 AllTargetTagsFound::AllTargetTagsFound(const std::string& name,
-                                       const BT::NodeConfig& cfg)
+                                       const BT::NodeConfiguration& cfg)
     : BT::ConditionNode(name, cfg)
     , ctx_(ctx_from(cfg))
 {}
@@ -90,7 +90,7 @@ BT::NodeStatus AllTargetTagsFound::tick() {
 // HasPendingFrontiers
 // ═════════════════════════════════════════════════════════════════════════════
 HasPendingFrontiers::HasPendingFrontiers(const std::string& name,
-                                         const BT::NodeConfig& cfg)
+                                         const BT::NodeConfiguration& cfg)
     : BT::ConditionNode(name, cfg)
     , ctx_(ctx_from(cfg))
 {}
@@ -131,7 +131,7 @@ BT::NodeStatus HasPendingFrontiers::tick() {
 // GetNextFrontierAction
 // ═════════════════════════════════════════════════════════════════════════════
 GetNextFrontierAction::GetNextFrontierAction(const std::string& name,
-                                             const BT::NodeConfig& cfg)
+                                             const BT::NodeConfiguration& cfg)
     : BT::StatefulActionNode(name, cfg)
     , ctx_(ctx_from(cfg))
 {}
@@ -190,7 +190,7 @@ void GetNextFrontierAction::onHalted() {
 // NavigateToGoalAction
 // ═════════════════════════════════════════════════════════════════════════════
 NavigateToGoalAction::NavigateToGoalAction(const std::string& name,
-                                           const BT::NodeConfig& cfg)
+                                           const BT::NodeConfiguration& cfg)
     : BT::StatefulActionNode(name, cfg)
     , ctx_(ctx_from(cfg))
 {}
@@ -290,7 +290,7 @@ void NavigateToGoalAction::onHalted() {
 // SpinAndScanAction
 // ═════════════════════════════════════════════════════════════════════════════
 SpinAndScanAction::SpinAndScanAction(const std::string& name,
-                                     const BT::NodeConfig& cfg)
+                                     const BT::NodeConfiguration& cfg)
     : BT::StatefulActionNode(name, cfg)
     , ctx_(ctx_from(cfg))
 {}
@@ -329,7 +329,7 @@ void SpinAndScanAction::onHalted() {
 // MarkFrontierBlockedAction
 // ═════════════════════════════════════════════════════════════════════════════
 MarkFrontierBlockedAction::MarkFrontierBlockedAction(const std::string& name,
-                                                     const BT::NodeConfig& cfg)
+                                                     const BT::NodeConfiguration& cfg)
     : BT::SyncActionNode(name, cfg)
     , ctx_(ctx_from(cfg))
 {}
@@ -359,7 +359,7 @@ BT::NodeStatus MarkFrontierBlockedAction::tick() {
 // UpdateFrontierStatusAction
 // ═════════════════════════════════════════════════════════════════════════════
 UpdateFrontierStatusAction::UpdateFrontierStatusAction(const std::string& name,
-                                                       const BT::NodeConfig& cfg)
+                                                       const BT::NodeConfiguration& cfg)
     : BT::StatefulActionNode(name, cfg)
     , ctx_(ctx_from(cfg))
 {}

@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<!--
+  exploration_tree.xml
+  ──────────────────────────────────────────────────────────────────────────
+  Root: Selector (no memory) — re-evaluated every tick so termination
+  conditions are always checked first, even mid-navigation.
+
+  1. AllTargetTagsFound      → SUCCESS as soon as every target tag is in the registry
+  2. Inverter(HasPendingFrontiers) → SUCCESS when the queue has nothing left
+  3. FrontierCycle (Sequence with memory) → does the actual work
+
+  Inside FrontierCycle:
+    GetNextFrontier  pops one PENDING frontier, writes frontier_id/target_x/target_y
+    NavWithRecovery  Selector: try Navigate+Scan, else MarkFrontierBlocked
+    UpdateFrontierStatus  always runs last — commits SUCCEEDED or BLOCKED
+  ──────────────────────────────────────────────────────────────────────────
+-->
+<root BTCPP_format="3" main_tree_to_execute="MissionRoot">
+  <BehaviorTree ID="MissionRoot">
+    <Fallback name="MissionRoot">
+
+      <!-- Termination gate #1: mission complete -->
+      <AllTargetTagsFound name="check_tags_found"/>
+
+      <!-- Termination gate #2: nothing left to explore -->
+      <Inverter name="invert_pending_check">
+        <HasPendingFrontiers name="check_pending"/>
+      </Inverter>
+
+      <!-- Main work cycle: resumes mid-sequence across ticks (memory node) -->
+      <Sequence name="FrontierCycle">
+
+        <GetNextFrontier name="pop_frontier"
+                         frontier_id="{frontier_id}"
+                         target_x="{target_x}"
+                         target_y="{target_y}"/>
+
+        <Fallback name="NavWithRecovery">
+
+          <Sequence name="NavigateAndScan">
+            <NavigateToGoal name="drive_to_frontier"
+                            target_x="{target_x}"
+                            target_y="{target_y}"
+                            nav_succeeded="{nav_succeeded}"/>
+            <SpinAndScan name="scan_360"/>
+          </Sequence>
+
+          <MarkFrontierBlocked name="mark_blocked"
+                               frontier_id="{frontier_id}"
+                               nav_succeeded="{nav_succeeded}"/>
+
+        </Fallback>
+
+        <UpdateFrontierStatus name="commit_status"
+                              frontier_id="{frontier_id}"
+                              nav_succeeded="{nav_succeeded}"/>
+
+      </Sequence>
+
+    </Fallback>
+  </BehaviorTree>
+</root>

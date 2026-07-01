@@ -1,3 +1,4 @@
+
 // ─────────────────────────────────────────────────────────────────────────────
 // tag_registry_node.cpp
 //
@@ -87,14 +88,38 @@ private:
     // ── detection callback ────────────────────────────────────────────────────
     void on_detections(
             const apriltag_msgs::msg::AprilTagDetectionArray::SharedPtr msg) {
-        const std::string map_frame = get_parameter("map_frame").as_string();
-        const double      alpha     = get_parameter("pose_avg_alpha").as_double();
+        const std::string map_frame    = get_parameter("map_frame").as_string();
+        const std::string camera_frame = get_parameter("camera_frame").as_string();
+        const double      alpha        = get_parameter("pose_avg_alpha").as_double();
 
         for (const auto& det : msg->detections) {
-            // Build PoseStamped in the detector's frame
+            // apriltag_msgs (christianrauch) — the package this node actually
+            // depends on — does NOT embed a pose in AprilTagDetection; only
+            // family/id/hamming/decision_margin/centre/corners/homography.
+            // apriltag_ros instead publishes each tag's pose directly on
+            // /tf, with child_frame_id "tag<family>:<id>" (e.g. "tag36h11:0").
+            // Look that transform up relative to camera_frame here, exactly
+            // the pose ps_cam below always represented, then hand it to the
+            // existing camera_frame → map_frame transform unchanged.
+            const std::string tag_frame =
+                "tag" + det.family + ":" + std::to_string(det.id);
+
             geometry_msgs::msg::PoseStamped ps_cam;
-            ps_cam.header         = det.pose.header;
-            ps_cam.pose           = det.pose.pose.pose;
+            try {
+                const auto tf_cam = tf_buffer_.lookupTransform(
+                    camera_frame, tag_frame, tf2::TimePointZero,
+                    tf2::durationFromSec(0.15));
+                ps_cam.header.frame_id    = camera_frame;
+                ps_cam.header.stamp       = tf_cam.header.stamp;
+                ps_cam.pose.position.x    = tf_cam.transform.translation.x;
+                ps_cam.pose.position.y    = tf_cam.transform.translation.y;
+                ps_cam.pose.position.z    = tf_cam.transform.translation.z;
+                ps_cam.pose.orientation   = tf_cam.transform.rotation;
+            } catch (const tf2::TransformException& ex) {
+                RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                    "TF for tag %d (%s): %s", det.id, tag_frame.c_str(), ex.what());
+                continue;
+            }
 
             // Transform to map frame
             geometry_msgs::msg::PoseStamped ps_map;

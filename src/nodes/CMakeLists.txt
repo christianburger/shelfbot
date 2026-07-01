@@ -20,20 +20,15 @@ find_package(behaviortree_cpp_v3 REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(ament_index_cpp REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
+find_package(apriltag_msgs REQUIRED)
 
-# ── Exploration service interfaces ─────────────────────────────────────────────
-# Consumed by frontier_discovery_node, frontier_queue_node, tag_registry_node,
-# and the exploration_bt_behaviors library via #include <shelfbot/srv/*.hpp>.
-rosidl_generate_interfaces(${PROJECT_NAME}
-        "srv/GetFrontiers.srv"
-        "srv/GetNextFrontier.srv"
-        "srv/UpdateFrontierStatus.srv"
-        "srv/GetQueueSummary.srv"
-        "srv/CheckTagsFound.srv"
-        DEPENDENCIES geometry_msgs
-)
-rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# NOTE: the exploration service interfaces (srv/GetFrontiers.srv etc.) are
+# generated in the TOP-LEVEL CMakeLists.txt, not here. rosidl_generate_interfaces()
+# resolves .srv paths relative to CMAKE_CURRENT_SOURCE_DIR of the file that calls
+# it, and srv/ only exists relative to the package root — calling it from this
+# subdirectory looks for src/nodes/srv/*.srv, which doesn't exist, and fails.
+# cpp_typesupport_target is already set by the parent scope by the time
+# add_subdirectory(src/nodes) runs, so it's available below without redefinition.
 set(OpenGL_GL_PREFERENCE "GLVND")
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
@@ -211,7 +206,7 @@ add_executable(tag_registry_node
 )
 target_link_libraries(tag_registry_node "${cpp_typesupport_target}")
 ament_target_dependencies(tag_registry_node
-        rclcpp tf2_ros tf2_geometry_msgs visualization_msgs geometry_msgs
+        rclcpp tf2_ros tf2_geometry_msgs visualization_msgs geometry_msgs apriltag_msgs
 )
 
 # ── Exploration BT (custom node library + main node) ───────────────────────────

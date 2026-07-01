@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
 
     // ── tick loop on the MAIN thread ────────────────────────────────────────
     const int period_ms = node->get_parameter("tick_period_ms").as_int();
-    rclcpp::WallRate rate(std::chrono::milliseconds(period_ms));
+    rclcpp::WallRate rate{std::chrono::milliseconds(period_ms)};
 
     RCLCPP_INFO(node->get_logger(), "Exploration BT started. Ticking every %d ms.", period_ms);
 

@@ -54,7 +54,7 @@ using Nav2GoalHandle = rclcpp_action::ClientGoalHandle<Nav2Action>;
 // ─────────────────────────────────────────────────────────────────────────────
 class AllTargetTagsFound : public BT::ConditionNode {
 public:
-    AllTargetTagsFound(const std::string& name, const BT::NodeConfig& cfg);
+    AllTargetTagsFound(const std::string& name, const BT::NodeConfiguration& cfg);
     static BT::PortsList providedPorts() { return {}; }
     BT::NodeStatus tick() override;
 
@@ -75,7 +75,7 @@ private:
 // ─────────────────────────────────────────────────────────────────────────────
 class HasPendingFrontiers : public BT::ConditionNode {
 public:
-    HasPendingFrontiers(const std::string& name, const BT::NodeConfig& cfg);
+    HasPendingFrontiers(const std::string& name, const BT::NodeConfiguration& cfg);
     static BT::PortsList providedPorts() { return {}; }
     BT::NodeStatus tick() override;
 
@@ -85,7 +85,15 @@ private:
     using FutureT = rclcpp::Client<SrvT>::SharedFuture;
 
     std::optional<FutureT>  future_;
-    BT::NodeStatus           cached_status_{BT::NodeStatus::FAILURE};
+    // Defaults to SUCCESS ("assume pending work exists") rather than
+    // FAILURE, unlike AllTargetTagsFound above. Until the first real
+    // /frontier_queue/get_summary response arrives, this placeholder value
+    // is what tick() returns. If it defaulted to FAILURE (as it did
+    // originally), Inverter(HasPendingFrontiers) would evaluate to SUCCESS
+    // on the very first tick — before any real queue data is known — and
+    // the root Fallback would conclude "mission complete, nothing to
+    // explore" immediately, even with a full queue of pending frontiers.
+    BT::NodeStatus           cached_status_{BT::NodeStatus::SUCCESS};
     std::chrono::steady_clock::time_point last_call_{};
     static constexpr std::chrono::milliseconds kCacheMs{500};
 };
@@ -98,7 +106,7 @@ private:
 // ─────────────────────────────────────────────────────────────────────────────
 class GetNextFrontierAction : public BT::StatefulActionNode {
 public:
-    GetNextFrontierAction(const std::string& name, const BT::NodeConfig& cfg);
+    GetNextFrontierAction(const std::string& name, const BT::NodeConfiguration& cfg);
     static BT::PortsList providedPorts();
     BT::NodeStatus onStart()   override;
     BT::NodeStatus onRunning() override;
@@ -120,7 +128,7 @@ private:
 // ─────────────────────────────────────────────────────────────────────────────
 class NavigateToGoalAction : public BT::StatefulActionNode {
 public:
-    NavigateToGoalAction(const std::string& name, const BT::NodeConfig& cfg);
+    NavigateToGoalAction(const std::string& name, const BT::NodeConfiguration& cfg);
     static BT::PortsList providedPorts();
     BT::NodeStatus onStart()   override;
     BT::NodeStatus onRunning() override;
@@ -144,7 +152,7 @@ private:
 // ─────────────────────────────────────────────────────────────────────────────
 class SpinAndScanAction : public BT::StatefulActionNode {
 public:
-    SpinAndScanAction(const std::string& name, const BT::NodeConfig& cfg);
+    SpinAndScanAction(const std::string& name, const BT::NodeConfiguration& cfg);
     static BT::PortsList providedPorts() { return {}; }
     BT::NodeStatus onStart()   override;
     BT::NodeStatus onRunning() override;
@@ -162,7 +170,7 @@ private:
 // ─────────────────────────────────────────────────────────────────────────────
 class MarkFrontierBlockedAction : public BT::SyncActionNode {
 public:
-    MarkFrontierBlockedAction(const std::string& name, const BT::NodeConfig& cfg);
+    MarkFrontierBlockedAction(const std::string& name, const BT::NodeConfiguration& cfg);
     static BT::PortsList providedPorts();
     BT::NodeStatus tick() override;
 
@@ -179,7 +187,7 @@ private:
 // ─────────────────────────────────────────────────────────────────────────────
 class UpdateFrontierStatusAction : public BT::StatefulActionNode {
 public:
-    UpdateFrontierStatusAction(const std::string& name, const BT::NodeConfig& cfg);
+    UpdateFrontierStatusAction(const std::string& name, const BT::NodeConfiguration& cfg);
     static BT::PortsList providedPorts();
     BT::NodeStatus onStart()   override;
     BT::NodeStatus onRunning() override;

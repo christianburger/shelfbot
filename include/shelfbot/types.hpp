@@ -69,4 +69,4 @@ struct FrontierEntry {
     }
 };
 
-}  // namespace shelfbot::exploration
+}
